@@ -1,0 +1,13 @@
+[package]
+name = "authmap-report"
+description = "AuthMap report rendering and output writing."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+authmap-core.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

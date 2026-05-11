@@ -1,0 +1,12 @@
+[package]
+name = "authmap-adapters"
+description = "Framework adapter contracts and built-in adapter registry."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+authmap-core.workspace = true
+authmap-parsers.workspace = true

@@ -73,3 +73,8 @@ Reporters should support:
 ## Trust boundary
 
 AuthMap should be honest about confidence. Dynamic language behavior, reflection, metaprogramming, and custom frameworks may produce incomplete maps. Reports should expose uncertainty.
+
+## Implementation architecture
+
+The Rust workspace scaffold and concurrency model are documented in
+[IMPLEMENTATION_ARCHITECTURE.md](IMPLEMENTATION_ARCHITECTURE.md).

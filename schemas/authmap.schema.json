@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ozark-Security-Labs/AuthMap/schemas/authmap.schema.json",
+  "title": "AuthMap Document",
+  "type": "object",
+  "required": ["schema_version", "metadata", "source_files", "routes", "evidence", "mutations", "links", "coverage", "diagnostics"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "metadata": { "type": "object" },
+    "source_files": { "type": "array" },
+    "routes": { "type": "array" },
+    "evidence": { "type": "array" },
+    "mutations": { "type": "array" },
+    "links": { "type": "array" },
+    "coverage": { "type": "array" },
+    "diagnostics": { "type": "array" }
+  },
+  "additionalProperties": false
+}

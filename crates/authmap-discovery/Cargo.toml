@@ -1,0 +1,14 @@
+[package]
+name = "authmap-discovery"
+description = "AuthMap file discovery, ignore handling, and project hints."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+authmap-config.workspace = true
+authmap-core.workspace = true
+ignore.workspace = true
+thiserror.workspace = true

@@ -1,0 +1,11 @@
+[package]
+name = "authmap-testkit"
+description = "Test helpers for AuthMap fixtures and golden outputs."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+authmap-core.workspace = true

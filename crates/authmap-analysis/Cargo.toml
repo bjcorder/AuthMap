@@ -1,0 +1,17 @@
+[package]
+name = "authmap-analysis"
+description = "AuthMap evidence extraction, linking, classification, and scan orchestration."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+authmap-adapters.workspace = true
+authmap-config.workspace = true
+authmap-core.workspace = true
+authmap-discovery.workspace = true
+authmap-parsers.workspace = true
+rayon.workspace = true
+thiserror.workspace = true

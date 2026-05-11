@@ -1,0 +1,11 @@
+[package]
+name = "authmap-core"
+description = "Core AuthMap intermediate representation and diagnostics."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+serde.workspace = true

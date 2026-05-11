@@ -1,0 +1,14 @@
+[package]
+name = "authmap-parsers"
+description = "Parser facade for AuthMap language backends."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+authmap-core.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
+tree-sitter.workspace = true

@@ -1,0 +1,20 @@
+[package]
+name = "authmap-cli"
+description = "AuthMap command-line interface."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "authmap"
+path = "src/main.rs"
+
+[dependencies]
+authmap-analysis.workspace = true
+authmap-config.workspace = true
+authmap-report.workspace = true
+clap.workspace = true
+miette.workspace = true
+thiserror.workspace = true
