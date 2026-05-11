@@ -1,0 +1,538 @@
+{
+  "schema_version": "0.1.0",
+  "metadata": {
+    "tool_name": "authmap",
+    "tool_version": "0.1.0",
+    "mode": "advisory",
+    "target_roots": [
+      "tests/fixtures/fastapi"
+    ],
+    "config_path": null
+  },
+  "source_files": [
+    {
+      "path": "tests/fixtures/fastapi/app/main_relative.py",
+      "language": "python",
+      "size_bytes": 167,
+      "sha256": null,
+      "project_hints": [
+        "fast_api"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/fastapi/app/routes/users.py",
+      "language": "python",
+      "size_bytes": 285,
+      "sha256": null,
+      "project_hints": [
+        "fast_api"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/fastapi/main.py",
+      "language": "python",
+      "size_bytes": 1035,
+      "sha256": null,
+      "project_hints": [
+        "fast_api"
+      ],
+      "skipped": null
+    }
+  ],
+  "routes": [
+    {
+      "id": "route_0001",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "/relative/users/{user_id}",
+      "name": "get_user",
+      "tags": [
+        "users"
+      ],
+      "middleware": [],
+      "handler": {
+        "name": "get_user",
+        "span": {
+          "file": "tests/fixtures/fastapi/app/routes/users.py",
+          "line": 7,
+          "column": 5,
+          "byte_range": {
+            "start": 132,
+            "end": 140
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/app/routes/users.py",
+        "line": 6,
+        "column": 2,
+        "byte_range": {
+          "start": 70,
+          "end": 127
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0002",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "/v1/users/{user_id}",
+      "name": "get_user",
+      "tags": [
+        "users"
+      ],
+      "middleware": [],
+      "handler": {
+        "name": "get_user",
+        "span": {
+          "file": "tests/fixtures/fastapi/app/routes/users.py",
+          "line": 7,
+          "column": 5,
+          "byte_range": {
+            "start": 132,
+            "end": 140
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/app/routes/users.py",
+        "line": 6,
+        "column": 2,
+        "byte_range": {
+          "start": 70,
+          "end": 127
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0003",
+      "framework": "fast_api",
+      "method": "PUT",
+      "path": "/relative/users/{user_id}",
+      "name": null,
+      "tags": [
+        "users"
+      ],
+      "middleware": [],
+      "handler": {
+        "name": "update_user",
+        "span": {
+          "file": "tests/fixtures/fastapi/app/routes/users.py",
+          "line": 12,
+          "column": 5,
+          "byte_range": {
+            "start": 231,
+            "end": 242
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/app/routes/users.py",
+        "line": 11,
+        "column": 2,
+        "byte_range": {
+          "start": 186,
+          "end": 226
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0004",
+      "framework": "fast_api",
+      "method": "PUT",
+      "path": "/v1/users/{user_id}",
+      "name": null,
+      "tags": [
+        "users"
+      ],
+      "middleware": [],
+      "handler": {
+        "name": "update_user",
+        "span": {
+          "file": "tests/fixtures/fastapi/app/routes/users.py",
+          "line": 12,
+          "column": 5,
+          "byte_range": {
+            "start": 231,
+            "end": 242
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/app/routes/users.py",
+        "line": 11,
+        "column": 2,
+        "byte_range": {
+          "start": 186,
+          "end": 226
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0005",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "/health",
+      "name": "healthcheck",
+      "tags": [
+        "system"
+      ],
+      "middleware": [],
+      "handler": {
+        "name": "health",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 12,
+          "column": 5,
+          "byte_range": {
+            "start": 343,
+            "end": 349
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 11,
+        "column": 2,
+        "byte_range": {
+          "start": 283,
+          "end": 338
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0006",
+      "framework": "fast_api",
+      "method": "POST",
+      "path": "/items",
+      "name": null,
+      "tags": [
+        "items"
+      ],
+      "middleware": [],
+      "handler": {
+        "name": "create_item",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 17,
+          "column": 5,
+          "byte_range": {
+            "start": 424,
+            "end": 435
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 16,
+        "column": 2,
+        "byte_range": {
+          "start": 380,
+          "end": 419
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0007",
+      "framework": "fast_api",
+      "method": "DELETE",
+      "path": "/api/local/{item_id}",
+      "name": "delete_local",
+      "tags": [
+        "local-default"
+      ],
+      "middleware": [],
+      "handler": {
+        "name": "delete_local",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 22,
+          "column": 5,
+          "byte_range": {
+            "start": 530,
+            "end": 542
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 21,
+        "column": 2,
+        "byte_range": {
+          "start": 471,
+          "end": 525
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0008",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "/reports",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "dynamic_reports",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 27,
+          "column": 5,
+          "byte_range": {
+            "start": 628,
+            "end": 643
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 26,
+        "column": 2,
+        "byte_range": {
+          "start": 593,
+          "end": 623
+        }
+      },
+      "source_evidence": [],
+      "confidence": "medium",
+      "notes": [
+        "router prefix is dynamic and was not included in the route path",
+        "include_router prefix is dynamic and was not included in the route path"
+      ]
+    },
+    {
+      "id": "route_0009",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "/search",
+      "name": null,
+      "tags": [
+        "search"
+      ],
+      "middleware": [],
+      "handler": {
+        "name": "search",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 32,
+          "column": 5,
+          "byte_range": {
+            "start": 735,
+            "end": 741
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 31,
+        "column": 2,
+        "byte_range": {
+          "start": 664,
+          "end": 730
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0010",
+      "framework": "fast_api",
+      "method": "POST",
+      "path": "/search",
+      "name": null,
+      "tags": [
+        "search"
+      ],
+      "middleware": [],
+      "handler": {
+        "name": "search",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 32,
+          "column": 5,
+          "byte_range": {
+            "start": 735,
+            "end": 741
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 31,
+        "column": 2,
+        "byte_range": {
+          "start": 664,
+          "end": 730
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0011",
+      "framework": "fast_api",
+      "method": "ANY",
+      "path": "/fallback",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "fallback",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 37,
+          "column": 5,
+          "byte_range": {
+            "start": 793,
+            "end": 801
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 36,
+        "column": 2,
+        "byte_range": {
+          "start": 762,
+          "end": 788
+        }
+      },
+      "source_evidence": [],
+      "confidence": "medium",
+      "notes": [
+        "api_route methods are dynamic or missing; emitted as ANY"
+      ]
+    },
+    {
+      "id": "route_0012",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "<dynamic>",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "generated_path",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 42,
+          "column": 5,
+          "byte_range": {
+            "start": 848,
+            "end": 862
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 41,
+        "column": 2,
+        "byte_range": {
+          "start": 822,
+          "end": 843
+        }
+      },
+      "source_evidence": [],
+      "confidence": "medium",
+      "notes": [
+        "route path is dynamic and was emitted as <dynamic>",
+        "route path is dynamic and was not fully resolved"
+      ]
+    }
+  ],
+  "evidence": [],
+  "mutations": [],
+  "links": [],
+  "coverage": [],
+  "diagnostics": [
+    {
+      "category": "adapter",
+      "code": "fastapi_dynamic_api_route_methods",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 36,
+        "column": 2,
+        "byte_range": {
+          "start": 762,
+          "end": 788
+        }
+      },
+      "message": "FastAPI api_route methods are dynamic or missing"
+    },
+    {
+      "category": "adapter",
+      "code": "fastapi_dynamic_include_router_prefix",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 48,
+        "column": 1,
+        "byte_range": {
+          "start": 977,
+          "end": 1034
+        }
+      },
+      "message": "FastAPI include_router prefix is dynamic and could not be resolved"
+    },
+    {
+      "category": "adapter",
+      "code": "fastapi_dynamic_route_path",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 41,
+        "column": 2,
+        "byte_range": {
+          "start": 822,
+          "end": 843
+        }
+      },
+      "message": "FastAPI route path is dynamic and could not be resolved"
+    },
+    {
+      "category": "adapter",
+      "code": "fastapi_dynamic_router_prefix",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 8,
+        "column": 18,
+        "byte_range": {
+          "start": 247,
+          "end": 279
+        }
+      },
+      "message": "FastAPI router prefix is dynamic and could not be resolved"
+    }
+  ]
+}

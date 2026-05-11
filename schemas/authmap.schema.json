@@ -119,6 +119,9 @@
         "framework",
         "method",
         "path",
+        "name",
+        "tags",
+        "middleware",
         "handler",
         "span",
         "source_evidence",
@@ -130,6 +133,17 @@
         "framework": { "$ref": "#/$defs/framework" },
         "method": { "type": "string", "minLength": 1 },
         "path": { "type": "string", "minLength": 1 },
+        "name": {
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "tags": { "$ref": "#/$defs/string_list" },
+        "middleware": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/symbol_ref" }
+        },
         "handler": {
           "anyOf": [
             { "$ref": "#/$defs/symbol_ref" },

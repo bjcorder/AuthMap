@@ -11,3 +11,6 @@ version.workspace = true
 authmap-core.workspace = true
 authmap-parsers.workspace = true
 tree-sitter.workspace = true
+
+[dev-dependencies]
+authmap-testkit.workspace = true

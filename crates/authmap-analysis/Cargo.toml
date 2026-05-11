@@ -15,3 +15,6 @@ authmap-discovery.workspace = true
 authmap-parsers.workspace = true
 rayon.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+authmap-testkit.workspace = true

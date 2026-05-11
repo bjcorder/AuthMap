@@ -88,6 +88,9 @@ fn rust_document_serialization_validates_against_schema() {
         framework: Framework::Express,
         method: "DELETE".to_string(),
         path: "/accounts/:id".to_string(),
+        name: Some("deleteAccount".to_string()),
+        tags: vec!["accounts".to_string()],
+        middleware: vec![symbol("requireUser", "src/routes/accounts.ts", 8, 8)],
         handler: Some(symbol("deleteAccount", "src/routes/accounts.ts", 10, 14)),
         span: Some(span("src/routes/accounts.ts", 9, 1)),
         source_evidence: vec![SourceEvidence {

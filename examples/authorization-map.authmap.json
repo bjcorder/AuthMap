@@ -31,6 +31,9 @@
       "framework": "next_js",
       "method": "POST",
       "path": "/api/admin/users/:id/disable",
+      "name": null,
+      "tags": ["admin", "users"],
+      "middleware": [],
       "handler": {
         "name": "POST",
         "span": {
@@ -81,6 +84,9 @@
       "framework": "fast_api",
       "method": "DELETE",
       "path": "/accounts/{account_id}",
+      "name": "delete_account",
+      "tags": ["accounts"],
+      "middleware": [],
       "handler": {
         "name": "delete_account",
         "span": {

@@ -281,6 +281,9 @@ pub struct Route {
     pub framework: Framework,
     pub method: String,
     pub path: String,
+    pub name: Option<String>,
+    pub tags: Vec<String>,
+    pub middleware: Vec<SymbolRef>,
     pub handler: Option<SymbolRef>,
     pub span: Option<Span>,
     #[serde(default)]

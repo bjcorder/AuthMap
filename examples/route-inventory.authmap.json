@@ -23,6 +23,9 @@
       "framework": "express",
       "method": "DELETE",
       "path": "/accounts/:id",
+      "name": null,
+      "tags": ["accounts"],
+      "middleware": [],
       "handler": {
         "name": "deleteAccount",
         "span": {

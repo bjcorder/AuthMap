@@ -17,6 +17,18 @@ pub struct ParsedFile {
 }
 
 impl ParsedFile {
+    pub fn root_node(&self) -> Option<Node<'_>> {
+        self.tree.as_ref().map(|tree| tree.root_node())
+    }
+
+    pub fn text_for(&self, node: Node<'_>) -> Option<&str> {
+        node.utf8_text(self.text.as_bytes()).ok()
+    }
+
+    pub fn span_for(&self, node: Node<'_>) -> Span {
+        span_for_node(&self.source, node)
+    }
+
     pub fn tree(&self) -> Option<&Tree> {
         self.tree.as_ref()
     }
@@ -300,6 +312,7 @@ mod tests {
                 .expect("source should parse");
             assert_eq!(parsed.status, ParseStatus::Parsed);
             assert!(parsed.tree().is_some());
+            assert!(parsed.root_node().is_some());
             assert!(parsed.diagnostics.is_empty());
         }
     }

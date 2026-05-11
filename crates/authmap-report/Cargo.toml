@@ -12,3 +12,7 @@ authmap-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+authmap-analysis.workspace = true
+authmap-config.workspace = true

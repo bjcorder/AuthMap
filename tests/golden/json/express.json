@@ -1,0 +1,694 @@
+{
+  "schema_version": "0.1.0",
+  "metadata": {
+    "tool_name": "authmap",
+    "tool_version": "0.1.0",
+    "mode": "advisory",
+    "target_roots": [
+      "tests/fixtures/express"
+    ],
+    "config_path": null
+  },
+  "source_files": [
+    {
+      "path": "tests/fixtures/express/app.js",
+      "language": "java_script",
+      "size_bytes": 1165,
+      "sha256": null,
+      "project_hints": [
+        "express"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/express/routes/admin.js",
+      "language": "java_script",
+      "size_bytes": 253,
+      "sha256": null,
+      "project_hints": [
+        "express"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/express/routes/exported.ts",
+      "language": "type_script",
+      "size_bytes": 317,
+      "sha256": null,
+      "project_hints": [
+        "express"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/express/routes/users.ts",
+      "language": "type_script",
+      "size_bytes": 445,
+      "sha256": null,
+      "project_hints": [
+        "express"
+      ],
+      "skipped": null
+    }
+  ],
+  "routes": [
+    {
+      "id": "route_0001",
+      "framework": "express",
+      "method": "GET",
+      "path": "/health",
+      "name": null,
+      "tags": [],
+      "middleware": [
+        {
+          "name": "requireAuth",
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 12,
+            "column": 10,
+            "byte_range": {
+              "start": 380,
+              "end": 391
+            }
+          }
+        }
+      ],
+      "handler": {
+        "name": "<inline_handler>",
+        "span": {
+          "file": "tests/fixtures/express/app.js",
+          "line": 24,
+          "column": 33,
+          "byte_range": {
+            "start": 554,
+            "end": 597
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 24,
+        "column": 1,
+        "byte_range": {
+          "start": 522,
+          "end": 598
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0002",
+      "framework": "express",
+      "method": "POST",
+      "path": "/accounts",
+      "name": null,
+      "tags": [],
+      "middleware": [
+        {
+          "name": "requireAuth",
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 12,
+            "column": 10,
+            "byte_range": {
+              "start": 380,
+              "end": 391
+            }
+          }
+        },
+        {
+          "name": "audit",
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 16,
+            "column": 10,
+            "byte_range": {
+              "start": 432,
+              "end": 437
+            }
+          }
+        }
+      ],
+      "handler": {
+        "name": "listAccounts",
+        "span": {
+          "file": "tests/fixtures/express/app.js",
+          "line": 20,
+          "column": 10,
+          "byte_range": {
+            "start": 478,
+            "end": 490
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 28,
+        "column": 1,
+        "byte_range": {
+          "start": 601,
+          "end": 658
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0003",
+      "framework": "express",
+      "method": "DELETE",
+      "path": "<dynamic>",
+      "name": null,
+      "tags": [],
+      "middleware": [
+        {
+          "name": "requireAuth",
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 12,
+            "column": 10,
+            "byte_range": {
+              "start": 380,
+              "end": 391
+            }
+          }
+        }
+      ],
+      "handler": {
+        "name": "listAccounts",
+        "span": {
+          "file": "tests/fixtures/express/app.js",
+          "line": 20,
+          "column": 10,
+          "byte_range": {
+            "start": 478,
+            "end": 490
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 29,
+        "column": 1,
+        "byte_range": {
+          "start": 660,
+          "end": 710
+        }
+      },
+      "source_evidence": [],
+      "confidence": "low",
+      "notes": [
+        "Express route path is dynamic and was emitted as <dynamic>"
+      ]
+    },
+    {
+      "id": "route_0004",
+      "framework": "express",
+      "method": "PUT",
+      "path": "/api/:id",
+      "name": null,
+      "tags": [],
+      "middleware": [
+        {
+          "name": "requireAuth",
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 12,
+            "column": 10,
+            "byte_range": {
+              "start": 380,
+              "end": 391
+            }
+          }
+        }
+      ],
+      "handler": {
+        "name": "listAccounts",
+        "span": {
+          "file": "tests/fixtures/express/app.js",
+          "line": 20,
+          "column": 10,
+          "byte_range": {
+            "start": 478,
+            "end": 490
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 31,
+        "column": 1,
+        "byte_range": {
+          "start": 713,
+          "end": 763
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0005",
+      "framework": "express",
+      "method": "GET",
+      "path": "/api/nested/child",
+      "name": null,
+      "tags": [],
+      "middleware": [
+        {
+          "name": "audit",
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 16,
+            "column": 10,
+            "byte_range": {
+              "start": 432,
+              "end": 437
+            }
+          }
+        }
+      ],
+      "handler": {
+        "name": "listAccounts",
+        "span": {
+          "file": "tests/fixtures/express/app.js",
+          "line": 20,
+          "column": 10,
+          "byte_range": {
+            "start": 478,
+            "end": 490
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 32,
+        "column": 1,
+        "byte_range": {
+          "start": 765,
+          "end": 811
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0006",
+      "framework": "express",
+      "method": "GET",
+      "path": "/child",
+      "name": null,
+      "tags": [],
+      "middleware": [
+        {
+          "name": "audit",
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 16,
+            "column": 10,
+            "byte_range": {
+              "start": 432,
+              "end": 437
+            }
+          }
+        }
+      ],
+      "handler": {
+        "name": "listAccounts",
+        "span": {
+          "file": "tests/fixtures/express/app.js",
+          "line": 20,
+          "column": 10,
+          "byte_range": {
+            "start": 478,
+            "end": 490
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 32,
+        "column": 1,
+        "byte_range": {
+          "start": 765,
+          "end": 811
+        }
+      },
+      "source_evidence": [],
+      "confidence": "medium",
+      "notes": [
+        "Express mount prefix is dynamic and was not included in the route path"
+      ]
+    },
+    {
+      "id": "route_0007",
+      "framework": "express",
+      "method": "GET",
+      "path": "/admin/dashboard",
+      "name": null,
+      "tags": [],
+      "middleware": [
+        {
+          "name": "requireAdmin",
+          "span": {
+            "file": "tests/fixtures/express/routes/admin.js",
+            "line": 5,
+            "column": 10,
+            "byte_range": {
+              "start": 80,
+              "end": 92
+            }
+          }
+        }
+      ],
+      "handler": {
+        "name": "listAdmins",
+        "span": {
+          "file": "tests/fixtures/express/routes/admin.js",
+          "line": 9,
+          "column": 10,
+          "byte_range": {
+            "start": 133,
+            "end": 143
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/routes/admin.js",
+        "line": 13,
+        "column": 1,
+        "byte_range": {
+          "start": 175,
+          "end": 225
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0008",
+      "framework": "express",
+      "method": "PATCH",
+      "path": "/exported/audit",
+      "name": null,
+      "tags": [],
+      "middleware": [
+        {
+          "name": "audit",
+          "span": {
+            "file": "tests/fixtures/express/routes/exported.ts",
+            "line": 5,
+            "column": 10,
+            "byte_range": {
+              "start": 82,
+              "end": 87
+            }
+          }
+        }
+      ],
+      "handler": {
+        "name": "exportAudit",
+        "span": {
+          "file": "tests/fixtures/express/routes/exported.ts",
+          "line": 9,
+          "column": 10,
+          "byte_range": {
+            "start": 185,
+            "end": 196
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/routes/exported.ts",
+        "line": 13,
+        "column": 1,
+        "byte_range": {
+          "start": 273,
+          "end": 315
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0009",
+      "framework": "express",
+      "method": "GET",
+      "path": "/secure/:userId",
+      "name": null,
+      "tags": [],
+      "middleware": [
+        {
+          "name": "requireUser",
+          "span": {
+            "file": "tests/fixtures/express/routes/users.ts",
+            "line": 5,
+            "column": 10,
+            "byte_range": {
+              "start": 75,
+              "end": 86
+            }
+          }
+        }
+      ],
+      "handler": {
+        "name": "<inline_handler>",
+        "span": {
+          "file": "tests/fixtures/express/routes/users.ts",
+          "line": 15,
+          "column": 21,
+          "byte_range": {
+            "start": 313,
+            "end": 385
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/routes/users.ts",
+        "line": 13,
+        "column": 1,
+        "byte_range": {
+          "start": 265,
+          "end": 386
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0010",
+      "framework": "express",
+      "method": "GET",
+      "path": "/v1/:userId",
+      "name": null,
+      "tags": [],
+      "middleware": [
+        {
+          "name": "requireUser",
+          "span": {
+            "file": "tests/fixtures/express/routes/users.ts",
+            "line": 5,
+            "column": 10,
+            "byte_range": {
+              "start": 75,
+              "end": 86
+            }
+          }
+        }
+      ],
+      "handler": {
+        "name": "<inline_handler>",
+        "span": {
+          "file": "tests/fixtures/express/routes/users.ts",
+          "line": 15,
+          "column": 21,
+          "byte_range": {
+            "start": 313,
+            "end": 385
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/routes/users.ts",
+        "line": 13,
+        "column": 1,
+        "byte_range": {
+          "start": 265,
+          "end": 386
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0011",
+      "framework": "express",
+      "method": "POST",
+      "path": "/secure/:userId",
+      "name": null,
+      "tags": [],
+      "middleware": [
+        {
+          "name": "requireUser",
+          "span": {
+            "file": "tests/fixtures/express/routes/users.ts",
+            "line": 5,
+            "column": 10,
+            "byte_range": {
+              "start": 75,
+              "end": 86
+            }
+          }
+        }
+      ],
+      "handler": {
+        "name": "updateUser",
+        "span": {
+          "file": "tests/fixtures/express/routes/users.ts",
+          "line": 9,
+          "column": 7,
+          "byte_range": {
+            "start": 181,
+            "end": 191
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/routes/users.ts",
+        "line": 13,
+        "column": 1,
+        "byte_range": {
+          "start": 265,
+          "end": 419
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0012",
+      "framework": "express",
+      "method": "POST",
+      "path": "/v1/:userId",
+      "name": null,
+      "tags": [],
+      "middleware": [
+        {
+          "name": "requireUser",
+          "span": {
+            "file": "tests/fixtures/express/routes/users.ts",
+            "line": 5,
+            "column": 10,
+            "byte_range": {
+              "start": 75,
+              "end": 86
+            }
+          }
+        }
+      ],
+      "handler": {
+        "name": "updateUser",
+        "span": {
+          "file": "tests/fixtures/express/routes/users.ts",
+          "line": 9,
+          "column": 7,
+          "byte_range": {
+            "start": 181,
+            "end": 191
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/routes/users.ts",
+        "line": 13,
+        "column": 1,
+        "byte_range": {
+          "start": 265,
+          "end": 419
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    }
+  ],
+  "evidence": [],
+  "mutations": [],
+  "links": [],
+  "coverage": [],
+  "diagnostics": [
+    {
+      "category": "adapter",
+      "code": "express_cyclic_mount_router",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 34,
+        "column": 1,
+        "byte_range": {
+          "start": 854,
+          "end": 891
+        }
+      },
+      "message": "Express mounted router cycle was ignored"
+    },
+    {
+      "category": "adapter",
+      "code": "express_dynamic_mount_prefix",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 41,
+        "column": 9,
+        "byte_range": {
+          "start": 1077,
+          "end": 1090
+        }
+      },
+      "message": "Express mount prefix is dynamic and could not be resolved"
+    },
+    {
+      "category": "adapter",
+      "code": "express_dynamic_route_path",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 29,
+        "column": 1,
+        "byte_range": {
+          "start": 660,
+          "end": 710
+        }
+      },
+      "message": "Express route path is dynamic and could not be resolved"
+    },
+    {
+      "category": "adapter",
+      "code": "express_unresolved_mount_router",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 42,
+        "column": 1,
+        "byte_range": {
+          "start": 1106,
+          "end": 1140
+        }
+      },
+      "message": "Express mounted router could not be resolved statically"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+# AuthMap Report
+
+- Tool: authmap 0.1.0
+- Schema: 0.1.0
+
+## Summary
+
+- Mode: advisory
+- Targets: tests/fixtures/negative/frontend_only
+- Source files: 1
+- Routes: 0
+- Evidence entries: 0
+- Mutations: 0
+- Diagnostics: 0
+- Frameworks: none
+
+## Review Required
+
+No review-required items were identified.
+
+## Route Inventory
+
+No routes were discovered.
+
+## Route Details
+
+No route details are available.
+
+## Diagnostics
+
+No diagnostics were emitted.
+
+## Skipped Files
+
+No files were skipped.
