@@ -1,0 +1,4 @@
+# Keep fixture-backed snapshots stable across Windows, Linux, and macOS.
+.gitattributes text eol=lf
+tests/fixtures/** text eol=lf
+tests/golden/** text eol=lf
