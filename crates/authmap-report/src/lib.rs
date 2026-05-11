@@ -98,21 +98,21 @@ impl<'a> ReportIndex<'a> {
 
         let mut mutations_by_route: BTreeMap<&str, Vec<&Mutation>> = BTreeMap::new();
         for link in &document.links {
-            if let Some(evidence_id) = &link.evidence_id {
-                if let Some(evidence) = evidence_by_id.get(evidence_id.as_str()) {
-                    evidence_by_route
-                        .entry(link.route_id.as_str())
-                        .or_default()
-                        .push(evidence);
-                }
+            if let Some(evidence_id) = &link.evidence_id
+                && let Some(evidence) = evidence_by_id.get(evidence_id.as_str())
+            {
+                evidence_by_route
+                    .entry(link.route_id.as_str())
+                    .or_default()
+                    .push(evidence);
             }
-            if let Some(mutation_id) = &link.mutation_id {
-                if let Some(mutation) = mutation_by_id.get(mutation_id.as_str()) {
-                    mutations_by_route
-                        .entry(link.route_id.as_str())
-                        .or_default()
-                        .push(mutation);
-                }
+            if let Some(mutation_id) = &link.mutation_id
+                && let Some(mutation) = mutation_by_id.get(mutation_id.as_str())
+            {
+                mutations_by_route
+                    .entry(link.route_id.as_str())
+                    .or_default()
+                    .push(mutation);
             }
         }
 
@@ -542,13 +542,13 @@ fn render_table(output: &mut String, headers: &[&str], rows: &[Vec<String>]) {
 
 fn sorted_routes(document: &AuthMapDocument) -> Vec<&authmap_core::Route> {
     let mut routes = document.routes.iter().collect::<Vec<_>>();
-    routes.sort_by(|left, right| route_sort_key(left).cmp(&route_sort_key(right)));
+    routes.sort_by_key(|route| route_sort_key(route));
     routes
 }
 
 fn sorted_diagnostics(document: &AuthMapDocument) -> Vec<&Diagnostic> {
     let mut diagnostics = document.diagnostics.iter().collect::<Vec<_>>();
-    diagnostics.sort_by(|left, right| diagnostic_sort_key(left).cmp(&diagnostic_sort_key(right)));
+    diagnostics.sort_by_key(|diagnostic| diagnostic_sort_key(diagnostic));
     diagnostics
 }
 
@@ -699,8 +699,7 @@ fn list_or_none(items: Vec<String>) -> String {
 fn escape_table(input: &str) -> String {
     escape_inline(input)
         .replace('|', "\\|")
-        .replace('\n', " ")
-        .replace('\r', " ")
+        .replace(['\n', '\r'], " ")
 }
 
 fn escape_inline(input: &str) -> String {

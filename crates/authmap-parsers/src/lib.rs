@@ -16,10 +16,9 @@ pub struct ParsedFile {
 
 impl ParsedFile {
     pub fn root_node(&self) -> Option<Node<'_>> {
-        match &self.syntax {
-            Some(ParsedSyntax::TreeSitter(tree)) => Some(tree.root_node()),
-            None => None,
-        }
+        self.syntax
+            .as_ref()
+            .map(|ParsedSyntax::TreeSitter(tree)| tree.root_node())
     }
 
     pub fn text_for(&self, node: Node<'_>) -> Option<&str> {

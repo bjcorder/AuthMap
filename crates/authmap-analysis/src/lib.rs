@@ -66,9 +66,7 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
     );
     document.routes = adapter_output.routes;
     document.diagnostics.extend(adapter_output.diagnostics);
-    document
-        .routes
-        .sort_by(|left, right| route_sort_key(left).cmp(&route_sort_key(right)));
+    document.routes.sort_by_key(route_sort_key);
     for (index, route) in document.routes.iter_mut().enumerate() {
         route.id = format!("route_{:04}", index + 1);
     }

@@ -179,10 +179,10 @@ impl FastApiIndex {
                 continue;
             };
 
-            if binding.kind == BindingKind::App {
-                if let Some(emitted_route) = build_route(route, None, false, binding) {
-                    push_unique(&mut emitted, &mut seen, emitted_route);
-                }
+            if binding.kind == BindingKind::App
+                && let Some(emitted_route) = build_route(route, None, false, binding)
+            {
+                push_unique(&mut emitted, &mut seen, emitted_route);
             }
         }
 
@@ -227,14 +227,13 @@ impl FastApiIndex {
             }
         }
 
-        emitted.sort_by(|left, right| route_sort_key(left).cmp(&route_sort_key(right)));
+        emitted.sort_by_key(route_sort_key);
         for (index, route) in emitted.iter_mut().enumerate() {
             route.id = format!("route_{:04}", index + 1);
         }
 
         let mut diagnostics = self.diagnostics;
-        diagnostics
-            .sort_by(|left, right| diagnostic_sort_key(left).cmp(&diagnostic_sort_key(right)));
+        diagnostics.sort_by_key(diagnostic_sort_key);
 
         AdapterOutput {
             routes: emitted,
@@ -845,7 +844,7 @@ fn string_literal(parsed: &ParsedFile, node: Node<'_>) -> Option<String> {
 
 fn decode_python_string_literal(text: &str) -> Option<String> {
     let trimmed = text.trim();
-    let quote_index = trimmed.find(|ch| ch == '\'' || ch == '"')?;
+    let quote_index = trimmed.find(['\'', '"'])?;
     if trimmed[..quote_index]
         .chars()
         .any(|ch| matches!(ch, 'f' | 'F' | 'b' | 'B'))
@@ -1127,13 +1126,12 @@ impl ExpressIndex {
             }
         }
 
-        routes.sort_by(|left, right| route_sort_key(left).cmp(&route_sort_key(right)));
+        routes.sort_by_key(route_sort_key);
         for (index, route) in routes.iter_mut().enumerate() {
             route.id = format!("route_{:04}", index + 1);
         }
 
-        diagnostics
-            .sort_by(|left, right| diagnostic_sort_key(left).cmp(&diagnostic_sort_key(right)));
+        diagnostics.sort_by_key(diagnostic_sort_key);
         AdapterOutput {
             routes,
             diagnostics,
@@ -1503,16 +1501,16 @@ fn find_route_call_in_chain<'tree>(
             return None;
         }
         let function = node.child_by_field_name("function")?;
-        if let Some((_, member)) = js_member_target(parsed, function) {
-            if member == "route" {
-                return Some(node);
-            }
+        if let Some((_, member)) = js_member_target(parsed, function)
+            && member == "route"
+        {
+            return Some(node);
         }
-        if function.kind() == "member_expression" {
-            if let Some(object) = function.child_by_field_name("object") {
-                node = object;
-                continue;
-            }
+        if function.kind() == "member_expression"
+            && let Some(object) = function.child_by_field_name("object")
+        {
+            node = object;
+            continue;
         }
         return None;
     }
