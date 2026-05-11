@@ -10,3 +10,6 @@ version.workspace = true
 [dependencies]
 authmap-core.workspace = true
 authmap-parsers.workspace = true
+
+[dev-dependencies]
+authmap-testkit.workspace = true

@@ -1,15 +1,51 @@
 use authmap_core::{Diagnostic, Language, SourceFile};
 use rayon::prelude::*;
 use thiserror::Error;
+use tree_sitter::{Parser, Tree};
 
-#[derive(Clone, Debug)]
+pub use tree_sitter::Node;
+
+#[derive(Debug)]
 pub struct ParsedFile {
     pub source: SourceFile,
     pub language: Language,
+    pub text: String,
+    pub syntax: Option<ParsedSyntax>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
-#[derive(Clone, Debug, Default)]
+impl ParsedFile {
+    pub fn root_node(&self) -> Option<Node<'_>> {
+        match &self.syntax {
+            Some(ParsedSyntax::TreeSitter(tree)) => Some(tree.root_node()),
+            None => None,
+        }
+    }
+
+    pub fn text_for(&self, node: Node<'_>) -> Option<&str> {
+        node.utf8_text(self.text.as_bytes()).ok()
+    }
+
+    pub fn span_for(&self, node: Node<'_>) -> authmap_core::Span {
+        let point = node.start_position();
+        authmap_core::Span {
+            file: self.source.path.clone(),
+            line: point.row as u32 + 1,
+            column: point.column as u32 + 1,
+            byte_range: Some(authmap_core::ByteRange {
+                start: node.start_byte() as u64,
+                end: node.end_byte() as u64,
+            }),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ParsedSyntax {
+    TreeSitter(Tree),
+}
+
+#[derive(Debug, Default)]
 pub struct ParseOutput {
     pub parsed_files: Vec<ParsedFile>,
     pub diagnostics: Vec<Diagnostic>,
@@ -50,13 +86,52 @@ where
 pub struct TreeSitterBackend;
 
 impl ParserBackend for TreeSitterBackend {
-    fn parse(&self, source: &SourceFile, _text: &str) -> Result<ParsedFile, ParseError> {
+    fn parse(&self, source: &SourceFile, text: &str) -> Result<ParsedFile, ParseError> {
+        let syntax = match source.language {
+            Language::JavaScript | Language::JavaScriptReact => {
+                parse_with_language(source, text, tree_sitter_javascript::LANGUAGE.into())?
+            }
+            Language::Python => {
+                parse_with_language(source, text, tree_sitter_python::LANGUAGE.into())?
+            }
+            Language::TypeScript => parse_with_language(
+                source,
+                text,
+                tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+            )?,
+            Language::TypeScriptReact => {
+                parse_with_language(source, text, tree_sitter_typescript::LANGUAGE_TSX.into())?
+            }
+            _ => None,
+        };
+
         Ok(ParsedFile {
             source: source.clone(),
             language: source.language,
+            text: text.to_string(),
+            syntax,
             diagnostics: Vec::new(),
         })
     }
+}
+
+fn parse_with_language(
+    source: &SourceFile,
+    text: &str,
+    language: tree_sitter::Language,
+) -> Result<Option<ParsedSyntax>, ParseError> {
+    let mut parser = Parser::new();
+    parser
+        .set_language(&language)
+        .map_err(|error| ParseError::Parse {
+            path: source.path.clone(),
+            message: error.to_string(),
+        })?;
+    let tree = parser.parse(text, None).ok_or_else(|| ParseError::Parse {
+        path: source.path.clone(),
+        message: "tree-sitter returned no parse tree".to_string(),
+    })?;
+    Ok(Some(ParsedSyntax::TreeSitter(tree)))
 }
 
 #[derive(Debug, Error)]
