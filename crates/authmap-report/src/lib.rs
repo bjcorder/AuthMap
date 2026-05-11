@@ -1,4 +1,5 @@
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use authmap_core::{AuthMapDocument, Diagnostic, DiagnosticSeverity, RiskLevel, SkipReason, Span};
@@ -55,7 +56,7 @@ impl Reporter for MarkdownReporter {
             for coverage in review_required {
                 report.push_str(&format!(
                     "- `{}`: risk `{}`, class `{}`\n",
-                    coverage.route_id,
+                    markdown_code(&coverage.route_id),
                     enum_value(&coverage.risk),
                     enum_value(&coverage.class)
                 ));
@@ -74,7 +75,12 @@ impl Reporter for MarkdownReporter {
         if !skipped_files.is_empty() {
             report.push_str("## Skipped Files\n\n");
             for (path, skip) in skipped_files {
-                report.push_str(&format!("- `{path}`: `{}` - {}\n", skip.code, skip.message));
+                report.push_str(&format!(
+                    "- `{}`: `{}` - {}\n",
+                    markdown_code(path),
+                    markdown_code(&skip.code),
+                    markdown_text(&skip.message)
+                ));
             }
             report.push('\n');
         }
@@ -86,12 +92,15 @@ impl Reporter for MarkdownReporter {
                     "- `{}` `{}` `{}`: {}{}\n",
                     enum_value(&diagnostic.severity),
                     enum_value(&diagnostic.category),
-                    diagnostic.code,
-                    diagnostic.message,
+                    markdown_code(&diagnostic.code),
+                    markdown_text(&diagnostic.message),
                     diagnostic
                         .span
                         .as_ref()
-                        .map_or_else(String::new, |span| format!(" ({})", span_location(span)))
+                        .map_or_else(String::new, |span| format!(
+                            " ({})",
+                            markdown_text(&span_location(span))
+                        ))
                 ));
             }
             report.push('\n');
@@ -230,8 +239,35 @@ fn span_location(span: &Span) -> String {
 
 fn append_nested_lines(report: &mut String, label: &str, values: &[String]) {
     for value in values {
-        report.push_str(&format!("  - {label}: {value}\n"));
+        report.push_str(&format!("  - {label}: {}\n", markdown_text(value)));
     }
+}
+
+fn markdown_code(input: &str) -> String {
+    input
+        .replace(['\r', '\n', '\t'], " ")
+        .replace('`', "'")
+        .trim()
+        .to_string()
+}
+
+fn markdown_text(input: &str) -> String {
+    input
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace(['\r', '\n', '\t'], " ")
+        .replace('\\', "\\\\")
+        .replace('`', "\\`")
+        .replace('*', "\\*")
+        .replace('_', "\\_")
+        .replace('[', "\\[")
+        .replace(']', "\\]")
+        .replace('(', "\\(")
+        .replace(')', "\\)")
+        .replace('#', "\\#")
+        .trim()
+        .to_string()
 }
 
 pub fn redact_sensitive_text(input: &str) -> String {
@@ -240,10 +276,20 @@ pub fn redact_sensitive_text(input: &str) -> String {
 
 pub fn write_atomic(path: &Path, contents: &str) -> Result<(), ReportError> {
     let temp_path = temp_path_for(path);
-    fs::write(&temp_path, contents).map_err(|source| ReportError::Write {
-        path: temp_path.clone(),
-        source,
-    })?;
+    let mut temp_file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp_path)
+        .map_err(|source| ReportError::Write {
+            path: temp_path.clone(),
+            source,
+        })?;
+    temp_file
+        .write_all(contents.as_bytes())
+        .map_err(|source| ReportError::Write {
+            path: temp_path.clone(),
+            source,
+        })?;
     fs::rename(&temp_path, path).map_err(|source| ReportError::Write {
         path: path.to_path_buf(),
         source,
@@ -368,5 +414,51 @@ mod tests {
                 ["uri"],
             "src/app.py"
         );
+    }
+
+    #[test]
+    fn markdown_escapes_untrusted_report_fields() {
+        let mut document = document_with_review_data();
+        document.source_files[0].path = "src/evil`\n## forged.md".to_string();
+        document.source_files[0]
+            .skipped
+            .as_mut()
+            .expect("file should be skipped")
+            .message = "<script>alert(1)</script>\n```".to_string();
+        document.diagnostics[0].message = "[click](javascript:alert(1))\n# forged".to_string();
+        document.coverage[0].rationale = vec!["**bold**\n## forged".to_string()];
+
+        let markdown = MarkdownReporter
+            .render(&document)
+            .expect("markdown should render");
+
+        assert!(!markdown.contains("\n## forged.md"));
+        assert!(!markdown.contains("<script>"));
+        assert!(!markdown.contains("```"));
+        assert!(!markdown.contains("[click](javascript:alert(1))"));
+        assert!(!markdown.contains("\n# forged"));
+        assert!(markdown.contains("&lt;script&gt;alert"));
+        assert!(markdown.contains("\\[click\\]"));
+    }
+
+    #[test]
+    fn write_atomic_refuses_preexisting_temp_path() {
+        let dir = std::env::temp_dir().join(format!(
+            "authmap-report-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock should be after Unix epoch")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).expect("temp dir should be created");
+        let output = dir.join("authmap.md");
+        let temp = temp_path_for(&output);
+        fs::write(&temp, "stale temp").expect("stale temp should be written");
+
+        let error = write_atomic(&output, "new report").expect_err("temp path should be refused");
+
+        assert!(matches!(error, ReportError::Write { .. }));
+        assert!(!output.exists());
+        let _ = fs::remove_dir_all(dir);
     }
 }

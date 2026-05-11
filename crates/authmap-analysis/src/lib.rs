@@ -4,7 +4,7 @@ use authmap_adapters::AdapterRegistry;
 use authmap_config::ScanPlan;
 use authmap_core::{AuthMapDocument, Diagnostic, Evidence, Mutation, ScanMetadata};
 use authmap_discovery::discover_sources;
-use authmap_parsers::{ParseError, TreeSitterBackend, parse_files_in_parallel};
+use authmap_parsers::{ParseError, TreeSitterBackend, parse_diagnostics_in_parallel};
 use thiserror::Error;
 
 pub trait EvidenceExtractor: Send + Sync {
@@ -32,7 +32,7 @@ pub struct AnalysisFacts {
 pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
     let discovery = discover_sources(plan)?;
     let backend = TreeSitterBackend;
-    let parse_output = parse_files_in_parallel(&backend, &discovery.files, |file| {
+    let parse_diagnostics = parse_diagnostics_in_parallel(&backend, &discovery.files, |file| {
         fs::read_to_string(&file.path).map_err(|source| ParseError::Read {
             path: file.path.clone(),
             message: source.to_string(),
@@ -56,7 +56,7 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
     });
     document.source_files = discovery.files;
     document.diagnostics = discovery.diagnostics;
-    document.diagnostics.extend(parse_output.diagnostics);
+    document.diagnostics.extend(parse_diagnostics);
     document.diagnostics.sort_by(|left, right| {
         left.category.cmp(&right.category).then(
             left.code

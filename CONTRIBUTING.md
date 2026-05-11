@@ -25,4 +25,6 @@ Diagnostic categories and stable codes should follow
 
 ## Development status
 
-The current repository contains initial product documentation and architecture notes. Implementation issues and milestones will be added as the project hardens.
+The current repository contains the v0.1.0 foundation crates for the CLI,
+schema/IR, discovery, parsing, diagnostics, and reporting. Framework-specific
+adapter behavior and higher-level policy checks will land in later milestones.

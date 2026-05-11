@@ -65,6 +65,20 @@ fn assert_exit(output: &Output, code: i32) {
     );
 }
 
+fn assert_valid_authmap_document(document: &Value) {
+    let schema_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("schemas/authmap.schema.json");
+    let schema_text = fs::read_to_string(&schema_path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", schema_path.display()));
+    let schema: Value = serde_json::from_str(&schema_text)
+        .unwrap_or_else(|error| panic!("schema should parse: {error}"));
+    let validator = jsonschema::validator_for(&schema).expect("schema should compile");
+    if let Err(error) = validator.validate(document) {
+        panic!("CLI output should validate against AuthMap schema: {error}");
+    }
+}
+
 #[test]
 fn root_help_works() {
     let output = authmap(&["--help"]);
@@ -107,6 +121,7 @@ fn scan_writes_valid_placeholder_json() {
     let document: Value =
         serde_json::from_str(&fs::read_to_string(output_path).expect("output should exist"))
             .expect("output should be valid JSON");
+    assert_valid_authmap_document(&document);
     assert_eq!(document["schema_version"], "0.1.0");
     assert_eq!(document["metadata"]["mode"], "advisory");
     assert!(
@@ -235,6 +250,46 @@ fn enforce_mode_with_error_diagnostic_writes_report_and_exits_enforcement_code()
             .any(|diagnostic| diagnostic["category"] == "parser"
                 && diagnostic["code"] == "parser.source_read_failed"
                 && diagnostic["severity"] == "error")
+    );
+}
+
+#[test]
+fn enforce_mode_with_incomplete_discovery_writes_report_and_exits_enforcement_code() {
+    let temp = TestDir::new("enforce-incomplete-discovery");
+    let project = temp.path().join("project");
+    let config = temp.path().join("authmap.yml");
+    let output_path = temp.path().join("authmap.json");
+    write_file(
+        &project.join("app.py"),
+        "print('this file exceeds the configured limit')\n",
+    );
+    write_file(
+        &config,
+        "mode: enforce\nlimits:\n  max_file_size_bytes: 4\n",
+    );
+
+    let output = authmap(&[
+        "scan",
+        project.to_str().expect("path should be UTF-8"),
+        "--config",
+        config.to_str().expect("path should be UTF-8"),
+        "--output",
+        output_path.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 20);
+    let document: Value =
+        serde_json::from_str(&fs::read_to_string(output_path).expect("output should exist"))
+            .expect("output should be valid JSON");
+    assert!(
+        document["diagnostics"]
+            .as_array()
+            .expect("diagnostics should be an array")
+            .iter()
+            .any(
+                |diagnostic| diagnostic["code"] == "discovery.file_too_large"
+                    && diagnostic["severity"] == "error"
+            )
     );
 }
 

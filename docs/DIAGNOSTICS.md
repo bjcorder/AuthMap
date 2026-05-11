@@ -56,7 +56,10 @@ and exit `0`.
 Enforce mode also writes the requested artifact first. If the completed
 document contains any diagnostic with `severity: "error"` or
 `recoverability: "fatal"`, the CLI exits `20` after writing the report.
-Warnings remain non-blocking.
+Warnings remain non-blocking. Discovery diagnostics that mean the scan is
+incomplete, such as `discovery.file_limit_reached` and
+`discovery.file_too_large`, are warnings in advisory mode and errors in enforce
+mode.
 
 Hard process failures do not produce a report and use their dedicated exit
 codes: CLI usage `2`, target unavailable `10`, empty enforce target `11`,

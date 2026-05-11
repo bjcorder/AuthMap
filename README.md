@@ -145,7 +145,9 @@ cargo install --path crates/authmap-cli
 
 `authmap scan` supports `--mode advisory|enforce`. In v0.1.0, enforce mode
 writes the requested report and exits `20` when the completed document contains
-any `error` or `fatal` diagnostic. Warnings remain non-blocking.
+any `error` or `fatal` diagnostic. Warnings remain non-blocking; incomplete
+discovery conditions such as file truncation or oversized supported files are
+promoted to error diagnostics in enforce mode.
 
 Discovery honors gitignore-style `include` and `exclude` entries in
 `authmap.yml`. Includes narrow the supported source-file set, excludes win over
@@ -206,4 +208,7 @@ AuthMap is not intended to:
 
 ## Status
 
-This repository currently contains the initial product concept and documentation. Implementation milestones will be added next.
+This repository contains the v0.1.0 foundation work: Rust workspace crates for
+the CLI, config loading, deterministic discovery, Tree-sitter parsing,
+canonical schema/IR, and JSON/Markdown/SARIF reporting. Framework-specific
+route and authorization adapters are still future milestone work.

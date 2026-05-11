@@ -22,4 +22,5 @@ miette.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+jsonschema.workspace = true
 serde_json.workspace = true

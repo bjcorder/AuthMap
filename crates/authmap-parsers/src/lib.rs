@@ -78,6 +78,34 @@ where
     output
 }
 
+pub fn parse_diagnostics_in_parallel<B>(
+    backend: &B,
+    files: &[SourceFile],
+    read_source: impl Fn(&SourceFile) -> Result<String, ParseError> + Send + Sync,
+) -> Vec<Diagnostic>
+where
+    B: ParserBackend,
+{
+    let mut diagnostics = files
+        .par_iter()
+        .filter(|file| file.skipped.is_none())
+        .flat_map(|file| {
+            let result = read_source(file).and_then(|text| backend.parse(file, &text));
+            match result {
+                Ok(parsed) => parsed.diagnostics,
+                Err(error) => vec![error.into_diagnostic()],
+            }
+        })
+        .collect::<Vec<_>>();
+    diagnostics.sort_by(|left, right| {
+        left.category
+            .cmp(&right.category)
+            .then(left.code.cmp(&right.code))
+            .then(left.message.cmp(&right.message))
+    });
+    diagnostics
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct TreeSitterBackend;
 
@@ -88,6 +116,7 @@ impl ParserBackend for TreeSitterBackend {
                 diagnostic_codes::PARSER_SOURCE_LANGUAGE_UNSUPPORTED,
                 source.path.clone(),
                 DiagnosticSeverity::Warning,
+                None,
                 format!("no parser backend is configured for {:?}", source.language),
             );
             return Ok(ParsedFile {
@@ -114,10 +143,12 @@ impl ParserBackend for TreeSitterBackend {
         })?;
         let mut diagnostics = Vec::new();
         let status = if tree.root_node().has_error() {
+            let span = first_error_node(tree.root_node()).map(|node| span_for_node(source, node));
             diagnostics.push(diagnostic(
                 diagnostic_codes::PARSER_SOURCE_PARSE_RECOVERED,
                 source.path.clone(),
                 DiagnosticSeverity::Warning,
+                span,
                 "source parsed with syntax errors; partial tree is available".to_string(),
             ));
             ParseStatus::Recovered
@@ -165,6 +196,7 @@ fn diagnostic(
     code: impl Into<String>,
     path: String,
     severity: DiagnosticSeverity,
+    span: Option<Span>,
     message: impl Into<String>,
 ) -> Diagnostic {
     Diagnostic {
@@ -172,14 +204,29 @@ fn diagnostic(
         code: code.into(),
         severity,
         recoverability: Recoverability::Recoverable,
-        span: Some(Span {
+        span: span.or(Some(Span {
             file: path,
             line: 1,
             column: 1,
             byte_range: None,
-        }),
+        })),
         message: message.into(),
     }
+}
+
+fn first_error_node(node: Node<'_>) -> Option<Node<'_>> {
+    if node.is_error() || node.is_missing() {
+        return Some(node);
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.has_error()
+            && let Some(error) = first_error_node(child)
+        {
+            return Some(error);
+        }
+    }
+    None
 }
 
 #[derive(Debug, Error)]
@@ -197,12 +244,14 @@ impl ParseError {
                 diagnostic_codes::PARSER_SOURCE_READ_FAILED,
                 path,
                 DiagnosticSeverity::Error,
+                None,
                 message,
             ),
             ParseError::Parse { path, message } => diagnostic(
                 diagnostic_codes::PARSER_SOURCE_PARSE_FAILED,
                 path,
                 DiagnosticSeverity::Error,
+                None,
                 message,
             ),
         }
@@ -267,6 +316,27 @@ mod tests {
         assert_eq!(
             parsed.diagnostics[0].code,
             diagnostic_codes::PARSER_SOURCE_PARSE_RECOVERED
+        );
+    }
+
+    #[test]
+    fn recovery_diagnostic_points_to_error_node_when_available() {
+        let backend = TreeSitterBackend;
+        let parsed = backend
+            .parse(
+                &source("broken.py", Language::Python),
+                "def ok():\n    return 1\ndef broken(:\n",
+            )
+            .expect("recoverable parse should return a parsed file");
+
+        assert_eq!(parsed.status, ParseStatus::Recovered);
+        assert_eq!(
+            parsed.diagnostics[0]
+                .span
+                .as_ref()
+                .expect("recovery diagnostic should have a span")
+                .line,
+            3
         );
     }
 

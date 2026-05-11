@@ -97,13 +97,19 @@ pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryErr
     all_paths.sort();
     all_paths.dedup();
 
-    let target_hints = detect_project_hints(&target_roots, &all_paths);
     let matchers = PatternMatchers::new(&plan.targets, &plan.config.include, &plan.config.exclude)?;
 
     let mut diagnostics = Vec::new();
     let mut candidates = Vec::new();
+    let mut hint_paths = Vec::new();
     for path in all_paths {
-        if is_hard_excluded(&path) || !is_supported_source(&path) || !matchers.is_included(&path) {
+        if is_hard_excluded_for_roots(&path, &target_roots) {
+            continue;
+        }
+        if is_manifest_or_hint_file(&path) {
+            hint_paths.push(path.clone());
+        }
+        if !is_supported_source(&path) || !matchers.is_included(&path) {
             continue;
         }
         if matchers.is_excluded(&path) {
@@ -137,8 +143,9 @@ pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryErr
 
     let candidate_count = candidates.len();
     if candidate_count > plan.config.limits.max_files {
-        diagnostics.push(diagnostic(
+        diagnostics.push(diagnostic_with_severity(
             diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED,
+            incomplete_scan_severity(plan.config.mode),
             format!(
                 "discovered {candidate_count} candidate source files; scanning first {} after deterministic sorting",
                 plan.config.limits.max_files
@@ -146,8 +153,21 @@ pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryErr
         ));
     }
 
+    candidates.truncate(plan.config.limits.max_files);
+    hint_paths.sort();
+    hint_paths.dedup();
+    hint_paths.truncate(plan.config.limits.max_files);
+    hint_paths.extend(candidates.iter().cloned());
+    hint_paths.sort();
+    hint_paths.dedup();
+    let target_hints = detect_project_hints(
+        &target_roots,
+        &hint_paths,
+        plan.config.limits.max_file_size_bytes,
+    );
+
     let mut files = Vec::new();
-    for path in candidates.into_iter().take(plan.config.limits.max_files) {
+    for path in candidates {
         let metadata = fs::metadata(&path).map_err(|source| DiscoveryError::Metadata {
             path: path.clone(),
             source,
@@ -161,8 +181,9 @@ pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryErr
                 ),
             });
         if let Some(skip) = skipped.as_ref() {
-            diagnostics.push(diagnostic(
+            diagnostics.push(diagnostic_with_severity(
                 diagnostic_codes::DISCOVERY_FILE_TOO_LARGE,
+                incomplete_scan_severity(plan.config.mode),
                 format!("{}: {}", normalize_path(&path), skip.message),
             ));
         }
@@ -196,7 +217,7 @@ fn walk_target(target: &Path) -> Vec<PathBuf> {
                 if is_hard_excluded_dir(&entry) {
                     return WalkState::Skip;
                 }
-                if is_regular_file(&entry) {
+                if is_regular_file(&entry) && is_source_or_hint_path(entry.path()) {
                     paths
                         .lock()
                         .expect("discovery path mutex poisoned")
@@ -238,6 +259,31 @@ fn is_hard_excluded(path: &Path) -> bool {
         .is_some_and(|name| HARD_EXCLUDED_FILES.contains(&name))
 }
 
+fn is_hard_excluded_for_roots(path: &Path, roots: &[PathBuf]) -> bool {
+    let relative = roots
+        .iter()
+        .filter_map(|root| path.strip_prefix(root).ok())
+        .min_by_key(|relative| relative.components().count())
+        .unwrap_or(path);
+    is_hard_excluded(relative)
+}
+
+fn is_source_or_hint_path(path: &Path) -> bool {
+    is_supported_source(path) || is_manifest_or_hint_file(path)
+}
+
+fn is_manifest_or_hint_file(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            MANIFEST_FILES.contains(&name)
+                || matches!(
+                    name,
+                    "next.config.js" | "next.config.mjs" | "next.config.ts"
+                )
+        })
+}
+
 fn is_supported_source(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|ext| ext.to_str()),
@@ -263,6 +309,7 @@ fn detect_language(path: &Path) -> Language {
 fn detect_project_hints(
     roots: &[PathBuf],
     discovered_paths: &[PathBuf],
+    max_read_bytes: u64,
 ) -> BTreeMap<PathBuf, BTreeSet<ProjectHint>> {
     let mut hints = BTreeMap::<PathBuf, BTreeSet<ProjectHint>>::new();
     for root in roots {
@@ -270,9 +317,6 @@ fn detect_project_hints(
     }
 
     for path in discovered_paths {
-        if is_hard_excluded(path) {
-            continue;
-        }
         let normalized = normalize_path(path);
         let lower = normalized.to_ascii_lowercase();
         let mut path_hints = BTreeSet::new();
@@ -298,16 +342,17 @@ fn detect_project_hints(
             .file_name()
             .and_then(|name| name.to_str())
             .is_some_and(|name| MANIFEST_FILES.contains(&name))
+            && file_is_within_read_budget(path, max_read_bytes)
+            && let Ok(text) = fs::read_to_string(path)
         {
-            if let Ok(text) = fs::read_to_string(path) {
-                detect_manifest_hints(&text, &mut path_hints);
-            }
+            detect_manifest_hints(&text, &mut path_hints);
         }
 
-        if is_supported_source(path) {
-            if let Ok(text) = fs::read_to_string(path) {
-                detect_source_hints(&text, &mut path_hints);
-            }
+        if is_supported_source(path)
+            && file_is_within_read_budget(path, max_read_bytes)
+            && let Ok(text) = fs::read_to_string(path)
+        {
+            detect_source_hints(&text, &mut path_hints);
         }
 
         if path_hints.is_empty() {
@@ -328,6 +373,10 @@ fn detect_project_hints(
     }
 
     hints
+}
+
+fn file_is_within_read_budget(path: &Path, max_read_bytes: u64) -> bool {
+    fs::metadata(path).is_ok_and(|metadata| metadata.len() <= max_read_bytes)
 }
 
 fn detect_manifest_hints(text: &str, hints: &mut BTreeSet<ProjectHint>) {
@@ -398,13 +447,28 @@ fn hints_for_path(
 }
 
 fn diagnostic(code: impl Into<String>, message: impl Into<String>) -> Diagnostic {
+    diagnostic_with_severity(code, DiagnosticSeverity::Warning, message)
+}
+
+fn diagnostic_with_severity(
+    code: impl Into<String>,
+    severity: DiagnosticSeverity,
+    message: impl Into<String>,
+) -> Diagnostic {
     Diagnostic {
         category: DiagnosticCategory::Discovery,
         code: code.into(),
-        severity: DiagnosticSeverity::Warning,
+        severity,
         recoverability: Recoverability::Recoverable,
         span: None,
         message: message.into(),
+    }
+}
+
+fn incomplete_scan_severity(mode: authmap_core::ScanMode) -> DiagnosticSeverity {
+    match mode {
+        authmap_core::ScanMode::Advisory => DiagnosticSeverity::Warning,
+        authmap_core::ScanMode::Enforce => DiagnosticSeverity::Error,
     }
 }
 
@@ -599,6 +663,17 @@ mod tests {
     }
 
     #[test]
+    fn hard_exclusions_are_relative_to_scan_root_not_absolute_ancestors() {
+        let temp = TestDir::new("ancestor-build");
+        let project = temp.path().join("build").join("project");
+        write_file(&project.join("app.py"), "print('hello')\n");
+
+        let result = discover_sources(&plan(&project)).expect("discovery should succeed");
+
+        assert_eq!(names(&result), vec!["app.py"]);
+    }
+
+    #[test]
     fn hard_exclusions_cannot_be_reincluded_by_config() {
         let temp = TestDir::new("hard-exclude-include");
         write_file(
@@ -712,6 +787,22 @@ mod tests {
     }
 
     #[test]
+    fn enforce_large_file_marks_incomplete_discovery_as_error() {
+        let temp = TestDir::new("large-file-enforce");
+        write_file(&temp.path().join("app.py"), "print('this is too large')\n");
+        let mut plan = plan(temp.path());
+        plan.config.mode = ScanMode::Enforce;
+        plan.config.limits.max_file_size_bytes = 4;
+
+        let result = discover_sources(&plan).expect("large file should be represented as skipped");
+
+        assert!(result.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == diagnostic_codes::DISCOVERY_FILE_TOO_LARGE
+                && diagnostic.severity == DiagnosticSeverity::Error
+        }));
+    }
+
+    #[test]
     fn max_files_limit_truncates_after_sorting_and_warns() {
         let temp = TestDir::new("max-files");
         write_file(&temp.path().join("b.ts"), "export const b = 1;\n");
@@ -725,6 +816,24 @@ mod tests {
         assert_eq!(names(&result), vec!["a.ts", "b.ts"]);
         assert!(result.diagnostics.iter().any(|diagnostic| {
             diagnostic.code == diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED
+        }));
+    }
+
+    #[test]
+    fn enforce_max_files_limit_marks_incomplete_discovery_as_error() {
+        let temp = TestDir::new("max-files-enforce");
+        write_file(&temp.path().join("b.ts"), "export const b = 1;\n");
+        write_file(&temp.path().join("a.ts"), "export const a = 1;\n");
+        let mut plan = plan(temp.path());
+        plan.config.mode = ScanMode::Enforce;
+        plan.config.limits.max_files = 1;
+
+        let result = discover_sources(&plan).expect("discovery should succeed");
+
+        assert_eq!(names(&result), vec!["a.ts"]);
+        assert!(result.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED
+                && diagnostic.severity == DiagnosticSeverity::Error
         }));
     }
 
@@ -760,6 +869,25 @@ mod tests {
             assert!(file.project_hints.contains(&ProjectHint::Express));
             assert!(file.project_hints.contains(&ProjectHint::NextJs));
         }
+    }
+
+    #[test]
+    fn oversized_hint_files_are_not_read_before_size_limits() {
+        let temp = TestDir::new("oversized-hints");
+        write_file(
+            &temp.path().join("package.json"),
+            r#"{ "dependencies": { "express": "^4" } }"#,
+        );
+        write_file(&temp.path().join("src/app.ts"), "export const ok = true;\n");
+        let mut plan = plan(temp.path());
+        plan.config.limits.max_file_size_bytes = 4;
+
+        let result = discover_sources(&plan).expect("discovery should succeed");
+
+        assert!(
+            result.files[0].project_hints.is_empty(),
+            "oversized manifests and sources should not be read for hints"
+        );
     }
 
     #[test]
