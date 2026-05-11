@@ -1,0 +1,28 @@
+{
+  "schema_version": "0.1.0",
+  "metadata": {
+    "tool_name": "authmap",
+    "tool_version": "0.1.0",
+    "mode": "advisory",
+    "target_roots": [
+      "tests/fixtures/negative/frontend_only"
+    ],
+    "config_path": null
+  },
+  "source_files": [
+    {
+      "path": "tests/fixtures/negative/frontend_only/App.tsx",
+      "language": "type_script_react",
+      "size_bytes": 254,
+      "sha256": null,
+      "project_hints": [],
+      "skipped": null
+    }
+  ],
+  "routes": [],
+  "evidence": [],
+  "mutations": [],
+  "links": [],
+  "coverage": [],
+  "diagnostics": []
+}

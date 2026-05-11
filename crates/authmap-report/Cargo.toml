@@ -15,4 +15,3 @@ thiserror.workspace = true
 [dev-dependencies]
 authmap-analysis.workspace = true
 authmap-config.workspace = true
-authmap-testkit.workspace = true

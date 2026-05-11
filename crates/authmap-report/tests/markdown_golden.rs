@@ -1,8 +1,9 @@
+use std::path::{Path, PathBuf};
+
 use authmap_analysis::run_scan;
 use authmap_config::{ScanConfig, ScanPlan};
 use authmap_core::{AuthMapDocument, ScanMetadata};
 use authmap_report::{MarkdownReporter, Reporter};
-use authmap_testkit::fixture_path;
 
 #[test]
 fn empty_markdown_matches_golden() {
@@ -42,6 +43,12 @@ fn scan_fixture(name: &str) -> AuthMapDocument {
     run_scan(&plan).expect("fixture scan should succeed")
 }
 
+fn fixture_path(name: impl AsRef<Path>) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures")
+        .join(name)
+}
+
 fn assert_markdown_eq(actual: String, expected: &str) {
     assert_eq!(normalize(&actual), normalize(expected));
 }
@@ -56,4 +63,6 @@ fn normalize(input: &str) -> String {
         .replace("\r\n", "\n")
         .replace('\\', "/")
         .replace(&fixture_root, "tests/fixtures")
+        .trim_end_matches('\n')
+        .to_string()
 }

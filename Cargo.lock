@@ -158,7 +158,6 @@ dependencies = [
  "authmap-analysis",
  "authmap-config",
  "authmap-core",
- "authmap-testkit",
  "serde_json",
  "thiserror",
 ]
@@ -167,7 +166,11 @@ dependencies = [
 name = "authmap-testkit"
 version = "0.1.0"
 dependencies = [
+ "authmap-analysis",
+ "authmap-config",
  "authmap-core",
+ "authmap-report",
+ "serde_json",
 ]
 
 [[package]]
