@@ -809,53 +809,109 @@
   "coverage": [
     {
       "route_id": "route_0001",
-      "class": "unknown_or_dynamic",
-      "risk": "review_required",
+      "class": "unauthenticated",
+      "risk": "medium",
       "rationale": [
-        "No authorization evidence was detected for a sensitive-looking route."
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): path_param, user_path."
       ],
       "reviewer_questions": [
         "Should this route require ownership or permission checks?"
       ],
-      "uncertainty_reasons": []
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "path_param",
+            "user_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
     },
     {
       "route_id": "route_0002",
-      "class": "unknown_or_dynamic",
-      "risk": "review_required",
+      "class": "unauthenticated",
+      "risk": "medium",
       "rationale": [
-        "No authorization evidence was detected for a sensitive-looking route."
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): path_param, user_path."
       ],
       "reviewer_questions": [
         "Should this route require ownership or permission checks?"
       ],
-      "uncertainty_reasons": []
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "path_param",
+            "user_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
     },
     {
       "route_id": "route_0003",
-      "class": "unknown_or_dynamic",
-      "risk": "review_required",
+      "class": "unauthenticated",
+      "risk": "high",
       "rationale": [
-        "No authorization evidence was detected for a sensitive-looking route."
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): path_param, unsafe_method, user_path.",
+        "No strong authorization evidence was found for a high-sensitivity route."
       ],
       "reviewer_questions": [
         "Should this route require ownership or permission checks?",
         "Should this state-changing route require more than authentication?"
       ],
-      "uncertainty_reasons": []
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "path_param",
+            "unsafe_method",
+            "user_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
     },
     {
       "route_id": "route_0004",
-      "class": "unknown_or_dynamic",
-      "risk": "review_required",
+      "class": "unauthenticated",
+      "risk": "high",
       "rationale": [
-        "No authorization evidence was detected for a sensitive-looking route."
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): path_param, unsafe_method, user_path.",
+        "No strong authorization evidence was found for a high-sensitivity route."
       ],
       "reviewer_questions": [
         "Should this route require ownership or permission checks?",
         "Should this state-changing route require more than authentication?"
       ],
-      "uncertainty_reasons": []
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "path_param",
+            "unsafe_method",
+            "user_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
     },
     {
       "route_id": "route_0005",
@@ -865,65 +921,159 @@
         "No authorization evidence was detected."
       ],
       "reviewer_questions": [],
-      "uncertainty_reasons": []
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
     },
     {
       "route_id": "route_0006",
-      "class": "unknown_or_dynamic",
-      "risk": "review_required",
+      "class": "unauthenticated",
+      "risk": "high",
       "rationale": [
-        "No authorization evidence was detected for a sensitive-looking route."
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): unsafe_method.",
+        "No strong authorization evidence was found for a high-sensitivity route."
       ],
       "reviewer_questions": [
         "Should this state-changing route require more than authentication?"
       ],
-      "uncertainty_reasons": []
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
     },
     {
       "route_id": "route_0007",
       "class": "authn_only",
       "risk": "low",
       "rationale": [
-        "2 strong authorization evidence item(s) were detected."
+        "2 strong authorization evidence item(s) support authn_only coverage."
       ],
       "reviewer_questions": [],
-      "uncertainty_reasons": []
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0001",
+            "evidence_0002"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
     },
     {
       "route_id": "route_0008",
       "class": "admin_guarded",
       "risk": "low",
       "rationale": [
-        "2 strong authorization evidence item(s) were detected."
+        "2 strong authorization evidence item(s) support admin_guarded coverage.",
+        "Sensitive route modifier(s): account_path, admin_path, path_param, unsafe_method."
       ],
-      "reviewer_questions": [],
-      "uncertainty_reasons": []
+      "reviewer_questions": [
+        "Should this route require an admin or role guard?",
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0003",
+            "evidence_0004"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "admin_path",
+            "path_param",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
     },
     {
       "route_id": "route_0009",
       "class": "permission_guarded",
       "risk": "low",
       "rationale": [
-        "3 strong authorization evidence item(s) were detected."
-      ],
-      "reviewer_questions": [],
-      "uncertainty_reasons": [
-        "Low-confidence authorization evidence was detected.",
-        "Dynamic authorization evidence requires review."
-      ]
-    },
-    {
-      "route_id": "route_0010",
-      "class": "unknown_or_dynamic",
-      "risk": "review_required",
-      "rationale": [
-        "No authorization evidence was detected for a sensitive-looking route."
+        "3 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): account_path, path_param, unsafe_method."
       ],
       "reviewer_questions": [
         "Should this route require ownership or permission checks?",
         "Should this state-changing route require more than authentication?"
       ],
-      "uncertainty_reasons": []
+      "uncertainty_reasons": [
+        "Dynamic authorization evidence requires review.",
+        "Low-confidence authorization evidence was detected."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0005",
+            "evidence_0006",
+            "evidence_0007",
+            "evidence_0008"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "path_param",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": [
+            "evidence_0007"
+          ]
+        }
+      }
+    },
+    {
+      "route_id": "route_0010",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): path_param, unsafe_method.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "path_param",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
     },
     {
       "route_id": "route_0011",
@@ -935,7 +1085,16 @@
       "reviewer_questions": [],
       "uncertainty_reasons": [
         "Route inventory confidence is not high."
-      ]
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
     },
     {
       "route_id": "route_0012",
@@ -945,33 +1104,69 @@
         "No authorization evidence was detected."
       ],
       "reviewer_questions": [],
-      "uncertainty_reasons": []
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
     },
     {
       "route_id": "route_0013",
-      "class": "unknown_or_dynamic",
-      "risk": "review_required",
+      "class": "unauthenticated",
+      "risk": "high",
       "rationale": [
-        "No authorization evidence was detected for a sensitive-looking route."
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): unsafe_method.",
+        "No strong authorization evidence was found for a high-sensitivity route."
       ],
       "reviewer_questions": [
         "Should this state-changing route require more than authentication?"
       ],
-      "uncertainty_reasons": []
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
     },
     {
       "route_id": "route_0014",
-      "class": "unknown_or_dynamic",
-      "risk": "review_required",
+      "class": "unauthenticated",
+      "risk": "high",
       "rationale": [
-        "No authorization evidence was detected for a sensitive-looking route."
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): any_method, unsafe_method.",
+        "No strong authorization evidence was found for a high-sensitivity route."
       ],
       "reviewer_questions": [
         "Should this state-changing route require more than authentication?"
       ],
       "uncertainty_reasons": [
         "Route inventory confidence is not high."
-      ]
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "any_method",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
     },
     {
       "route_id": "route_0015",
@@ -983,7 +1178,16 @@
       "reviewer_questions": [],
       "uncertainty_reasons": [
         "Route inventory confidence is not high."
-      ]
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
     }
   ],
   "diagnostics": [

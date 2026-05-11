@@ -50,6 +50,29 @@ Coverage and risk fields should avoid overstating findings. When a check is
 dynamic or incomplete, prefer `unknown_or_dynamic` or `review_required` with a
 clear reviewer question.
 
+Coverage classification is deterministic and rule-based. AuthMap chooses the
+most specific strong evidence class in this order: `public_declared`,
+`admin_guarded`, `permission_guarded`, `ownership_guarded`, `tenant_guarded`,
+`role_guarded`, `authn_only`, `unknown_or_dynamic`, then `unauthenticated`.
+Low-confidence evidence and `unknown_dynamic_check` evidence require review
+rather than proving a route safe.
+
+Risk scoring uses route sensitivity modifiers and linked facts:
+
+- `high`: no authorization evidence on unsafe methods, `ANY`, or routes with
+  linked mutations.
+- `medium`: no authorization evidence on sensitive read paths such as admin,
+  account, user, tenant, or path-parameter routes.
+- `review_required`: weak/dynamic-only evidence, sensitive public routes,
+  sensitive authn-only routes, or linked mutations guarded only by non-resource
+  evidence.
+- `low`: non-sensitive public/unauthenticated routes and routes with strong
+  resource-oriented authorization evidence.
+
+Coverage entries include machine-readable support metadata in the namespaced
+extension key `authmap.coverage`. The extension can contain `evidence_ids`,
+`weak_evidence_ids`, `mutation_ids`, `link_ids`, and `sensitivity_reasons`.
+
 ## Project Authorization Rules
 
 Projects can extend built-in guard detection through `authmap.yml`:

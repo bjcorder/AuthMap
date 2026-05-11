@@ -5,7 +5,7 @@ use authmap_adapters::{AdapterContext, AdapterRegistry};
 use authmap_config::{AuthorizationRule, ScanConfig, ScanPlan};
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, Evidence, EvidenceType,
-    Framework, Mutation, RiskLevel, ScanMetadata, Span, SymbolRef,
+    Framework, Mutation, ReachabilityLink, RiskLevel, ScanMetadata, Span, SymbolRef,
 };
 use authmap_discovery::discover_sources;
 use authmap_parsers::{ParseError, ParsedFile, TreeSitterBackend, parse_files_in_parallel};
@@ -122,7 +122,12 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
     document.evidence = facts.evidence;
     document.mutations.append(&mut adapter_output.mutations);
     document.diagnostics.extend(facts.diagnostics);
-    document.coverage = classify_coverage(&document.routes, &document.evidence);
+    document.coverage = classify_coverage(
+        &document.routes,
+        &document.evidence,
+        &document.mutations,
+        &document.links,
+    );
     document.diagnostics.sort_by(|left, right| {
         left.category
             .cmp(&right.category)
@@ -739,132 +744,225 @@ fn evidence_sort_key(evidence: &Evidence) -> (String, String, u32, u32, Evidence
     )
 }
 
-fn classify_coverage(routes: &[authmap_core::Route], evidence: &[Evidence]) -> Vec<Coverage> {
-    let mut by_route = BTreeMap::<&str, Vec<&Evidence>>::new();
-    for item in evidence {
-        if let Some(route_id) = &item.route_id {
-            by_route.entry(route_id.as_str()).or_default().push(item);
-        }
-    }
-
+fn classify_coverage(
+    routes: &[authmap_core::Route],
+    evidence: &[Evidence],
+    mutations: &[Mutation],
+    links: &[ReachabilityLink],
+) -> Vec<Coverage> {
+    let index = CoverageIndex::new(evidence, mutations, links);
     routes
         .iter()
-        .map(|route| {
-            let evidence = by_route.get(route.id.as_str()).cloned().unwrap_or_default();
-            classify_route(route, &evidence)
-        })
+        .map(|route| classify_route(route, &index.route_facts(route.id.as_str())))
         .collect()
 }
 
-fn classify_route(route: &authmap_core::Route, evidence: &[&Evidence]) -> Coverage {
+#[derive(Clone, Debug, Default)]
+struct CoverageRouteFacts<'a> {
+    evidence: Vec<&'a Evidence>,
+    linked_mutations: Vec<&'a Mutation>,
+    links: Vec<&'a ReachabilityLink>,
+}
+
+#[derive(Clone, Debug)]
+struct CoverageIndex<'a> {
+    evidence_by_route: BTreeMap<&'a str, Vec<&'a Evidence>>,
+    mutations_by_id: BTreeMap<&'a str, &'a Mutation>,
+    links_by_route: BTreeMap<&'a str, Vec<&'a ReachabilityLink>>,
+}
+
+impl<'a> CoverageIndex<'a> {
+    fn new(
+        evidence: &'a [Evidence],
+        mutations: &'a [Mutation],
+        links: &'a [ReachabilityLink],
+    ) -> Self {
+        let mut evidence_by_route = BTreeMap::<&str, Vec<&Evidence>>::new();
+        for item in evidence {
+            if let Some(route_id) = &item.route_id {
+                evidence_by_route
+                    .entry(route_id.as_str())
+                    .or_default()
+                    .push(item);
+            }
+        }
+        for link in links {
+            if let Some(evidence_id) = &link.evidence_id
+                && let Some(item) = evidence.iter().find(|item| item.id == *evidence_id)
+            {
+                evidence_by_route
+                    .entry(link.route_id.as_str())
+                    .or_default()
+                    .push(item);
+            }
+        }
+        for evidence in evidence_by_route.values_mut() {
+            evidence.sort_by(|left, right| left.id.cmp(&right.id));
+            evidence.dedup_by(|left, right| left.id == right.id);
+        }
+
+        let mutations_by_id = mutations
+            .iter()
+            .map(|mutation| (mutation.id.as_str(), mutation))
+            .collect::<BTreeMap<_, _>>();
+        let mut links_by_route = BTreeMap::<&str, Vec<&ReachabilityLink>>::new();
+        for link in links {
+            links_by_route
+                .entry(link.route_id.as_str())
+                .or_default()
+                .push(link);
+        }
+        for route_links in links_by_route.values_mut() {
+            route_links.sort_by(|left, right| left.id.cmp(&right.id));
+        }
+
+        Self {
+            evidence_by_route,
+            mutations_by_id,
+            links_by_route,
+        }
+    }
+
+    fn route_facts(&self, route_id: &str) -> CoverageRouteFacts<'a> {
+        let evidence = self
+            .evidence_by_route
+            .get(route_id)
+            .cloned()
+            .unwrap_or_default();
+        let links = self
+            .links_by_route
+            .get(route_id)
+            .cloned()
+            .unwrap_or_default();
+        let mut linked_mutations = links
+            .iter()
+            .filter_map(|link| {
+                link.mutation_id
+                    .as_deref()
+                    .and_then(|mutation_id| self.mutations_by_id.get(mutation_id).copied())
+            })
+            .collect::<Vec<_>>();
+        linked_mutations.sort_by(|left, right| left.id.cmp(&right.id));
+        linked_mutations.dedup_by(|left, right| left.id == right.id);
+
+        CoverageRouteFacts {
+            evidence,
+            linked_mutations,
+            links,
+        }
+    }
+}
+
+fn classify_route(route: &authmap_core::Route, facts: &CoverageRouteFacts<'_>) -> Coverage {
+    let evidence = facts.evidence.as_slice();
     let strong = evidence
         .iter()
         .copied()
         .filter(|item| item.confidence != Confidence::Low)
         .filter(|item| item.evidence_type != EvidenceType::UnknownDynamicCheck)
         .collect::<Vec<_>>();
-    let sensitive = sensitive_route(route);
-
-    let mut uncertainty_reasons = Vec::new();
-    if evidence
+    let weak = evidence
         .iter()
-        .any(|item| item.confidence == Confidence::Low)
-    {
-        uncertainty_reasons.push("Low-confidence authorization evidence was detected.".to_string());
-    }
-    if evidence
-        .iter()
-        .any(|item| item.evidence_type == EvidenceType::UnknownDynamicCheck)
-    {
-        uncertainty_reasons.push("Dynamic authorization evidence requires review.".to_string());
-    }
-    if route.confidence != Confidence::High {
-        uncertainty_reasons.push("Route inventory confidence is not high.".to_string());
-    }
+        .copied()
+        .filter(|item| {
+            item.confidence == Confidence::Low
+                || item.evidence_type == EvidenceType::UnknownDynamicCheck
+        })
+        .collect::<Vec<_>>();
+    let sensitivity = sensitivity_reasons(route, !facts.linked_mutations.is_empty());
+    let sensitive = !sensitivity.is_empty();
+    let has_linked_mutations = !facts.linked_mutations.is_empty();
 
-    if evidence.is_empty() {
-        if sensitive {
-            return Coverage {
-                route_id: route.id.clone(),
-                class: CoverageClass::UnknownOrDynamic,
-                risk: RiskLevel::ReviewRequired,
-                rationale: vec![
-                    "No authorization evidence was detected for a sensitive-looking route."
-                        .to_string(),
-                ],
-                reviewer_questions: expected_questions(route),
-                uncertainty_reasons,
-                extensions: authmap_core::ExtensionMap::new(),
-            };
-        }
-        return Coverage {
-            route_id: route.id.clone(),
-            class: CoverageClass::Unauthenticated,
-            risk: RiskLevel::Low,
-            rationale: vec!["No authorization evidence was detected.".to_string()],
-            reviewer_questions: Vec::new(),
-            uncertainty_reasons,
-            extensions: authmap_core::ExtensionMap::new(),
-        };
+    let class = coverage_class(&strong, evidence);
+    let risk = coverage_risk(
+        route,
+        class,
+        evidence,
+        &strong,
+        &weak,
+        sensitive,
+        has_linked_mutations,
+    );
+    let mut reviewer_questions = reviewer_questions(route, class, sensitive, has_linked_mutations);
+    if risk == RiskLevel::High && reviewer_questions.is_empty() {
+        reviewer_questions
+            .push("Should this route have server-side authorization evidence?".to_string());
     }
-
-    if strong.is_empty() {
-        return Coverage {
-            route_id: route.id.clone(),
-            class: CoverageClass::UnknownOrDynamic,
-            risk: RiskLevel::ReviewRequired,
-            rationale: vec![
-                "Only weak or dynamic authorization evidence was detected.".to_string(),
-            ],
-            reviewer_questions: expected_questions(route),
-            uncertainty_reasons,
-            extensions: authmap_core::ExtensionMap::new(),
-        };
-    }
-
-    let class = if has_type(&strong, EvidenceType::ExplicitPublic) {
-        CoverageClass::PublicDeclared
-    } else if has_type(&strong, EvidenceType::AdminCheck) {
-        CoverageClass::AdminGuarded
-    } else if has_type(&strong, EvidenceType::PermissionCheck) {
-        CoverageClass::PermissionGuarded
-    } else if has_type(&strong, EvidenceType::RoleCheck) {
-        CoverageClass::RoleGuarded
-    } else if has_type(&strong, EvidenceType::TenantCheck) {
-        CoverageClass::TenantGuarded
-    } else if has_type(&strong, EvidenceType::OwnershipCheck) {
-        CoverageClass::OwnershipGuarded
-    } else if has_type(&strong, EvidenceType::Authn) {
-        CoverageClass::AuthnOnly
-    } else {
-        CoverageClass::UnknownOrDynamic
-    };
-
-    let mut reviewer_questions = Vec::new();
-    let risk = match class {
-        CoverageClass::PublicDeclared => RiskLevel::Low,
-        CoverageClass::AuthnOnly if sensitive => {
-            reviewer_questions = expected_questions(route);
-            RiskLevel::ReviewRequired
-        }
-        CoverageClass::UnknownOrDynamic => {
-            reviewer_questions = expected_questions(route);
-            RiskLevel::ReviewRequired
-        }
-        _ => RiskLevel::Low,
-    };
 
     Coverage {
         route_id: route.id.clone(),
         class,
         risk,
-        rationale: vec![format!(
-            "{} strong authorization evidence item(s) were detected.",
-            strong.len()
-        )],
+        rationale: coverage_rationale(
+            class,
+            risk,
+            &strong,
+            &weak,
+            &sensitivity,
+            has_linked_mutations,
+        ),
         reviewer_questions,
-        uncertainty_reasons,
-        extensions: authmap_core::ExtensionMap::new(),
+        uncertainty_reasons: uncertainty_reasons(route, evidence),
+        extensions: coverage_extensions(evidence, &weak, facts, &sensitivity),
+    }
+}
+
+fn coverage_class(strong: &[&Evidence], all_evidence: &[&Evidence]) -> CoverageClass {
+    if has_type(strong, EvidenceType::ExplicitPublic) {
+        CoverageClass::PublicDeclared
+    } else if has_type(strong, EvidenceType::AdminCheck) {
+        CoverageClass::AdminGuarded
+    } else if has_type(strong, EvidenceType::PermissionCheck) {
+        CoverageClass::PermissionGuarded
+    } else if has_type(strong, EvidenceType::OwnershipCheck) {
+        CoverageClass::OwnershipGuarded
+    } else if has_type(strong, EvidenceType::TenantCheck) {
+        CoverageClass::TenantGuarded
+    } else if has_type(strong, EvidenceType::RoleCheck) {
+        CoverageClass::RoleGuarded
+    } else if has_type(strong, EvidenceType::Authn) {
+        CoverageClass::AuthnOnly
+    } else if all_evidence.is_empty() {
+        CoverageClass::Unauthenticated
+    } else {
+        CoverageClass::UnknownOrDynamic
+    }
+}
+
+fn coverage_risk(
+    route: &authmap_core::Route,
+    class: CoverageClass,
+    all_evidence: &[&Evidence],
+    strong: &[&Evidence],
+    weak: &[&Evidence],
+    sensitive: bool,
+    has_linked_mutations: bool,
+) -> RiskLevel {
+    if strong.is_empty() && !weak.is_empty() {
+        return RiskLevel::ReviewRequired;
+    }
+    if all_evidence.is_empty() {
+        if has_linked_mutations || unsafe_method(route) {
+            return RiskLevel::High;
+        }
+        if sensitive {
+            return RiskLevel::Medium;
+        }
+        return RiskLevel::Low;
+    }
+    match class {
+        CoverageClass::PublicDeclared if sensitive => RiskLevel::ReviewRequired,
+        CoverageClass::AuthnOnly if sensitive || has_linked_mutations => RiskLevel::ReviewRequired,
+        CoverageClass::UnknownOrDynamic => RiskLevel::ReviewRequired,
+        CoverageClass::AdminGuarded
+        | CoverageClass::RoleGuarded
+        | CoverageClass::PermissionGuarded
+        | CoverageClass::AuthnOnly
+            if has_linked_mutations =>
+        {
+            RiskLevel::ReviewRequired
+        }
+        _ => RiskLevel::Low,
     }
 }
 
@@ -874,25 +972,54 @@ fn has_type(evidence: &[&Evidence], evidence_type: EvidenceType) -> bool {
         .any(|item| item.evidence_type == evidence_type)
 }
 
-fn sensitive_route(route: &authmap_core::Route) -> bool {
-    let method = route.method.as_str();
+fn sensitivity_reasons(route: &authmap_core::Route, has_linked_mutations: bool) -> Vec<String> {
+    let mut reasons = Vec::new();
     let lower_path = route.path.to_ascii_lowercase();
-    matches!(method, "POST" | "PUT" | "PATCH" | "DELETE" | "ANY")
-        || lower_path.contains("admin")
-        || lower_path.contains("account")
-        || lower_path.contains("user")
-        || lower_path.contains("tenant")
-        || lower_path.contains('{')
-        || lower_path.contains(':')
+    if unsafe_method(route) {
+        reasons.push("unsafe_method".to_string());
+    }
+    if route.method == "ANY" {
+        reasons.push("any_method".to_string());
+    }
+    if lower_path.contains('{') || lower_path.contains(':') {
+        reasons.push("path_param".to_string());
+    }
+    if lower_path.contains("admin") {
+        reasons.push("admin_path".to_string());
+    }
+    if lower_path.contains("account") {
+        reasons.push("account_path".to_string());
+    }
+    if lower_path.contains("user") {
+        reasons.push("user_path".to_string());
+    }
+    if lower_path.contains("tenant") {
+        reasons.push("tenant_path".to_string());
+    }
+    if has_linked_mutations {
+        reasons.push("linked_mutation".to_string());
+    }
+    reasons.sort();
+    reasons.dedup();
+    reasons
 }
 
-fn expected_questions(route: &authmap_core::Route) -> Vec<String> {
-    let mut questions = Vec::new();
-    let lower_path = route.path.to_ascii_lowercase();
-    if matches!(
+fn unsafe_method(route: &authmap_core::Route) -> bool {
+    matches!(
         route.method.as_str(),
         "POST" | "PUT" | "PATCH" | "DELETE" | "ANY"
-    ) {
+    )
+}
+
+fn reviewer_questions(
+    route: &authmap_core::Route,
+    class: CoverageClass,
+    sensitive: bool,
+    has_linked_mutations: bool,
+) -> Vec<String> {
+    let mut questions = Vec::new();
+    let lower_path = route.path.to_ascii_lowercase();
+    if unsafe_method(route) {
         questions
             .push("Should this state-changing route require more than authentication?".to_string());
     }
@@ -909,9 +1036,124 @@ fn expected_questions(route: &authmap_core::Route) -> Vec<String> {
     if lower_path.contains("tenant") {
         questions.push("Should this route require tenant isolation checks?".to_string());
     }
+    if has_linked_mutations {
+        questions.push(
+            "Should linked data mutations have resource-specific authorization evidence?"
+                .to_string(),
+        );
+    }
+    if class == CoverageClass::PublicDeclared && sensitive {
+        questions.push("Is this sensitive route intentionally public?".to_string());
+    }
+    if class == CoverageClass::UnknownOrDynamic {
+        questions.push("Can the dynamic authorization path be confirmed?".to_string());
+    }
     questions.sort();
     questions.dedup();
     questions
+}
+
+fn uncertainty_reasons(route: &authmap_core::Route, evidence: &[&Evidence]) -> Vec<String> {
+    let mut reasons = Vec::new();
+    if evidence
+        .iter()
+        .any(|item| item.confidence == Confidence::Low)
+    {
+        reasons.push("Low-confidence authorization evidence was detected.".to_string());
+    }
+    if evidence
+        .iter()
+        .any(|item| item.evidence_type == EvidenceType::UnknownDynamicCheck)
+    {
+        reasons.push("Dynamic authorization evidence requires review.".to_string());
+    }
+    if route.confidence != Confidence::High {
+        reasons.push("Route inventory confidence is not high.".to_string());
+    }
+    reasons.sort();
+    reasons.dedup();
+    reasons
+}
+
+fn coverage_rationale(
+    class: CoverageClass,
+    risk: RiskLevel,
+    strong: &[&Evidence],
+    weak: &[&Evidence],
+    sensitivity: &[String],
+    has_linked_mutations: bool,
+) -> Vec<String> {
+    let mut rationale = Vec::new();
+    if strong.is_empty() && weak.is_empty() {
+        rationale.push("No authorization evidence was detected.".to_string());
+    } else if strong.is_empty() {
+        rationale.push(format!(
+            "{} weak or dynamic authorization evidence item(s) were detected.",
+            weak.len()
+        ));
+    } else {
+        rationale.push(format!(
+            "{} strong authorization evidence item(s) support {} coverage.",
+            strong.len(),
+            coverage_class_slug(class)
+        ));
+    }
+    if !sensitivity.is_empty() {
+        rationale.push(format!(
+            "Sensitive route modifier(s): {}.",
+            sensitivity.join(", ")
+        ));
+    }
+    if has_linked_mutations {
+        rationale.push("Linked data mutation(s) increase review sensitivity.".to_string());
+    }
+    if risk == RiskLevel::High {
+        rationale.push(
+            "No strong authorization evidence was found for a high-sensitivity route.".to_string(),
+        );
+    }
+    rationale
+}
+
+fn coverage_extensions(
+    evidence: &[&Evidence],
+    weak: &[&Evidence],
+    facts: &CoverageRouteFacts<'_>,
+    sensitivity: &[String],
+) -> authmap_core::ExtensionMap {
+    let mut extensions = authmap_core::ExtensionMap::new();
+    extensions.insert(
+        "authmap.coverage".to_string(),
+        serde_json::json!({
+            "evidence_ids": sorted_ids(evidence.iter().map(|item| item.id.as_str())),
+            "weak_evidence_ids": sorted_ids(weak.iter().map(|item| item.id.as_str())),
+            "mutation_ids": sorted_ids(facts.linked_mutations.iter().map(|item| item.id.as_str())),
+            "link_ids": sorted_ids(facts.links.iter().map(|item| item.id.as_str())),
+            "sensitivity_reasons": sensitivity,
+        }),
+    );
+    extensions
+}
+
+fn sorted_ids<'a>(items: impl Iterator<Item = &'a str>) -> Vec<String> {
+    let mut ids = items.map(str::to_string).collect::<Vec<_>>();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+fn coverage_class_slug(class: CoverageClass) -> &'static str {
+    match class {
+        CoverageClass::PublicDeclared => "public_declared",
+        CoverageClass::Unauthenticated => "unauthenticated",
+        CoverageClass::AuthnOnly => "authn_only",
+        CoverageClass::RoleGuarded => "role_guarded",
+        CoverageClass::PermissionGuarded => "permission_guarded",
+        CoverageClass::OwnershipGuarded => "ownership_guarded",
+        CoverageClass::TenantGuarded => "tenant_guarded",
+        CoverageClass::AdminGuarded => "admin_guarded",
+        CoverageClass::UnknownOrDynamic => "unknown_or_dynamic",
+    }
 }
 
 fn route_sort_key(route: &authmap_core::Route) -> (String, u32, String, String, String) {
@@ -968,10 +1210,288 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use authmap_config::{ScanConfig, ScanPlan};
-    use authmap_core::{Confidence, CoverageClass, EvidenceType, RiskLevel};
+    use authmap_core::{
+        Confidence, CoverageClass, Evidence, EvidenceType, Framework, Mutation, MutationOperation,
+        ReachabilityLink, RiskLevel, Route,
+    };
     use authmap_testkit::fixture_path;
 
-    use super::run_scan;
+    use super::{classify_coverage, run_scan};
+
+    #[test]
+    fn classifier_covers_all_coverage_classes() {
+        let routes = vec![
+            route("route_public", "GET", "/public"),
+            route("route_admin", "GET", "/admin"),
+            route("route_permission", "GET", "/accounts"),
+            route("route_ownership", "GET", "/accounts/{account_id}"),
+            route("route_tenant", "GET", "/tenants/{tenant_id}"),
+            route("route_role", "GET", "/reports"),
+            route("route_authn", "GET", "/profile"),
+            route("route_unknown", "GET", "/dynamic"),
+            route("route_unauth", "GET", "/health"),
+        ];
+        let evidence = vec![
+            evidence(
+                "evidence_public",
+                "route_public",
+                EvidenceType::ExplicitPublic,
+                Confidence::High,
+            ),
+            evidence(
+                "evidence_admin",
+                "route_admin",
+                EvidenceType::AdminCheck,
+                Confidence::High,
+            ),
+            evidence(
+                "evidence_permission",
+                "route_permission",
+                EvidenceType::PermissionCheck,
+                Confidence::High,
+            ),
+            evidence(
+                "evidence_ownership",
+                "route_ownership",
+                EvidenceType::OwnershipCheck,
+                Confidence::High,
+            ),
+            evidence(
+                "evidence_tenant",
+                "route_tenant",
+                EvidenceType::TenantCheck,
+                Confidence::High,
+            ),
+            evidence(
+                "evidence_role",
+                "route_role",
+                EvidenceType::RoleCheck,
+                Confidence::High,
+            ),
+            evidence(
+                "evidence_authn",
+                "route_authn",
+                EvidenceType::Authn,
+                Confidence::High,
+            ),
+            evidence(
+                "evidence_dynamic",
+                "route_unknown",
+                EvidenceType::UnknownDynamicCheck,
+                Confidence::Low,
+            ),
+        ];
+
+        let coverage = classify_coverage(&routes, &evidence, &[], &[]);
+
+        assert_coverage(
+            &coverage,
+            "route_public",
+            CoverageClass::PublicDeclared,
+            RiskLevel::Low,
+        );
+        assert_coverage(
+            &coverage,
+            "route_admin",
+            CoverageClass::AdminGuarded,
+            RiskLevel::Low,
+        );
+        assert_coverage(
+            &coverage,
+            "route_permission",
+            CoverageClass::PermissionGuarded,
+            RiskLevel::Low,
+        );
+        assert_coverage(
+            &coverage,
+            "route_ownership",
+            CoverageClass::OwnershipGuarded,
+            RiskLevel::Low,
+        );
+        assert_coverage(
+            &coverage,
+            "route_tenant",
+            CoverageClass::TenantGuarded,
+            RiskLevel::Low,
+        );
+        assert_coverage(
+            &coverage,
+            "route_role",
+            CoverageClass::RoleGuarded,
+            RiskLevel::Low,
+        );
+        assert_coverage(
+            &coverage,
+            "route_authn",
+            CoverageClass::AuthnOnly,
+            RiskLevel::Low,
+        );
+        assert_coverage(
+            &coverage,
+            "route_unknown",
+            CoverageClass::UnknownOrDynamic,
+            RiskLevel::ReviewRequired,
+        );
+        assert_coverage(
+            &coverage,
+            "route_unauth",
+            CoverageClass::Unauthenticated,
+            RiskLevel::Low,
+        );
+    }
+
+    #[test]
+    fn classifier_applies_v1_risk_matrix() {
+        let routes = vec![
+            route("route_delete", "DELETE", "/health"),
+            route("route_user_read", "GET", "/users/{user_id}"),
+            route("route_dynamic", "GET", "/policy"),
+            route("route_authn_sensitive", "GET", "/accounts/{account_id}"),
+            route(
+                "route_public_sensitive",
+                "DELETE",
+                "/public/accounts/{account_id}",
+            ),
+        ];
+        let evidence = vec![
+            evidence(
+                "evidence_dynamic",
+                "route_dynamic",
+                EvidenceType::UnknownDynamicCheck,
+                Confidence::Low,
+            ),
+            evidence(
+                "evidence_authn",
+                "route_authn_sensitive",
+                EvidenceType::Authn,
+                Confidence::High,
+            ),
+            evidence(
+                "evidence_public",
+                "route_public_sensitive",
+                EvidenceType::ExplicitPublic,
+                Confidence::High,
+            ),
+        ];
+
+        let coverage = classify_coverage(&routes, &evidence, &[], &[]);
+
+        assert_coverage(
+            &coverage,
+            "route_delete",
+            CoverageClass::Unauthenticated,
+            RiskLevel::High,
+        );
+        assert_coverage(
+            &coverage,
+            "route_user_read",
+            CoverageClass::Unauthenticated,
+            RiskLevel::Medium,
+        );
+        assert_coverage(
+            &coverage,
+            "route_dynamic",
+            CoverageClass::UnknownOrDynamic,
+            RiskLevel::ReviewRequired,
+        );
+        assert_coverage(
+            &coverage,
+            "route_authn_sensitive",
+            CoverageClass::AuthnOnly,
+            RiskLevel::ReviewRequired,
+        );
+        assert_coverage(
+            &coverage,
+            "route_public_sensitive",
+            CoverageClass::PublicDeclared,
+            RiskLevel::ReviewRequired,
+        );
+    }
+
+    #[test]
+    fn classifier_consumes_existing_linked_mutations_and_support_metadata() {
+        let routes = vec![
+            route("route_mutation", "GET", "/status"),
+            route("route_role_mutation", "GET", "/admin/jobs"),
+        ];
+        let evidence = vec![evidence(
+            "evidence_role",
+            "route_role_mutation",
+            EvidenceType::RoleCheck,
+            Confidence::High,
+        )];
+        let mutations = vec![Mutation {
+            id: "mutation_0001".to_string(),
+            operation: MutationOperation::Delete,
+            library: Some("sqlalchemy".to_string()),
+            resource: Some("Account".to_string()),
+            span: None,
+            confidence: Confidence::High,
+            notes: Vec::new(),
+            extensions: authmap_core::ExtensionMap::new(),
+        }];
+        let links = vec![
+            ReachabilityLink {
+                id: "link_0001".to_string(),
+                route_id: "route_mutation".to_string(),
+                mutation_id: Some("mutation_0001".to_string()),
+                evidence_id: None,
+                confidence: Confidence::Medium,
+                notes: Vec::new(),
+                extensions: authmap_core::ExtensionMap::new(),
+            },
+            ReachabilityLink {
+                id: "link_0002".to_string(),
+                route_id: "route_role_mutation".to_string(),
+                mutation_id: Some("mutation_0001".to_string()),
+                evidence_id: Some("evidence_role".to_string()),
+                confidence: Confidence::Medium,
+                notes: Vec::new(),
+                extensions: authmap_core::ExtensionMap::new(),
+            },
+        ];
+
+        let coverage = classify_coverage(&routes, &evidence, &mutations, &links);
+        let item = coverage
+            .iter()
+            .find(|coverage| coverage.route_id == "route_mutation")
+            .expect("route should be classified");
+        assert_eq!(item.class, CoverageClass::Unauthenticated);
+        assert_eq!(item.risk, RiskLevel::High);
+        let support = item
+            .extensions
+            .get("authmap.coverage")
+            .expect("coverage support extension should exist");
+        assert_eq!(
+            support["mutation_ids"],
+            serde_json::json!(["mutation_0001"])
+        );
+        assert_eq!(support["link_ids"], serde_json::json!(["link_0001"]));
+        assert_eq!(
+            support["sensitivity_reasons"],
+            serde_json::json!(["linked_mutation"])
+        );
+
+        let role_item = coverage
+            .iter()
+            .find(|coverage| coverage.route_id == "route_role_mutation")
+            .expect("role-guarded route should be classified");
+        assert_eq!(role_item.class, CoverageClass::RoleGuarded);
+        assert_eq!(role_item.risk, RiskLevel::ReviewRequired);
+        let support = role_item
+            .extensions
+            .get("authmap.coverage")
+            .expect("coverage support extension should exist");
+        assert_eq!(
+            support["evidence_ids"],
+            serde_json::json!(["evidence_role"])
+        );
+        assert_eq!(
+            support["mutation_ids"],
+            serde_json::json!(["mutation_0001"])
+        );
+        assert_eq!(support["link_ids"], serde_json::json!(["link_0002"]));
+    }
 
     #[test]
     fn scan_pipeline_includes_fastapi_routes() {
@@ -1168,5 +1688,56 @@ authorization:
             std::fs::create_dir_all(parent).expect("test fixture parent should be created");
         }
         std::fs::write(path, contents).expect("test fixture should be written");
+    }
+
+    fn route(id: &str, method: &str, path: &str) -> Route {
+        Route {
+            id: id.to_string(),
+            framework: Framework::Express,
+            method: method.to_string(),
+            path: path.to_string(),
+            name: None,
+            tags: Vec::new(),
+            middleware: Vec::new(),
+            handler: None,
+            span: None,
+            source_evidence: Vec::new(),
+            confidence: Confidence::High,
+            notes: Vec::new(),
+            extensions: authmap_core::ExtensionMap::new(),
+        }
+    }
+
+    fn evidence(
+        id: &str,
+        route_id: &str,
+        evidence_type: EvidenceType,
+        confidence: Confidence,
+    ) -> Evidence {
+        Evidence {
+            id: id.to_string(),
+            route_id: Some(route_id.to_string()),
+            evidence_type,
+            mechanism: "test_guard".to_string(),
+            symbol: None,
+            span: None,
+            confidence,
+            notes: Vec::new(),
+            extensions: authmap_core::ExtensionMap::new(),
+        }
+    }
+
+    fn assert_coverage(
+        coverage: &[authmap_core::Coverage],
+        route_id: &str,
+        class: CoverageClass,
+        risk: RiskLevel,
+    ) {
+        let item = coverage
+            .iter()
+            .find(|coverage| coverage.route_id == route_id)
+            .unwrap_or_else(|| panic!("missing coverage for {route_id}"));
+        assert_eq!(item.class, class, "{route_id} class");
+        assert_eq!(item.risk, risk, "{route_id} risk");
     }
 }

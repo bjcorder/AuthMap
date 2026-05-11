@@ -18,15 +18,13 @@
 
 | Item | Subject | Reason |
 | --- | --- | --- |
-| [route_0001](#route-route_0001) | GET /relative/users/{user_id} | risk is review_required; coverage is unknown_or_dynamic |
-| [route_0002](#route-route_0002) | GET /v1/users/{user_id} | risk is review_required; coverage is unknown_or_dynamic |
-| [route_0003](#route-route_0003) | PUT /relative/users/{user_id} | risk is review_required; coverage is unknown_or_dynamic |
-| [route_0004](#route-route_0004) | PUT /v1/users/{user_id} | risk is review_required; coverage is unknown_or_dynamic |
-| [route_0006](#route-route_0006) | POST /items | risk is review_required; coverage is unknown_or_dynamic |
-| [route_0010](#route-route_0010) | DELETE /api/local/{item_id} | risk is review_required; coverage is unknown_or_dynamic |
+| [route_0003](#route-route_0003) | PUT /relative/users/{user_id} | risk is high |
+| [route_0004](#route-route_0004) | PUT /v1/users/{user_id} | risk is high |
+| [route_0006](#route-route_0006) | POST /items | risk is high |
+| [route_0010](#route-route_0010) | DELETE /api/local/{item_id} | risk is high |
 | [route_0011](#route-route_0011) | GET /reports | confidence is medium; router prefix is dynamic and was not included in the route path; include_router prefix is dynamic and was not included in the route path |
-| [route_0013](#route-route_0013) | POST /search | risk is review_required; coverage is unknown_or_dynamic |
-| [route_0014](#route-route_0014) | ANY /fallback | confidence is medium; api_route methods are dynamic or missing; emitted as ANY; risk is review_required; coverage is unknown_or_dynamic |
+| [route_0013](#route-route_0013) | POST /search | risk is high |
+| [route_0014](#route-route_0014) | ANY /fallback | confidence is medium; api_route methods are dynamic or missing; emitted as ANY; risk is high |
 | [route_0015](#route-route_0015) | GET &lt;dynamic&gt; | confidence is medium; route path is dynamic and was emitted as &lt;dynamic&gt;; route path is dynamic and was not fully resolved |
 | diagnostic | fastapi_dynamic_router_prefix | FastAPI router prefix is dynamic and could not be resolved at tests/fixtures/fastapi/main.py:8:18 |
 | diagnostic | fastapi_dynamic_api_route_methods | FastAPI api_route methods are dynamic or missing at tests/fixtures/fastapi/main.py:71:2 |
@@ -37,20 +35,20 @@
 
 | ID | Framework | Method | Path | Handler | Middleware | Confidence | Coverage | Risk |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [route_0001](#route-route_0001) | fast_api | GET | /relative/users/{user_id} | \`get_user\` (tests/fixtures/fastapi/app/routes/users.py:7:5) | none | high | unknown_or_dynamic | review_required |
-| [route_0002](#route-route_0002) | fast_api | GET | /v1/users/{user_id} | \`get_user\` (tests/fixtures/fastapi/app/routes/users.py:7:5) | none | high | unknown_or_dynamic | review_required |
-| [route_0003](#route-route_0003) | fast_api | PUT | /relative/users/{user_id} | \`update_user\` (tests/fixtures/fastapi/app/routes/users.py:12:5) | none | high | unknown_or_dynamic | review_required |
-| [route_0004](#route-route_0004) | fast_api | PUT | /v1/users/{user_id} | \`update_user\` (tests/fixtures/fastapi/app/routes/users.py:12:5) | none | high | unknown_or_dynamic | review_required |
+| [route_0001](#route-route_0001) | fast_api | GET | /relative/users/{user_id} | \`get_user\` (tests/fixtures/fastapi/app/routes/users.py:7:5) | none | high | unauthenticated | medium |
+| [route_0002](#route-route_0002) | fast_api | GET | /v1/users/{user_id} | \`get_user\` (tests/fixtures/fastapi/app/routes/users.py:7:5) | none | high | unauthenticated | medium |
+| [route_0003](#route-route_0003) | fast_api | PUT | /relative/users/{user_id} | \`update_user\` (tests/fixtures/fastapi/app/routes/users.py:12:5) | none | high | unauthenticated | high |
+| [route_0004](#route-route_0004) | fast_api | PUT | /v1/users/{user_id} | \`update_user\` (tests/fixtures/fastapi/app/routes/users.py:12:5) | none | high | unauthenticated | high |
 | [route_0005](#route-route_0005) | fast_api | GET | /health | \`health\` (tests/fixtures/fastapi/main.py:30:5) | none | high | unauthenticated | low |
-| [route_0006](#route-route_0006) | fast_api | POST | /items | \`create_item\` (tests/fixtures/fastapi/main.py:35:5) | none | high | unknown_or_dynamic | review_required |
+| [route_0006](#route-route_0006) | fast_api | POST | /items | \`create_item\` (tests/fixtures/fastapi/main.py:35:5) | none | high | unauthenticated | high |
 | [route_0007](#route-route_0007) | fast_api | GET | /profile | \`profile\` (tests/fixtures/fastapi/main.py:40:5) | none | high | authn_only | low |
 | [route_0008](#route-route_0008) | fast_api | DELETE | /admin/accounts/{account_id} | \`delete_account\` (tests/fixtures/fastapi/main.py:45:5) | none | high | admin_guarded | low |
 | [route_0009](#route-route_0009) | fast_api | PATCH | /accounts/{account_id}/permissions | \`grant_permission\` (tests/fixtures/fastapi/main.py:50:5) | none | high | permission_guarded | low |
-| [route_0010](#route-route_0010) | fast_api | DELETE | /api/local/{item_id} | \`delete_local\` (tests/fixtures/fastapi/main.py:57:5) | none | high | unknown_or_dynamic | review_required |
+| [route_0010](#route-route_0010) | fast_api | DELETE | /api/local/{item_id} | \`delete_local\` (tests/fixtures/fastapi/main.py:57:5) | none | high | unauthenticated | high |
 | [route_0011](#route-route_0011) | fast_api | GET | /reports | \`dynamic_reports\` (tests/fixtures/fastapi/main.py:62:5) | none | medium | unauthenticated | low |
 | [route_0012](#route-route_0012) | fast_api | GET | /search | \`search\` (tests/fixtures/fastapi/main.py:67:5) | none | high | unauthenticated | low |
-| [route_0013](#route-route_0013) | fast_api | POST | /search | \`search\` (tests/fixtures/fastapi/main.py:67:5) | none | high | unknown_or_dynamic | review_required |
-| [route_0014](#route-route_0014) | fast_api | ANY | /fallback | \`fallback\` (tests/fixtures/fastapi/main.py:72:5) | none | medium | unknown_or_dynamic | review_required |
+| [route_0013](#route-route_0013) | fast_api | POST | /search | \`search\` (tests/fixtures/fastapi/main.py:67:5) | none | high | unauthenticated | high |
+| [route_0014](#route-route_0014) | fast_api | ANY | /fallback | \`fallback\` (tests/fixtures/fastapi/main.py:72:5) | none | medium | unauthenticated | high |
 | [route_0015](#route-route_0015) | fast_api | GET | &lt;dynamic&gt; | \`generated_path\` (tests/fixtures/fastapi/main.py:77:5) | none | medium | unauthenticated | low |
 
 ## Route Details
@@ -63,8 +61,9 @@
 - Route location: tests/fixtures/fastapi/app/routes/users.py:6:2
 - Middleware: none
 - Confidence: high
-- Coverage: unknown_or_dynamic (review_required)
-- Coverage rationale: No authorization evidence was detected for a sensitive-looking route.
+- Coverage: unauthenticated (medium)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): path_param, user_path.
+- Coverage support: sensitivity: path_param, user_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
 - Auth evidence: none
@@ -78,8 +77,9 @@
 - Route location: tests/fixtures/fastapi/app/routes/users.py:6:2
 - Middleware: none
 - Confidence: high
-- Coverage: unknown_or_dynamic (review_required)
-- Coverage rationale: No authorization evidence was detected for a sensitive-looking route.
+- Coverage: unauthenticated (medium)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): path_param, user_path.
+- Coverage support: sensitivity: path_param, user_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
 - Auth evidence: none
@@ -93,8 +93,9 @@
 - Route location: tests/fixtures/fastapi/app/routes/users.py:11:2
 - Middleware: none
 - Confidence: high
-- Coverage: unknown_or_dynamic (review_required)
-- Coverage rationale: No authorization evidence was detected for a sensitive-looking route.
+- Coverage: unauthenticated (high)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): path_param, unsafe_method, user_path.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: sensitivity: path_param, unsafe_method, user_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
@@ -109,8 +110,9 @@
 - Route location: tests/fixtures/fastapi/app/routes/users.py:11:2
 - Middleware: none
 - Confidence: high
-- Coverage: unknown_or_dynamic (review_required)
-- Coverage rationale: No authorization evidence was detected for a sensitive-looking route.
+- Coverage: unauthenticated (high)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): path_param, unsafe_method, user_path.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: sensitivity: path_param, unsafe_method, user_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
@@ -138,8 +140,9 @@
 - Route location: tests/fixtures/fastapi/main.py:34:2
 - Middleware: none
 - Confidence: high
-- Coverage: unknown_or_dynamic (review_required)
-- Coverage rationale: No authorization evidence was detected for a sensitive-looking route.
+- Coverage: unauthenticated (high)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): unsafe_method.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: sensitivity: unsafe_method
 - Reviewer questions:
   - Should this state-changing route require more than authentication?
 - Auth evidence: none
@@ -154,7 +157,8 @@
 - Middleware: none
 - Confidence: high
 - Coverage: authn_only (low)
-- Coverage rationale: 2 strong authorization evidence item(s) were detected.
+- Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.
+- Coverage support: evidence: evidence_0001, evidence_0002
 - Auth evidence:
   - authn `handler_body` at tests/fixtures/fastapi/main.py:40:5 (medium)
     - Symbol: `profile` (tests/fixtures/fastapi/main.py:40:5)
@@ -172,7 +176,12 @@
 - Middleware: none
 - Confidence: high
 - Coverage: admin_guarded (low)
-- Coverage rationale: 2 strong authorization evidence item(s) were detected.
+- Coverage rationale: 2 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): account_path, admin_path, path_param, unsafe_method.
+- Coverage support: evidence: evidence_0003, evidence_0004; sensitivity: account_path, admin_path, path_param, unsafe_method
+- Reviewer questions:
+  - Should this route require an admin or role guard?
+  - Should this route require ownership or permission checks?
+  - Should this state-changing route require more than authentication?
 - Auth evidence:
   - admin_check `admin_guard` at tests/fixtures/fastapi/main.py:44:59 (high)
     - Symbol: `require_admin` (tests/fixtures/fastapi/main.py:44:67)
@@ -190,10 +199,14 @@
 - Middleware: none
 - Confidence: high
 - Coverage: permission_guarded (low)
-- Coverage rationale: 3 strong authorization evidence item(s) were detected.
+- Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param, unsafe_method.
+- Coverage support: evidence: evidence_0005, evidence_0006, evidence_0007, evidence_0008; weak evidence: evidence_0007; sensitivity: account_path, path_param, unsafe_method
+- Reviewer questions:
+  - Should this route require ownership or permission checks?
+  - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
-  - Low-confidence authorization evidence was detected.
   - Dynamic authorization evidence requires review.
+  - Low-confidence authorization evidence was detected.
 - Auth evidence:
   - permission_check `permission_guard` at tests/fixtures/fastapi/main.py:49:64 (high)
     - Symbol: `can_edit_account` (tests/fixtures/fastapi/main.py:49:72)
@@ -214,8 +227,9 @@
 - Route location: tests/fixtures/fastapi/main.py:56:2
 - Middleware: none
 - Confidence: high
-- Coverage: unknown_or_dynamic (review_required)
-- Coverage rationale: No authorization evidence was detected for a sensitive-looking route.
+- Coverage: unauthenticated (high)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): path_param, unsafe_method.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: sensitivity: path_param, unsafe_method
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
@@ -261,8 +275,9 @@
 - Route location: tests/fixtures/fastapi/main.py:66:2
 - Middleware: none
 - Confidence: high
-- Coverage: unknown_or_dynamic (review_required)
-- Coverage rationale: No authorization evidence was detected for a sensitive-looking route.
+- Coverage: unauthenticated (high)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): unsafe_method.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: sensitivity: unsafe_method
 - Reviewer questions:
   - Should this state-changing route require more than authentication?
 - Auth evidence: none
@@ -276,8 +291,9 @@
 - Route location: tests/fixtures/fastapi/main.py:71:2
 - Middleware: none
 - Confidence: medium
-- Coverage: unknown_or_dynamic (review_required)
-- Coverage rationale: No authorization evidence was detected for a sensitive-looking route.
+- Coverage: unauthenticated (high)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): any_method, unsafe_method.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: sensitivity: any_method, unsafe_method
 - Reviewer questions:
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:

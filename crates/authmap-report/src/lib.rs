@@ -386,6 +386,7 @@ fn render_route_details(output: &mut String, document: &AuthMapDocument, index: 
                         .join("; ")
                 );
             }
+            render_coverage_support(output, coverage);
             if !coverage.reviewer_questions.is_empty() {
                 let _ = writeln!(output, "- Reviewer questions:");
                 for question in &coverage.reviewer_questions {
@@ -413,6 +414,52 @@ fn render_route_details(output: &mut String, document: &AuthMapDocument, index: 
         render_route_mutations(output, route.id.as_str(), index);
         let _ = writeln!(output);
     }
+}
+
+fn render_coverage_support(output: &mut String, coverage: &Coverage) {
+    let Some(support) = coverage.extensions.get("authmap.coverage") else {
+        return;
+    };
+    let parts = [
+        ("evidence", support_ids(support, "evidence_ids")),
+        ("weak evidence", support_ids(support, "weak_evidence_ids")),
+        ("mutations", support_ids(support, "mutation_ids")),
+        ("links", support_ids(support, "link_ids")),
+        ("sensitivity", support_ids(support, "sensitivity_reasons")),
+    ]
+    .into_iter()
+    .filter_map(|(label, values)| {
+        (!values.is_empty()).then(|| {
+            format!(
+                "{}: {}",
+                label,
+                values
+                    .iter()
+                    .map(|item| escape_inline(item))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })
+    })
+    .collect::<Vec<_>>();
+
+    if !parts.is_empty() {
+        let _ = writeln!(output, "- Coverage support: {}", parts.join("; "));
+    }
+}
+
+fn support_ids(value: &Value, key: &str) -> Vec<String> {
+    value
+        .get(key)
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
 }
 
 fn render_route_evidence(output: &mut String, route_id: &str, index: &ReportIndex<'_>) {
