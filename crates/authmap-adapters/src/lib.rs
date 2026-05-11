@@ -1954,6 +1954,7 @@ fn resolve_js_module(
 }
 
 fn normalize_js_module_path(current_dir: &str, module: &str) -> String {
+    let is_absolute = current_dir.starts_with('/');
     let mut parts = current_dir
         .split('/')
         .filter(|part| !part.is_empty())
@@ -1968,7 +1969,12 @@ fn normalize_js_module_path(current_dir: &str, module: &str) -> String {
             _ => parts.push(part.to_string()),
         }
     }
-    parts.join("/")
+    let normalized = parts.join("/");
+    if is_absolute {
+        format!("/{normalized}")
+    } else {
+        normalized
+    }
 }
 
 #[cfg(test)]
@@ -2285,6 +2291,24 @@ mod tests {
                 .diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic.code == "express_cyclic_mount_router")
+        );
+    }
+
+    #[test]
+    fn normalizes_posix_absolute_relative_js_imports() {
+        assert_eq!(
+            super::normalize_js_module_path(
+                "/home/runner/project/tests/fixtures/express",
+                "./routes/users"
+            ),
+            "/home/runner/project/tests/fixtures/express/routes/users"
+        );
+        assert_eq!(
+            super::normalize_js_module_path(
+                "/home/runner/project/tests/fixtures/express/routes",
+                "../shared/index"
+            ),
+            "/home/runner/project/tests/fixtures/express/shared/index"
         );
     }
 
