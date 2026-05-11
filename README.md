@@ -47,6 +47,11 @@ Initial outputs:
 - SARIF for code-scanning integration
 - GitHub Actions summary
 
+The canonical JSON contract is documented in [docs/SCHEMA.md](docs/SCHEMA.md)
+and defined by [schemas/authmap.schema.json](schemas/authmap.schema.json).
+Diagnostic categories, stable codes, and CI exit behavior are documented in
+[docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md).
+
 ## Example report shape
 
 ```text
@@ -126,6 +131,42 @@ authmap baseline create
 authmap rules suggest
 ```
 
+## Local development
+
+AuthMap is implemented as a Rust Cargo workspace. Useful local commands:
+
+```bash
+cargo run -p authmap-cli -- --help
+cargo run -p authmap-cli -- scan . --format json --output authmap.json
+cargo run -p authmap-cli -- scan . --format sarif --output authmap.sarif.json
+cargo test --workspace
+cargo install --path crates/authmap-cli
+```
+
+`authmap scan` supports `--mode advisory|enforce`. In v0.1.0, enforce mode
+writes the requested report and exits `20` when the completed document contains
+any `error` or `fatal` diagnostic. Warnings remain non-blocking; incomplete
+discovery conditions such as file truncation or oversized supported files are
+promoted to error diagnostics in enforce mode.
+
+Discovery honors gitignore-style `include` and `exclude` entries in
+`authmap.yml`. Includes narrow the supported source-file set, excludes win over
+includes, and AuthMap always skips dependency, build, VCS, cache, and generated
+report output directories.
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Success |
+| 2 | CLI usage error, including unsupported `--format` values |
+| 10 | Target path does not exist or is not readable |
+| 11 | Enforce-mode target exists but contains no supported source files |
+| 12 | Config file cannot be read, parsed, or validated |
+| 13 | Scan pipeline failed for another reason |
+| 14 | Report rendering or writing failed |
+| 20 | Enforce-mode diagnostic failure after the report was written |
+
 ## GitHub Action sketch
 
 ```yaml
@@ -167,4 +208,7 @@ AuthMap is not intended to:
 
 ## Status
 
-This repository currently contains the initial product concept and documentation. Implementation milestones will be added next.
+This repository contains the v0.1.0 foundation work: Rust workspace crates for
+the CLI, config loading, deterministic discovery, Tree-sitter parsing,
+canonical schema/IR, and JSON/Markdown/SARIF reporting. Framework-specific
+route and authorization adapters are still future milestone work.

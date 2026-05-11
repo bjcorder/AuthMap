@@ -14,7 +14,13 @@ path = "src/main.rs"
 [dependencies]
 authmap-analysis.workspace = true
 authmap-config.workspace = true
+authmap-core.workspace = true
+authmap-discovery.workspace = true
 authmap-report.workspace = true
 clap.workspace = true
 miette.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+jsonschema.workspace = true
+serde_json.workspace = true

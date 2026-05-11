@@ -10,3 +10,4 @@ version.workspace = true
 [dependencies]
 authmap-core.workspace = true
 authmap-parsers.workspace = true
+tree-sitter.workspace = true

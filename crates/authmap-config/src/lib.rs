@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct ScanConfig {
     pub mode: ScanMode,
     pub include: Vec<String>,
@@ -24,6 +25,7 @@ impl Default for ScanConfig {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct ScanLimits {
     pub max_files: usize,
     pub max_file_size_bytes: u64,
@@ -64,11 +66,30 @@ pub fn load_config(path: Option<PathBuf>) -> Result<(Option<PathBuf>, ScanConfig
         path: path.clone(),
         source,
     })?;
-    let config = serde_yaml::from_str(&text).map_err(|source| ConfigError::Parse {
+    let config: ScanConfig = serde_yaml::from_str(&text).map_err(|source| ConfigError::Parse {
         path: path.clone(),
         source,
     })?;
+    config.validate(&path)?;
     Ok((Some(path), config))
+}
+
+impl ScanConfig {
+    fn validate(&self, path: &std::path::Path) -> Result<(), ConfigError> {
+        if self.limits.max_files == 0 {
+            return Err(ConfigError::Validate {
+                path: path.to_path_buf(),
+                message: "limits.max_files must be greater than zero".to_string(),
+            });
+        }
+        if self.limits.max_file_size_bytes == 0 {
+            return Err(ConfigError::Validate {
+                path: path.to_path_buf(),
+                message: "limits.max_file_size_bytes must be greater than zero".to_string(),
+            });
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Error)]
@@ -83,4 +104,30 @@ pub enum ConfigError {
         path: PathBuf,
         source: serde_yaml::Error,
     },
+    #[error("invalid config {path}: {message}")]
+    Validate { path: PathBuf, message: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn partial_config_uses_defaults() {
+        let config: ScanConfig =
+            serde_yaml::from_str("mode: enforce\n").expect("partial config should parse");
+
+        assert_eq!(config.mode, ScanMode::Enforce);
+        assert_eq!(config.include, Vec::<String>::new());
+        assert_eq!(config.exclude, Vec::<String>::new());
+        assert_eq!(config.limits, ScanLimits::default());
+    }
+
+    #[test]
+    fn unknown_config_fields_are_rejected() {
+        let error = serde_yaml::from_str::<ScanConfig>("unknown_key: true\n")
+            .expect_err("unknown fields should be rejected");
+
+        assert!(error.to_string().contains("unknown field"));
+    }
 }
