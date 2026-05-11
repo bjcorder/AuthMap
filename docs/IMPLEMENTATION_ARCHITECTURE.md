@@ -97,6 +97,8 @@ Race-condition rules:
 - avoid concurrent maps unless profiling proves they are needed
 - have workers return owned result structs
 - accumulate diagnostics as data rather than relying on threaded logging
+- keep diagnostic categories, codes, and CI exit behavior aligned with
+  [`docs/DIAGNOSTICS.md`](DIAGNOSTICS.md)
 - make report output a single final step after the document is complete
 
 ## Dependency Defaults
@@ -107,12 +109,16 @@ Initial implementation dependencies:
 - `serde`, `serde_json`, and `serde_yaml` for schema and config data
 - `ignore` for gitignore-aware discovery
 - `rayon` for bounded CPU parallelism
-- `tree-sitter` behind `authmap-parsers` as the first parser facade backend
+- `tree-sitter` with Python, JavaScript, and TypeScript/TSX grammars behind
+  `authmap-parsers` as the first parser facade backend
 - `thiserror` and `miette` for structured errors and CLI diagnostics
 
 Parser backends are hidden behind `authmap-parsers` so more precise libraries
 such as `oxc`, `swc`, or Python-specific parsers can be added later without
 rewiring adapters or reports.
+
+Parser and adapter contributor contracts are documented in
+[PARSERS_AND_ADAPTERS.md](PARSERS_AND_ADAPTERS.md).
 
 ## Testing Strategy
 

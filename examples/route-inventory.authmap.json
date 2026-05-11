@@ -1,0 +1,75 @@
+{
+  "schema_version": "0.1.0",
+  "metadata": {
+    "tool_name": "authmap",
+    "tool_version": "0.1.0",
+    "mode": "advisory",
+    "target_roots": ["examples/fixtures/route-inventory"],
+    "config_path": null
+  },
+  "source_files": [
+    {
+      "path": "src/routes/accounts.ts",
+      "language": "type_script",
+      "size_bytes": 1240,
+      "sha256": null,
+      "project_hints": ["express"],
+      "skipped": null
+    }
+  ],
+  "routes": [
+    {
+      "id": "route.accounts.delete",
+      "framework": "express",
+      "method": "DELETE",
+      "path": "/accounts/:id",
+      "name": null,
+      "tags": ["accounts"],
+      "middleware": [],
+      "handler": {
+        "name": "deleteAccount",
+        "span": {
+          "file": "src/routes/accounts.ts",
+          "line": 18,
+          "column": 7,
+          "byte_range": null
+        }
+      },
+      "span": {
+        "file": "src/routes/accounts.ts",
+        "line": 12,
+        "column": 1,
+        "byte_range": null
+      },
+      "source_evidence": [
+        {
+          "mechanism": "express_router_method",
+          "symbol": {
+            "name": "router.delete",
+            "span": {
+              "file": "src/routes/accounts.ts",
+              "line": 12,
+              "column": 1,
+              "byte_range": null
+            }
+          },
+          "span": {
+            "file": "src/routes/accounts.ts",
+            "line": 12,
+            "column": 1,
+            "byte_range": null
+          },
+          "confidence": "high",
+          "notes": ["Route inventory only; authorization evidence not extracted in this sample."]
+        }
+      ],
+      "confidence": "high",
+      "notes": []
+    }
+  ],
+  "evidence": [],
+  "mutations": [],
+  "links": [],
+  "coverage": [],
+  "diagnostics": []
+}

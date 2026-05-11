@@ -15,7 +15,9 @@
       "language": "python",
       "size_bytes": 167,
       "sha256": null,
-      "project_hints": [],
+      "project_hints": [
+        "fast_api"
+      ],
       "skipped": null
     },
     {
@@ -23,7 +25,9 @@
       "language": "python",
       "size_bytes": 285,
       "sha256": null,
-      "project_hints": [],
+      "project_hints": [
+        "fast_api"
+      ],
       "skipped": null
     },
     {
@@ -31,7 +35,9 @@
       "language": "python",
       "size_bytes": 1035,
       "sha256": null,
-      "project_hints": [],
+      "project_hints": [
+        "fast_api"
+      ],
       "skipped": null
     }
   ],
@@ -67,6 +73,7 @@
           "end": 127
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -101,6 +108,7 @@
           "end": 127
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -135,6 +143,7 @@
           "end": 226
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -169,6 +178,7 @@
           "end": 226
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -203,6 +213,7 @@
           "end": 338
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -237,6 +248,7 @@
           "end": 419
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -271,6 +283,7 @@
           "end": 525
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -303,6 +316,7 @@
           "end": 623
         }
       },
+      "source_evidence": [],
       "confidence": "medium",
       "notes": [
         "router prefix is dynamic and was not included in the route path",
@@ -340,6 +354,7 @@
           "end": 730
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -374,6 +389,7 @@
           "end": 730
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -406,6 +422,7 @@
           "end": 788
         }
       },
+      "source_evidence": [],
       "confidence": "medium",
       "notes": [
         "api_route methods are dynamic or missing; emitted as ANY"
@@ -440,6 +457,7 @@
           "end": 843
         }
       },
+      "source_evidence": [],
       "confidence": "medium",
       "notes": [
         "route path is dynamic and was emitted as <dynamic>",
@@ -453,6 +471,7 @@
   "coverage": [],
   "diagnostics": [
     {
+      "category": "adapter",
       "code": "fastapi_dynamic_api_route_methods",
       "severity": "warning",
       "recoverability": "recoverable",
@@ -468,6 +487,7 @@
       "message": "FastAPI api_route methods are dynamic or missing"
     },
     {
+      "category": "adapter",
       "code": "fastapi_dynamic_include_router_prefix",
       "severity": "warning",
       "recoverability": "recoverable",
@@ -483,6 +503,7 @@
       "message": "FastAPI include_router prefix is dynamic and could not be resolved"
     },
     {
+      "category": "adapter",
       "code": "fastapi_dynamic_route_path",
       "severity": "warning",
       "recoverability": "recoverable",
@@ -498,6 +519,7 @@
       "message": "FastAPI route path is dynamic and could not be resolved"
     },
     {
+      "category": "adapter",
       "code": "fastapi_dynamic_router_prefix",
       "severity": "warning",
       "recoverability": "recoverable",

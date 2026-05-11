@@ -15,7 +15,9 @@
       "language": "java_script",
       "size_bytes": 1165,
       "sha256": null,
-      "project_hints": [],
+      "project_hints": [
+        "express"
+      ],
       "skipped": null
     },
     {
@@ -23,7 +25,9 @@
       "language": "java_script",
       "size_bytes": 253,
       "sha256": null,
-      "project_hints": [],
+      "project_hints": [
+        "express"
+      ],
       "skipped": null
     },
     {
@@ -31,7 +35,9 @@
       "language": "type_script",
       "size_bytes": 317,
       "sha256": null,
-      "project_hints": [],
+      "project_hints": [
+        "express"
+      ],
       "skipped": null
     },
     {
@@ -39,7 +45,9 @@
       "language": "type_script",
       "size_bytes": 445,
       "sha256": null,
-      "project_hints": [],
+      "project_hints": [
+        "express"
+      ],
       "skipped": null
     }
   ],
@@ -86,6 +94,7 @@
           "end": 598
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -143,6 +152,7 @@
           "end": 658
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -188,6 +198,7 @@
           "end": 710
         }
       },
+      "source_evidence": [],
       "confidence": "low",
       "notes": [
         "Express route path is dynamic and was emitted as <dynamic>"
@@ -235,6 +246,7 @@
           "end": 763
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -280,6 +292,7 @@
           "end": 811
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -325,6 +338,7 @@
           "end": 811
         }
       },
+      "source_evidence": [],
       "confidence": "medium",
       "notes": [
         "Express mount prefix is dynamic and was not included in the route path"
@@ -372,6 +386,7 @@
           "end": 225
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -417,6 +432,7 @@
           "end": 315
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -462,6 +478,7 @@
           "end": 386
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -507,6 +524,7 @@
           "end": 386
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -552,6 +570,7 @@
           "end": 419
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     },
@@ -597,6 +616,7 @@
           "end": 419
         }
       },
+      "source_evidence": [],
       "confidence": "high",
       "notes": []
     }
@@ -607,6 +627,7 @@
   "coverage": [],
   "diagnostics": [
     {
+      "category": "adapter",
       "code": "express_cyclic_mount_router",
       "severity": "warning",
       "recoverability": "recoverable",
@@ -622,6 +643,7 @@
       "message": "Express mounted router cycle was ignored"
     },
     {
+      "category": "adapter",
       "code": "express_dynamic_mount_prefix",
       "severity": "warning",
       "recoverability": "recoverable",
@@ -637,6 +659,7 @@
       "message": "Express mount prefix is dynamic and could not be resolved"
     },
     {
+      "category": "adapter",
       "code": "express_dynamic_route_path",
       "severity": "warning",
       "recoverability": "recoverable",
@@ -652,6 +675,7 @@
       "message": "Express route path is dynamic and could not be resolved"
     },
     {
+      "category": "adapter",
       "code": "express_unresolved_mount_router",
       "severity": "warning",
       "recoverability": "recoverable",

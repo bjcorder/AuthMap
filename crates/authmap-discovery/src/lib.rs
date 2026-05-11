@@ -1,88 +1,234 @@
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use authmap_config::ScanPlan;
-use authmap_core::{Language, ProjectHint, SkipReason, SourceFile};
+use authmap_core::{
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, Language, ProjectHint, Recoverability,
+    SkipReason, SourceFile, diagnostic_codes,
+};
+use ignore::overrides::{Override, OverrideBuilder};
 use ignore::{DirEntry, WalkBuilder, WalkState};
 use thiserror::Error;
+
+const HARD_EXCLUDED_DIRS: &[&str] = &[
+    ".git",
+    ".hg",
+    ".svn",
+    "node_modules",
+    "vendor",
+    ".venv",
+    "venv",
+    "env",
+    "__pycache__",
+    "target",
+    "dist",
+    "build",
+    "out",
+    ".next",
+    ".nuxt",
+    ".turbo",
+    ".cache",
+    "coverage",
+    ".authmap",
+];
+
+const HARD_EXCLUDED_FILES: &[&str] = &[
+    "authmap.json",
+    "authmap.md",
+    "authmap.sarif",
+    "authmap.sarif.json",
+];
+
+const MANIFEST_FILES: &[&str] = &[
+    "package.json",
+    "requirements.txt",
+    "pyproject.toml",
+    "poetry.lock",
+    "Pipfile",
+    "Pipfile.lock",
+    "manage.py",
+];
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DiscoveryResult {
     pub files: Vec<SourceFile>,
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryError> {
-    let paths = Arc::new(Mutex::new(Vec::<PathBuf>::new()));
+    let mut all_paths = Vec::new();
+    let mut target_roots = Vec::new();
 
     for target in &plan.targets {
-        if target.is_file() {
-            paths
-                .lock()
-                .expect("discovery path mutex poisoned")
-                .push(target.clone());
+        let metadata =
+            fs::metadata(target).map_err(|source| DiscoveryError::TargetUnavailable {
+                path: target.clone(),
+                source,
+            })?;
+
+        if metadata.is_file() {
+            all_paths.push(target.clone());
+            target_roots.push(
+                target
+                    .parent()
+                    .unwrap_or_else(|| Path::new("."))
+                    .to_path_buf(),
+            );
             continue;
         }
 
-        let mut builder = WalkBuilder::new(target);
-        builder
-            .hidden(false)
-            .git_ignore(true)
-            .git_exclude(true)
-            .parents(true);
+        if !metadata.is_dir() {
+            return Err(DiscoveryError::UnsupportedTarget {
+                path: target.clone(),
+            });
+        }
 
-        let paths = Arc::clone(&paths);
-        builder.build_parallel().run(|| {
-            let paths = Arc::clone(&paths);
-            Box::new(move |entry| {
-                if let Ok(entry) = entry {
-                    if is_ignored_directory(&entry) {
-                        return WalkState::Skip;
-                    }
-                    if is_regular_file(&entry) {
-                        paths
-                            .lock()
-                            .expect("discovery path mutex poisoned")
-                            .push(entry.path().to_path_buf());
-                    }
-                }
-                WalkState::Continue
-            })
+        fs::read_dir(target).map_err(|source| DiscoveryError::TargetUnavailable {
+            path: target.clone(),
+            source,
+        })?;
+
+        target_roots.push(target.clone());
+        all_paths.extend(walk_target(target));
+    }
+
+    all_paths.sort();
+    all_paths.dedup();
+
+    let matchers = PatternMatchers::new(&plan.targets, &plan.config.include, &plan.config.exclude)?;
+
+    let mut diagnostics = Vec::new();
+    let mut candidates = Vec::new();
+    let mut hint_paths = Vec::new();
+    for path in all_paths {
+        if is_hard_excluded_for_roots(&path, &target_roots) {
+            continue;
+        }
+        if is_manifest_or_hint_file(&path) {
+            hint_paths.push(path.clone());
+        }
+        if !is_supported_source(&path) || !matchers.is_included(&path) {
+            continue;
+        }
+        if matchers.is_excluded(&path) {
+            continue;
+        }
+        candidates.push(path);
+    }
+
+    if candidates.is_empty() {
+        if plan.config.mode == authmap_core::ScanMode::Enforce {
+            return Err(DiscoveryError::EmptyTarget {
+                targets: plan.targets.clone(),
+            });
+        }
+        diagnostics.push(diagnostic(
+            diagnostic_codes::DISCOVERY_NO_CANDIDATE_SOURCES,
+            format!(
+                "scan targets contain no supported source files after discovery filters: {}",
+                plan.targets
+                    .iter()
+                    .map(|path| normalize_path(path))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        ));
+        return Ok(DiscoveryResult {
+            files: Vec::new(),
+            diagnostics,
         });
     }
 
-    let mut paths = Arc::try_unwrap(paths)
-        .expect("all discovery workers should be complete")
-        .into_inner()
-        .expect("discovery path mutex poisoned");
-    paths.sort();
-    paths.dedup();
+    let candidate_count = candidates.len();
+    if candidate_count > plan.config.limits.max_files {
+        diagnostics.push(diagnostic_with_severity(
+            diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED,
+            incomplete_scan_severity(plan.config.mode),
+            format!(
+                "discovered {candidate_count} candidate source files; scanning first {} after deterministic sorting",
+                plan.config.limits.max_files
+            ),
+        ));
+    }
+
+    candidates.truncate(plan.config.limits.max_files);
+    hint_paths.sort();
+    hint_paths.dedup();
+    hint_paths.truncate(plan.config.limits.max_files);
+    hint_paths.extend(candidates.iter().cloned());
+    hint_paths.sort();
+    hint_paths.dedup();
+    let target_hints = detect_project_hints(
+        &target_roots,
+        &hint_paths,
+        plan.config.limits.max_file_size_bytes,
+    );
 
     let mut files = Vec::new();
-    for path in paths.into_iter().take(plan.config.limits.max_files) {
+    for path in candidates {
         let metadata = fs::metadata(&path).map_err(|source| DiscoveryError::Metadata {
             path: path.clone(),
             source,
         })?;
         let skipped =
             (metadata.len() > plan.config.limits.max_file_size_bytes).then(|| SkipReason {
-                code: "file_too_large".to_string(),
+                code: diagnostic_codes::DISCOVERY_FILE_TOO_LARGE.to_string(),
                 message: format!(
                     "file is {} bytes, exceeding configured max_file_size_bytes",
                     metadata.len()
                 ),
             });
+        if let Some(skip) = skipped.as_ref() {
+            diagnostics.push(diagnostic_with_severity(
+                diagnostic_codes::DISCOVERY_FILE_TOO_LARGE,
+                incomplete_scan_severity(plan.config.mode),
+                format!("{}: {}", normalize_path(&path), skip.message),
+            ));
+        }
         files.push(SourceFile {
             path: normalize_path(&path),
             language: detect_language(&path),
             size_bytes: metadata.len(),
             sha256: None,
-            project_hints: detect_project_hints(&path),
+            project_hints: hints_for_path(&path, &target_hints),
             skipped,
         });
     }
 
-    Ok(DiscoveryResult { files })
+    Ok(DiscoveryResult { files, diagnostics })
+}
+
+fn walk_target(target: &Path) -> Vec<PathBuf> {
+    let paths = Arc::new(Mutex::new(Vec::<PathBuf>::new()));
+    let mut builder = WalkBuilder::new(target);
+    builder
+        .hidden(false)
+        .git_ignore(true)
+        .git_exclude(true)
+        .parents(true);
+
+    let paths_for_worker = Arc::clone(&paths);
+    builder.build_parallel().run(|| {
+        let paths = Arc::clone(&paths_for_worker);
+        Box::new(move |entry| {
+            if let Ok(entry) = entry {
+                if is_hard_excluded_dir(&entry) {
+                    return WalkState::Skip;
+                }
+                if is_regular_file(&entry) && is_source_or_hint_path(entry.path()) {
+                    paths
+                        .lock()
+                        .expect("discovery path mutex poisoned")
+                        .push(entry.path().to_path_buf());
+                }
+            }
+            WalkState::Continue
+        })
+    });
+
+    paths.lock().expect("discovery path mutex poisoned").clone()
 }
 
 fn is_regular_file(entry: &DirEntry) -> bool {
@@ -91,14 +237,58 @@ fn is_regular_file(entry: &DirEntry) -> bool {
         .is_some_and(|file_type| file_type.is_file())
 }
 
-fn is_ignored_directory(entry: &DirEntry) -> bool {
+fn is_hard_excluded_dir(entry: &DirEntry) -> bool {
     entry
         .file_type()
         .is_some_and(|file_type| file_type.is_dir())
-        && matches!(
-            entry.file_name().to_str(),
-            Some(".git" | ".hg" | ".svn" | "node_modules" | "target" | ".venv")
-        )
+        && entry
+            .file_name()
+            .to_str()
+            .is_some_and(|name| HARD_EXCLUDED_DIRS.contains(&name))
+}
+
+fn is_hard_excluded(path: &Path) -> bool {
+    path.components().any(|component| {
+        component
+            .as_os_str()
+            .to_str()
+            .is_some_and(|name| HARD_EXCLUDED_DIRS.contains(&name))
+    }) || path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| HARD_EXCLUDED_FILES.contains(&name))
+}
+
+fn is_hard_excluded_for_roots(path: &Path, roots: &[PathBuf]) -> bool {
+    let relative = roots
+        .iter()
+        .filter_map(|root| path.strip_prefix(root).ok())
+        .min_by_key(|relative| relative.components().count())
+        .unwrap_or(path);
+    is_hard_excluded(relative)
+}
+
+fn is_source_or_hint_path(path: &Path) -> bool {
+    is_supported_source(path) || is_manifest_or_hint_file(path)
+}
+
+fn is_manifest_or_hint_file(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            MANIFEST_FILES.contains(&name)
+                || matches!(
+                    name,
+                    "next.config.js" | "next.config.mjs" | "next.config.ts"
+                )
+        })
+}
+
+fn is_supported_source(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|ext| ext.to_str()),
+        Some("py" | "js" | "jsx" | "ts" | "tsx")
+    )
 }
 
 fn normalize_path(path: &Path) -> String {
@@ -116,24 +306,599 @@ fn detect_language(path: &Path) -> Language {
     }
 }
 
-fn detect_project_hints(path: &Path) -> Vec<ProjectHint> {
-    let normalized = normalize_path(path);
-    let mut hints = Vec::new();
-    if normalized.ends_with("route.ts")
-        || normalized.ends_with("route.tsx")
-        || normalized.ends_with("route.js")
-        || normalized.ends_with("route.jsx")
-    {
-        hints.push(ProjectHint::NextJs);
+fn detect_project_hints(
+    roots: &[PathBuf],
+    discovered_paths: &[PathBuf],
+    max_read_bytes: u64,
+) -> BTreeMap<PathBuf, BTreeSet<ProjectHint>> {
+    let mut hints = BTreeMap::<PathBuf, BTreeSet<ProjectHint>>::new();
+    for root in roots {
+        hints.entry(root.clone()).or_default();
     }
+
+    for path in discovered_paths {
+        let normalized = normalize_path(path);
+        let lower = normalized.to_ascii_lowercase();
+        let mut path_hints = BTreeSet::new();
+
+        if lower.ends_with("/app/route.ts")
+            || lower.ends_with("/app/route.tsx")
+            || lower.ends_with("/app/route.js")
+            || lower.ends_with("/app/route.jsx")
+            || lower.contains("/app/")
+                && matches!(
+                    path.file_name().and_then(|name| name.to_str()),
+                    Some("route.ts" | "route.tsx" | "route.js" | "route.jsx")
+                )
+            || matches!(
+                path.file_name().and_then(|name| name.to_str()),
+                Some("next.config.js" | "next.config.mjs" | "next.config.ts")
+            )
+        {
+            path_hints.insert(ProjectHint::NextJs);
+        }
+
+        if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| MANIFEST_FILES.contains(&name))
+            && file_is_within_read_budget(path, max_read_bytes)
+            && let Ok(text) = fs::read_to_string(path)
+        {
+            detect_manifest_hints(&text, &mut path_hints);
+        }
+
+        if is_supported_source(path)
+            && file_is_within_read_budget(path, max_read_bytes)
+            && let Ok(text) = fs::read_to_string(path)
+        {
+            detect_source_hints(&text, &mut path_hints);
+        }
+
+        if path_hints.is_empty() {
+            continue;
+        }
+
+        let root = roots
+            .iter()
+            .filter(|root| path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+            .cloned()
+            .unwrap_or_else(|| {
+                path.parent()
+                    .unwrap_or_else(|| Path::new("."))
+                    .to_path_buf()
+            });
+        hints.entry(root).or_default().extend(path_hints);
+    }
+
     hints
+}
+
+fn file_is_within_read_budget(path: &Path, max_read_bytes: u64) -> bool {
+    fs::metadata(path).is_ok_and(|metadata| metadata.len() <= max_read_bytes)
+}
+
+fn detect_manifest_hints(text: &str, hints: &mut BTreeSet<ProjectHint>) {
+    let lower = text.to_ascii_lowercase();
+    if lower.contains("fastapi") {
+        hints.insert(ProjectHint::FastApi);
+    }
+    if lower.contains("django") {
+        hints.insert(ProjectHint::Django);
+    }
+    if lower.contains("djangorestframework") || lower.contains("rest_framework") {
+        hints.insert(ProjectHint::DjangoRestFramework);
+    }
+    if lower.contains("\"express\"") || lower.contains("'express'") || lower.contains(" express") {
+        hints.insert(ProjectHint::Express);
+    }
+    if lower.contains("\"next\"") || lower.contains("'next'") || lower.contains(" next") {
+        hints.insert(ProjectHint::NextJs);
+    }
+}
+
+fn detect_source_hints(text: &str, hints: &mut BTreeSet<ProjectHint>) {
+    let lower = text.to_ascii_lowercase();
+    if lower.contains("from fastapi") || lower.contains("import fastapi") {
+        hints.insert(ProjectHint::FastApi);
+    }
+    if lower.contains("from django") || lower.contains("import django") || lower.contains("django.")
+    {
+        hints.insert(ProjectHint::Django);
+    }
+    if lower.contains("rest_framework") {
+        hints.insert(ProjectHint::DjangoRestFramework);
+    }
+    if lower.contains("from \"express\"")
+        || lower.contains("from 'express'")
+        || lower.contains("require(\"express\")")
+        || lower.contains("require('express')")
+    {
+        hints.insert(ProjectHint::Express);
+    }
+    if lower.contains("from \"next")
+        || lower.contains("from 'next")
+        || lower.contains("next/server")
+    {
+        hints.insert(ProjectHint::NextJs);
+    }
+}
+
+fn hints_for_path(
+    path: &Path,
+    target_hints: &BTreeMap<PathBuf, BTreeSet<ProjectHint>>,
+) -> Vec<ProjectHint> {
+    let mut hints = BTreeSet::new();
+    for (root, root_hints) in target_hints {
+        if path.starts_with(root) {
+            hints.extend(root_hints.iter().copied());
+        }
+    }
+    if normalize_path(path).contains("/app/")
+        && matches!(
+            path.file_name().and_then(|name| name.to_str()),
+            Some("route.ts" | "route.tsx" | "route.js" | "route.jsx")
+        )
+    {
+        hints.insert(ProjectHint::NextJs);
+    }
+    hints.into_iter().collect()
+}
+
+fn diagnostic(code: impl Into<String>, message: impl Into<String>) -> Diagnostic {
+    diagnostic_with_severity(code, DiagnosticSeverity::Warning, message)
+}
+
+fn diagnostic_with_severity(
+    code: impl Into<String>,
+    severity: DiagnosticSeverity,
+    message: impl Into<String>,
+) -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Discovery,
+        code: code.into(),
+        severity,
+        recoverability: Recoverability::Recoverable,
+        span: None,
+        message: message.into(),
+    }
+}
+
+fn incomplete_scan_severity(mode: authmap_core::ScanMode) -> DiagnosticSeverity {
+    match mode {
+        authmap_core::ScanMode::Advisory => DiagnosticSeverity::Warning,
+        authmap_core::ScanMode::Enforce => DiagnosticSeverity::Error,
+    }
+}
+
+struct PatternMatchers {
+    includes: Vec<Override>,
+    excludes: Vec<Override>,
+}
+
+impl PatternMatchers {
+    fn new(
+        roots: &[PathBuf],
+        include: &[String],
+        exclude: &[String],
+    ) -> Result<Self, DiscoveryError> {
+        let includes = build_matchers(roots, include, "include")?;
+        let excludes = build_matchers(roots, exclude, "exclude")?;
+        Ok(Self { includes, excludes })
+    }
+
+    fn is_included(&self, path: &Path) -> bool {
+        self.includes.is_empty()
+            || self
+                .includes
+                .iter()
+                .any(|matcher| matcher.matched(path, false).is_whitelist())
+    }
+
+    fn is_excluded(&self, path: &Path) -> bool {
+        self.excludes
+            .iter()
+            .any(|matcher| matcher.matched(path, false).is_whitelist())
+    }
+}
+
+fn build_matchers(
+    roots: &[PathBuf],
+    patterns: &[String],
+    kind: &'static str,
+) -> Result<Vec<Override>, DiscoveryError> {
+    if patterns.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut matchers = Vec::new();
+    for root in roots {
+        let base = if root.is_file() {
+            root.parent().unwrap_or_else(|| Path::new("."))
+        } else {
+            root.as_path()
+        };
+        let mut builder = OverrideBuilder::new(base);
+        for pattern in patterns {
+            builder
+                .add(pattern)
+                .map_err(|source| DiscoveryError::InvalidPattern {
+                    kind,
+                    pattern: pattern.clone(),
+                    source,
+                })?;
+        }
+        matchers.push(
+            builder
+                .build()
+                .map_err(|source| DiscoveryError::InvalidPattern {
+                    kind,
+                    pattern: patterns.join(", "),
+                    source,
+                })?,
+        );
+    }
+    Ok(matchers)
 }
 
 #[derive(Debug, Error)]
 pub enum DiscoveryError {
+    #[error("scan target is missing or unreadable: {path}: {source}")]
+    TargetUnavailable {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error("scan target is not a regular file or directory: {path}")]
+    UnsupportedTarget { path: PathBuf },
+    #[error("scan target contains no supported source files: {targets:?}")]
+    EmptyTarget { targets: Vec<PathBuf> },
+    #[error("invalid {kind} pattern {pattern:?}: {source}")]
+    InvalidPattern {
+        kind: &'static str,
+        pattern: String,
+        source: ignore::Error,
+    },
     #[error("failed to read metadata for {path}: {source}")]
     Metadata {
         path: PathBuf,
         source: std::io::Error,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use authmap_config::{ScanConfig, ScanLimits, ScanPlan};
+    use authmap_core::{ScanMode, diagnostic_codes};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    struct TestDir {
+        path: PathBuf,
+    }
+
+    impl TestDir {
+        fn new(name: &str) -> Self {
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system clock should be after Unix epoch")
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "authmap-discovery-test-{name}-{}-{nonce}",
+                std::process::id()
+            ));
+            fs::create_dir_all(&path).expect("test temp directory should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn write_file(path: &Path, contents: &str) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("test fixture parent should be created");
+        }
+        fs::write(path, contents).expect("test fixture should be written");
+    }
+
+    fn plan(target: &Path) -> ScanPlan {
+        ScanPlan::new(
+            vec![target.to_path_buf()],
+            None,
+            ScanConfig {
+                mode: ScanMode::Advisory,
+                include: Vec::new(),
+                exclude: Vec::new(),
+                limits: ScanLimits::default(),
+            },
+        )
+    }
+
+    fn names(result: &DiscoveryResult) -> Vec<String> {
+        result
+            .files
+            .iter()
+            .map(|file| {
+                Path::new(&file.path)
+                    .file_name()
+                    .expect("file should have a name")
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn default_exclusions_skip_dependency_build_and_generated_outputs() {
+        let temp = TestDir::new("default-exclusions");
+        for path in [
+            ".git/config.ts",
+            "node_modules/pkg/index.ts",
+            ".venv/app.py",
+            "venv/app.py",
+            "dist/bundle.js",
+            "build/bundle.js",
+            "target/debug/build.ts",
+            ".next/server/route.ts",
+            "authmap.json",
+            "authmap.md",
+            "authmap.sarif",
+            "authmap.sarif.json",
+            "src/app.ts",
+        ] {
+            write_file(&temp.path().join(path), "const ok = true;\n");
+        }
+
+        let result = discover_sources(&plan(temp.path())).expect("discovery should succeed");
+
+        assert_eq!(names(&result), vec!["app.ts"]);
+    }
+
+    #[test]
+    fn hard_exclusions_are_relative_to_scan_root_not_absolute_ancestors() {
+        let temp = TestDir::new("ancestor-build");
+        let project = temp.path().join("build").join("project");
+        write_file(&project.join("app.py"), "print('hello')\n");
+
+        let result = discover_sources(&plan(&project)).expect("discovery should succeed");
+
+        assert_eq!(names(&result), vec!["app.py"]);
+    }
+
+    #[test]
+    fn hard_exclusions_cannot_be_reincluded_by_config() {
+        let temp = TestDir::new("hard-exclude-include");
+        write_file(
+            &temp.path().join("node_modules/pkg/index.ts"),
+            "export const ignored = true;\n",
+        );
+        let mut plan = plan(temp.path());
+        plan.config.include = vec!["node_modules/**/*.ts".to_string()];
+
+        let result =
+            discover_sources(&plan).expect("advisory scan with only hard-excluded files warns");
+
+        assert!(result.files.is_empty());
+        assert_eq!(
+            result.diagnostics[0].code,
+            diagnostic_codes::DISCOVERY_NO_CANDIDATE_SOURCES
+        );
+    }
+
+    #[test]
+    fn single_supported_file_succeeds_and_unsupported_file_warns_in_advisory() {
+        let temp = TestDir::new("single-file");
+        let supported = temp.path().join("app.py");
+        let unsupported = temp.path().join("README.md");
+        write_file(&supported, "print('hello')\n");
+        write_file(&unsupported, "# hello\n");
+
+        let result = discover_sources(&plan(&supported)).expect("supported file should scan");
+        assert_eq!(names(&result), vec!["app.py"]);
+
+        let result =
+            discover_sources(&plan(&unsupported)).expect("unsupported advisory file should warn");
+        assert!(result.files.is_empty());
+        assert_eq!(
+            result.diagnostics[0].code,
+            diagnostic_codes::DISCOVERY_NO_CANDIDATE_SOURCES
+        );
+    }
+
+    #[test]
+    fn include_and_exclude_patterns_use_exclude_precedence() {
+        let temp = TestDir::new("patterns");
+        write_file(&temp.path().join("src/a.ts"), "export const a = 1;\n");
+        write_file(
+            &temp.path().join("src/a.test.ts"),
+            "export const test = 1;\n",
+        );
+        write_file(
+            &temp.path().join("scripts/tool.ts"),
+            "export const tool = 1;\n",
+        );
+
+        let mut plan = plan(temp.path());
+        plan.config.include = vec!["src/**/*.ts".to_string()];
+        plan.config.exclude = vec!["*.test.ts".to_string()];
+
+        let result = discover_sources(&plan).expect("patterns should be valid");
+
+        assert_eq!(names(&result), vec!["a.ts"]);
+    }
+
+    #[test]
+    fn discovery_order_is_deterministic() {
+        let temp = TestDir::new("deterministic");
+        write_file(&temp.path().join("z.ts"), "export const z = 1;\n");
+        write_file(&temp.path().join("a.py"), "print('a')\n");
+        write_file(&temp.path().join("nested/m.js"), "export const m = 1;\n");
+
+        let first = discover_sources(&plan(temp.path())).expect("first discovery should succeed");
+        let second = discover_sources(&plan(temp.path())).expect("second discovery should succeed");
+
+        assert_eq!(
+            first
+                .files
+                .iter()
+                .map(|file| &file.path)
+                .collect::<Vec<_>>(),
+            second
+                .files
+                .iter()
+                .map(|file| &file.path)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(names(&first), vec!["a.py", "m.js", "z.ts"]);
+    }
+
+    #[test]
+    fn large_file_is_included_as_skipped_with_warning() {
+        let temp = TestDir::new("large-file");
+        write_file(&temp.path().join("app.py"), "print('this is too large')\n");
+        let mut plan = plan(temp.path());
+        plan.config.limits.max_file_size_bytes = 4;
+
+        let result = discover_sources(&plan).expect("large file should be represented as skipped");
+
+        assert_eq!(result.files.len(), 1);
+        assert_eq!(
+            result.files[0]
+                .skipped
+                .as_ref()
+                .expect("file should be skipped")
+                .code,
+            diagnostic_codes::DISCOVERY_FILE_TOO_LARGE
+        );
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == diagnostic_codes::DISCOVERY_FILE_TOO_LARGE)
+        );
+    }
+
+    #[test]
+    fn enforce_large_file_marks_incomplete_discovery_as_error() {
+        let temp = TestDir::new("large-file-enforce");
+        write_file(&temp.path().join("app.py"), "print('this is too large')\n");
+        let mut plan = plan(temp.path());
+        plan.config.mode = ScanMode::Enforce;
+        plan.config.limits.max_file_size_bytes = 4;
+
+        let result = discover_sources(&plan).expect("large file should be represented as skipped");
+
+        assert!(result.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == diagnostic_codes::DISCOVERY_FILE_TOO_LARGE
+                && diagnostic.severity == DiagnosticSeverity::Error
+        }));
+    }
+
+    #[test]
+    fn max_files_limit_truncates_after_sorting_and_warns() {
+        let temp = TestDir::new("max-files");
+        write_file(&temp.path().join("b.ts"), "export const b = 1;\n");
+        write_file(&temp.path().join("a.ts"), "export const a = 1;\n");
+        write_file(&temp.path().join("c.ts"), "export const c = 1;\n");
+        let mut plan = plan(temp.path());
+        plan.config.limits.max_files = 2;
+
+        let result = discover_sources(&plan).expect("discovery should succeed");
+
+        assert_eq!(names(&result), vec!["a.ts", "b.ts"]);
+        assert!(result.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED
+        }));
+    }
+
+    #[test]
+    fn enforce_max_files_limit_marks_incomplete_discovery_as_error() {
+        let temp = TestDir::new("max-files-enforce");
+        write_file(&temp.path().join("b.ts"), "export const b = 1;\n");
+        write_file(&temp.path().join("a.ts"), "export const a = 1;\n");
+        let mut plan = plan(temp.path());
+        plan.config.mode = ScanMode::Enforce;
+        plan.config.limits.max_files = 1;
+
+        let result = discover_sources(&plan).expect("discovery should succeed");
+
+        assert_eq!(names(&result), vec!["a.ts"]);
+        assert!(result.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED
+                && diagnostic.severity == DiagnosticSeverity::Error
+        }));
+    }
+
+    #[test]
+    fn detects_project_hints_for_initial_frameworks() {
+        let temp = TestDir::new("project-hints");
+        write_file(
+            &temp.path().join("requirements.txt"),
+            "fastapi\ndjango\ndjangorestframework\n",
+        );
+        write_file(
+            &temp.path().join("package.json"),
+            r#"{ "dependencies": { "express": "^4", "next": "^15" } }"#,
+        );
+        write_file(
+            &temp.path().join("app/main.py"),
+            "from fastapi import FastAPI\n",
+        );
+        write_file(
+            &temp.path().join("app/api/users/route.ts"),
+            "import { NextRequest } from 'next/server';\n",
+        );
+
+        let result = discover_sources(&plan(temp.path())).expect("discovery should succeed");
+
+        for file in result.files {
+            assert!(file.project_hints.contains(&ProjectHint::FastApi));
+            assert!(file.project_hints.contains(&ProjectHint::Django));
+            assert!(
+                file.project_hints
+                    .contains(&ProjectHint::DjangoRestFramework)
+            );
+            assert!(file.project_hints.contains(&ProjectHint::Express));
+            assert!(file.project_hints.contains(&ProjectHint::NextJs));
+        }
+    }
+
+    #[test]
+    fn oversized_hint_files_are_not_read_before_size_limits() {
+        let temp = TestDir::new("oversized-hints");
+        write_file(
+            &temp.path().join("package.json"),
+            r#"{ "dependencies": { "express": "^4" } }"#,
+        );
+        write_file(&temp.path().join("src/app.ts"), "export const ok = true;\n");
+        let mut plan = plan(temp.path());
+        plan.config.limits.max_file_size_bytes = 4;
+
+        let result = discover_sources(&plan).expect("discovery should succeed");
+
+        assert!(
+            result.files[0].project_hints.is_empty(),
+            "oversized manifests and sources should not be read for hints"
+        );
+    }
+
+    #[test]
+    fn invalid_patterns_are_reported() {
+        let temp = TestDir::new("invalid-pattern");
+        write_file(&temp.path().join("app.py"), "print('hello')\n");
+        let mut plan = plan(temp.path());
+        plan.config.include = vec!["[abc".to_string()];
+
+        let error = discover_sources(&plan).expect_err("invalid pattern should fail");
+
+        assert!(matches!(error, DiscoveryError::InvalidPattern { .. }));
+    }
 }

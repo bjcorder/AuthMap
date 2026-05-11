@@ -57,13 +57,8 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
         ..ScanMetadata::default()
     });
     document.source_files = discovery.files;
-    document.diagnostics = parse_output.diagnostics;
-    document.diagnostics.extend(
-        parse_output
-            .parsed_files
-            .iter()
-            .flat_map(|parsed| parsed.diagnostics.clone()),
-    );
+    document.diagnostics = discovery.diagnostics;
+    document.diagnostics.extend(parse_output.diagnostics);
     document.routes = adapter_output.routes;
     document.diagnostics.extend(adapter_output.diagnostics);
     document.routes.sort_by_key(route_sort_key);
@@ -71,8 +66,9 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
         route.id = format!("route_{:04}", index + 1);
     }
     document.diagnostics.sort_by(|left, right| {
-        left.code
-            .cmp(&right.code)
+        left.category
+            .cmp(&right.category)
+            .then(left.code.cmp(&right.code))
             .then(left.message.cmp(&right.message))
     });
     Ok(document)
@@ -98,6 +94,32 @@ fn route_sort_key(route: &authmap_core::Route) -> (String, u32, String, String, 
 pub enum ScanError {
     #[error(transparent)]
     Discovery(#[from] authmap_discovery::DiscoveryError),
+}
+
+impl ScanError {
+    pub fn is_target_unavailable(&self) -> bool {
+        matches!(
+            self,
+            ScanError::Discovery(
+                authmap_discovery::DiscoveryError::TargetUnavailable { .. }
+                    | authmap_discovery::DiscoveryError::UnsupportedTarget { .. }
+            )
+        )
+    }
+
+    pub fn is_empty_target(&self) -> bool {
+        matches!(
+            self,
+            ScanError::Discovery(authmap_discovery::DiscoveryError::EmptyTarget { .. })
+        )
+    }
+
+    pub fn is_config_error(&self) -> bool {
+        matches!(
+            self,
+            ScanError::Discovery(authmap_discovery::DiscoveryError::InvalidPattern { .. })
+        )
+    }
 }
 
 #[cfg(test)]

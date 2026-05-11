@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use authmap_core::{
@@ -8,6 +9,7 @@ use authmap_core::{
     EvidenceType, Framework, Mutation, MutationOperation, RiskLevel, ScanMode, SourceFile, Span,
     SymbolRef,
 };
+use serde_json::{Value, json};
 use thiserror::Error;
 
 pub trait Reporter: Send + Sync {
@@ -390,6 +392,12 @@ fn render_route_details(output: &mut String, document: &AuthMapDocument, index: 
                     let _ = writeln!(output, "  - {}", escape_inline(question));
                 }
             }
+            if !coverage.uncertainty_reasons.is_empty() {
+                let _ = writeln!(output, "- Coverage uncertainty:");
+                for reason in &coverage.uncertainty_reasons {
+                    let _ = writeln!(output, "  - {}", escape_inline(reason));
+                }
+            }
         } else {
             let _ = writeln!(output, "- Coverage: not classified");
         }
@@ -708,6 +716,8 @@ fn escape_inline(input: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('`', "\\`")
+        .replace('[', "\\[")
+        .replace(']', "\\]")
 }
 
 fn scan_mode_label(mode: ScanMode) -> &'static str {
@@ -793,16 +803,140 @@ fn diagnostic_severity_label(severity: DiagnosticSeverity) -> &'static str {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct SarifReporter;
+
+impl Reporter for SarifReporter {
+    fn format(&self) -> ReportFormat {
+        ReportFormat::Sarif
+    }
+
+    fn render(&self, document: &AuthMapDocument) -> Result<String, ReportError> {
+        let rules = diagnostic_rules(&document.diagnostics);
+        let results = document
+            .diagnostics
+            .iter()
+            .map(diagnostic_result)
+            .collect::<Vec<_>>();
+        let sarif = json!({
+            "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+            "version": "2.1.0",
+            "runs": [
+                {
+                    "tool": {
+                        "driver": {
+                            "name": "AuthMap",
+                            "semanticVersion": document.metadata.tool_version,
+                            "informationUri": "https://github.com/Ozark-Security-Labs/AuthMap",
+                            "rules": rules
+                        }
+                    },
+                    "results": results
+                }
+            ]
+        });
+        serde_json::to_string_pretty(&sarif).map_err(ReportError::Json)
+    }
+}
+
+fn diagnostic_rules(diagnostics: &[Diagnostic]) -> Vec<Value> {
+    let mut diagnostics = diagnostics.iter().collect::<Vec<_>>();
+    diagnostics.sort_by(|left, right| {
+        left.code
+            .cmp(&right.code)
+            .then(left.category.cmp(&right.category))
+    });
+    diagnostics.dedup_by(|left, right| left.code == right.code);
+    diagnostics
+        .into_iter()
+        .map(|diagnostic| {
+            json!({
+                "id": diagnostic.code,
+                "name": diagnostic.code,
+                "shortDescription": {
+                    "text": format!("{} diagnostic", enum_value(&diagnostic.category))
+                },
+                "properties": {
+                    "category": enum_value(&diagnostic.category),
+                    "recoverability": enum_value(&diagnostic.recoverability)
+                }
+            })
+        })
+        .collect()
+}
+
+fn diagnostic_result(diagnostic: &Diagnostic) -> Value {
+    let mut result = json!({
+        "ruleId": diagnostic.code,
+        "level": sarif_level(diagnostic.severity),
+        "message": {
+            "text": diagnostic.message
+        },
+        "properties": {
+            "category": enum_value(&diagnostic.category),
+            "recoverability": enum_value(&diagnostic.recoverability)
+        }
+    });
+    if let Some(span) = &diagnostic.span {
+        result["locations"] = json!([{
+            "physicalLocation": {
+                "artifactLocation": {
+                    "uri": span.file
+                },
+                "region": sarif_region(span)
+            }
+        }]);
+    }
+    result
+}
+
+fn sarif_region(span: &Span) -> Value {
+    let mut region = json!({
+        "startLine": span.line,
+        "startColumn": span.column
+    });
+    if let Some(range) = span.byte_range {
+        region["byteOffset"] = json!(range.start);
+        region["byteLength"] = json!(range.end.saturating_sub(range.start));
+    }
+    region
+}
+
+fn sarif_level(severity: DiagnosticSeverity) -> &'static str {
+    match severity {
+        DiagnosticSeverity::Info => "note",
+        DiagnosticSeverity::Warning => "warning",
+        DiagnosticSeverity::Error => "error",
+    }
+}
+
+fn enum_value<T: serde::Serialize>(value: &T) -> String {
+    serde_json::to_value(value)
+        .ok()
+        .and_then(|value| value.as_str().map(ToString::to_string))
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
 pub fn redact_sensitive_text(input: &str) -> String {
     input.replace("Authorization:", "Authorization: [REDACTED]")
 }
 
 pub fn write_atomic(path: &Path, contents: &str) -> Result<(), ReportError> {
     let temp_path = temp_path_for(path);
-    fs::write(&temp_path, contents).map_err(|source| ReportError::Write {
-        path: temp_path.clone(),
-        source,
-    })?;
+    let mut temp_file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp_path)
+        .map_err(|source| ReportError::Write {
+            path: temp_path.clone(),
+            source,
+        })?;
+    temp_file
+        .write_all(contents.as_bytes())
+        .map_err(|source| ReportError::Write {
+            path: temp_path.clone(),
+            source,
+        })?;
     fs::rename(&temp_path, path).map_err(|source| ReportError::Write {
         path: path.to_path_buf(),
         source,
@@ -832,13 +966,13 @@ pub enum ReportError {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use authmap_core::{
-        AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticSeverity,
-        Evidence, EvidenceType, Framework, Mutation, MutationOperation, ReachabilityLink,
-        Recoverability, RiskLevel, Route, ScanMetadata, SourceFile, Span, SymbolRef,
+        AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticCategory,
+        DiagnosticSeverity, Evidence, EvidenceType, ExtensionMap, Framework, Mutation,
+        MutationOperation, ReachabilityLink, Recoverability, RiskLevel, Route, ScanMetadata,
+        SkipReason, SourceFile, Span, SymbolRef, diagnostic_codes,
     };
-
-    use super::{MarkdownReporter, Reporter};
 
     #[test]
     fn renders_empty_document_without_review_items() {
@@ -865,6 +999,171 @@ mod tests {
         assert!(rendered.contains("update `user.disabled` via `sqlalchemy`"));
         assert!(rendered.contains("Should this require a tenant check?"));
         assert!(rendered.contains("risk is review_required"));
+    }
+
+    #[test]
+    fn markdown_surfaces_review_skips_and_diagnostics_before_summary() {
+        let markdown = MarkdownReporter
+            .render(&document_with_review_data())
+            .expect("markdown should render");
+
+        let review_index = markdown.find("## Review Required").expect("review section");
+        let skipped_index = markdown.find("## Skipped Files").expect("skipped section");
+        let diagnostics_index = markdown
+            .find("## Diagnostics")
+            .expect("diagnostics section");
+        let summary_index = markdown.find("## Summary").expect("summary section");
+
+        assert!(summary_index < review_index);
+        assert!(review_index < diagnostics_index);
+        assert!(diagnostics_index < skipped_index);
+        assert!(markdown.contains("parser.source_parse_recovered"));
+        assert!(markdown.contains("discovery.file_too_large"));
+        assert!(markdown.contains("dynamic dispatch was detected"));
+    }
+
+    #[test]
+    fn sarif_maps_diagnostics_to_rules_results_and_locations() {
+        let sarif: Value = serde_json::from_str(
+            &SarifReporter
+                .render(&document_with_review_data())
+                .expect("SARIF should render"),
+        )
+        .expect("SARIF should be JSON");
+
+        assert_eq!(sarif["version"], "2.1.0");
+        assert_eq!(
+            sarif["runs"][0]["tool"]["driver"]["rules"][0]["id"],
+            "parser.source_parse_recovered"
+        );
+        assert_eq!(
+            sarif["runs"][0]["results"][0]["ruleId"],
+            "parser.source_parse_recovered"
+        );
+        assert_eq!(
+            sarif["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"]
+                ["uri"],
+            "src/app.py"
+        );
+    }
+
+    #[test]
+    fn markdown_escapes_untrusted_report_fields() {
+        let mut document = document_with_review_data();
+        document.source_files[0].path = "src/evil`\n## forged.md".to_string();
+        document.source_files[0]
+            .skipped
+            .as_mut()
+            .expect("file should be skipped")
+            .message = "<script>alert(1)</script>\n```".to_string();
+        document.diagnostics[0].message = "[click](javascript:alert(1))\n# forged".to_string();
+        document.coverage[0].rationale = vec!["**bold**\n## forged".to_string()];
+
+        let markdown = MarkdownReporter
+            .render(&document)
+            .expect("markdown should render");
+
+        assert!(!markdown.contains("\n## forged.md"));
+        assert!(!markdown.contains("<script>"));
+        assert!(!markdown.contains("```"));
+        assert!(!markdown.contains("[click](javascript:alert(1))"));
+        assert!(!markdown.contains("\n# forged"));
+        assert!(markdown.contains("&lt;script&gt;alert"));
+        assert!(markdown.contains("\\[click\\]"));
+    }
+
+    #[test]
+    fn write_atomic_refuses_preexisting_temp_path() {
+        let dir = std::env::temp_dir().join(format!(
+            "authmap-report-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock should be after Unix epoch")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).expect("temp dir should be created");
+        let output = dir.join("authmap.md");
+        let temp = temp_path_for(&output);
+        fs::write(&temp, "stale temp").expect("stale temp should be written");
+
+        let error = write_atomic(&output, "new report").expect_err("temp path should be refused");
+
+        assert!(matches!(error, ReportError::Write { .. }));
+        assert!(!output.exists());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    fn document_with_review_data() -> AuthMapDocument {
+        let mut document = AuthMapDocument::empty(ScanMetadata {
+            target_roots: vec!["src".to_string()],
+            ..ScanMetadata::default()
+        });
+        document.source_files.push(SourceFile {
+            path: "src/large.py".to_string(),
+            language: authmap_core::Language::Python,
+            size_bytes: 100,
+            sha256: None,
+            project_hints: Vec::new(),
+            skipped: Some(SkipReason {
+                code: diagnostic_codes::DISCOVERY_FILE_TOO_LARGE.to_string(),
+                message: "file exceeds max_file_size_bytes".to_string(),
+            }),
+        });
+        document.routes.push(Route {
+            id: "route.accounts.delete".to_string(),
+            framework: Framework::Express,
+            method: "DELETE".to_string(),
+            path: "/accounts/:id".to_string(),
+            name: None,
+            tags: Vec::new(),
+            middleware: Vec::new(),
+            handler: Some(SymbolRef {
+                name: "deleteAccount".to_string(),
+                span: Some(Span {
+                    file: "src/app.py".to_string(),
+                    line: 2,
+                    column: 1,
+                    byte_range: None,
+                }),
+            }),
+            span: Some(Span {
+                file: "src/app.py".to_string(),
+                line: 1,
+                column: 1,
+                byte_range: None,
+            }),
+            source_evidence: Vec::new(),
+            confidence: Confidence::High,
+            notes: Vec::new(),
+            extensions: ExtensionMap::new(),
+        });
+        document.coverage.push(Coverage {
+            route_id: "route.accounts.delete".to_string(),
+            class: CoverageClass::UnknownOrDynamic,
+            risk: RiskLevel::ReviewRequired,
+            rationale: vec!["authorization evidence was incomplete".to_string()],
+            reviewer_questions: vec!["Should this route require ownership?".to_string()],
+            uncertainty_reasons: vec!["dynamic dispatch was detected".to_string()],
+            extensions: ExtensionMap::new(),
+        });
+        document.diagnostics.push(diagnostic());
+        document
+    }
+
+    fn diagnostic() -> Diagnostic {
+        Diagnostic {
+            category: DiagnosticCategory::Parser,
+            code: diagnostic_codes::PARSER_SOURCE_PARSE_RECOVERED.to_string(),
+            severity: DiagnosticSeverity::Warning,
+            recoverability: Recoverability::Recoverable,
+            span: Some(Span {
+                file: "src/app.py".to_string(),
+                line: 3,
+                column: 5,
+                byte_range: None,
+            }),
+            message: "source parsed with syntax errors; partial tree is available".to_string(),
+        }
     }
 
     fn synthetic_document() -> AuthMapDocument {
@@ -904,8 +1203,10 @@ mod tests {
                     span: Some(span.clone()),
                 }),
                 span: Some(span.clone()),
+                source_evidence: Vec::new(),
                 confidence: Confidence::Medium,
                 notes: vec!["dynamic policy branch".to_string()],
+                extensions: ExtensionMap::new(),
             }],
             evidence: vec![Evidence {
                 id: "evidence_0001".to_string(),
@@ -916,6 +1217,7 @@ mod tests {
                 span: Some(span.clone()),
                 confidence: Confidence::High,
                 notes: Vec::new(),
+                extensions: ExtensionMap::new(),
             }],
             mutations: vec![Mutation {
                 id: "mutation_0001".to_string(),
@@ -925,6 +1227,7 @@ mod tests {
                 span: Some(span.clone()),
                 confidence: Confidence::Medium,
                 notes: Vec::new(),
+                extensions: ExtensionMap::new(),
             }],
             links: vec![ReachabilityLink {
                 id: "link_0001".to_string(),
@@ -933,6 +1236,7 @@ mod tests {
                 evidence_id: Some("evidence_0001".to_string()),
                 confidence: Confidence::Medium,
                 notes: Vec::new(),
+                extensions: ExtensionMap::new(),
             }],
             coverage: vec![Coverage {
                 route_id: "route_0001".to_string(),
@@ -940,14 +1244,18 @@ mod tests {
                 risk: RiskLevel::ReviewRequired,
                 rationale: vec!["dynamic policy branch".to_string()],
                 reviewer_questions: vec!["Should this require a tenant check?".to_string()],
+                uncertainty_reasons: Vec::new(),
+                extensions: ExtensionMap::new(),
             }],
             diagnostics: vec![Diagnostic {
+                category: DiagnosticCategory::Policy,
                 code: "dynamic_policy".to_string(),
                 severity: DiagnosticSeverity::Warning,
                 recoverability: Recoverability::Recoverable,
                 span: Some(span),
                 message: "dynamic policy branch".to_string(),
             }],
+            extensions: ExtensionMap::new(),
         }
     }
 }

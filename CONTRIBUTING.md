@@ -11,6 +11,11 @@ This repository is early-stage and design-first. Contributions should preserve t
 - Test fixtures for real-world application patterns
 - Output/reporting improvements
 
+Parser and adapter contributors should follow the shared contract in
+[docs/PARSERS_AND_ADAPTERS.md](docs/PARSERS_AND_ADAPTERS.md).
+Diagnostic categories and stable codes should follow
+[docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md).
+
 ## Ground rules
 
 - Do not add exploit automation, payload generation, credential theft, bypass instructions, or live attack workflows.
@@ -20,4 +25,6 @@ This repository is early-stage and design-first. Contributions should preserve t
 
 ## Development status
 
-The current repository contains initial product documentation and architecture notes. Implementation issues and milestones will be added as the project hardens.
+The current repository contains the v0.1.0 foundation crates for the CLI,
+schema/IR, discovery, parsing, diagnostics, and reporting. Framework-specific
+adapter behavior and higher-level policy checks will land in later milestones.

@@ -54,12 +54,14 @@ The classifier turns raw evidence into reviewable categories and risk levels.
 Example categories:
 
 - public_declared
-- unauthenticated_sensitive
-- authn_only_sensitive
+- unauthenticated
+- authn_only
+- role_guarded
+- permission_guarded
 - ownership_guarded
 - tenant_guarded
-- role_guarded
-- dynamic_review_required
+- admin_guarded
+- unknown_or_dynamic
 
 ### 5. Reporters
 

@@ -3,17 +3,512 @@
   "$id": "https://github.com/Ozark-Security-Labs/AuthMap/schemas/authmap.schema.json",
   "title": "AuthMap Document",
   "type": "object",
-  "required": ["schema_version", "metadata", "source_files", "routes", "evidence", "mutations", "links", "coverage", "diagnostics"],
+  "required": [
+    "schema_version",
+    "metadata",
+    "source_files",
+    "routes",
+    "evidence",
+    "mutations",
+    "links",
+    "coverage",
+    "diagnostics"
+  ],
   "properties": {
-    "schema_version": { "type": "string" },
-    "metadata": { "type": "object" },
-    "source_files": { "type": "array" },
-    "routes": { "type": "array" },
-    "evidence": { "type": "array" },
-    "mutations": { "type": "array" },
-    "links": { "type": "array" },
-    "coverage": { "type": "array" },
-    "diagnostics": { "type": "array" }
+    "schema_version": { "const": "0.1.0" },
+    "metadata": { "$ref": "#/$defs/scan_metadata" },
+    "source_files": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/source_file" }
+    },
+    "routes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/route" }
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/evidence" }
+    },
+    "mutations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/mutation" }
+    },
+    "links": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/reachability_link" }
+    },
+    "coverage": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/coverage" }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/diagnostic" }
+    },
+    "extensions": { "$ref": "#/$defs/extensions" }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "scan_metadata": {
+      "type": "object",
+      "required": ["tool_name", "tool_version", "mode", "target_roots", "config_path"],
+      "properties": {
+        "tool_name": { "type": "string", "minLength": 1 },
+        "tool_version": { "type": "string", "minLength": 1 },
+        "mode": { "$ref": "#/$defs/scan_mode" },
+        "target_roots": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "config_path": {
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "source_file": {
+      "type": "object",
+      "required": [
+        "path",
+        "language",
+        "size_bytes",
+        "sha256",
+        "project_hints",
+        "skipped"
+      ],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "language": { "$ref": "#/$defs/language" },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "sha256": {
+          "anyOf": [
+            { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+            { "type": "null" }
+          ]
+        },
+        "project_hints": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/project_hint" },
+          "uniqueItems": true
+        },
+        "skipped": {
+          "anyOf": [
+            { "$ref": "#/$defs/skip_reason" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "skip_reason": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "$ref": "#/$defs/diagnostic_code" },
+        "message": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "route": {
+      "type": "object",
+      "required": [
+        "id",
+        "framework",
+        "method",
+        "path",
+        "name",
+        "tags",
+        "middleware",
+        "handler",
+        "span",
+        "source_evidence",
+        "confidence",
+        "notes"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "framework": { "$ref": "#/$defs/framework" },
+        "method": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "name": {
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "tags": { "$ref": "#/$defs/string_list" },
+        "middleware": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/symbol_ref" }
+        },
+        "handler": {
+          "anyOf": [
+            { "$ref": "#/$defs/symbol_ref" },
+            { "type": "null" }
+          ]
+        },
+        "span": {
+          "anyOf": [
+            { "$ref": "#/$defs/span" },
+            { "type": "null" }
+          ]
+        },
+        "source_evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/source_evidence" }
+        },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "notes": { "$ref": "#/$defs/string_list" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "source_evidence": {
+      "type": "object",
+      "required": ["mechanism", "symbol", "span", "confidence", "notes"],
+      "properties": {
+        "mechanism": { "type": "string", "minLength": 1 },
+        "symbol": {
+          "anyOf": [
+            { "$ref": "#/$defs/symbol_ref" },
+            { "type": "null" }
+          ]
+        },
+        "span": {
+          "anyOf": [
+            { "$ref": "#/$defs/span" },
+            { "type": "null" }
+          ]
+        },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "notes": { "$ref": "#/$defs/string_list" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "required": [
+        "id",
+        "route_id",
+        "evidence_type",
+        "mechanism",
+        "symbol",
+        "span",
+        "confidence",
+        "notes"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "route_id": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "evidence_type": { "$ref": "#/$defs/evidence_type" },
+        "mechanism": { "type": "string", "minLength": 1 },
+        "symbol": {
+          "anyOf": [
+            { "$ref": "#/$defs/symbol_ref" },
+            { "type": "null" }
+          ]
+        },
+        "span": {
+          "anyOf": [
+            { "$ref": "#/$defs/span" },
+            { "type": "null" }
+          ]
+        },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "notes": { "$ref": "#/$defs/string_list" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "mutation": {
+      "type": "object",
+      "required": [
+        "id",
+        "operation",
+        "library",
+        "resource",
+        "span",
+        "confidence",
+        "notes"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "operation": { "$ref": "#/$defs/mutation_operation" },
+        "library": {
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "resource": {
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "span": {
+          "anyOf": [
+            { "$ref": "#/$defs/span" },
+            { "type": "null" }
+          ]
+        },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "notes": { "$ref": "#/$defs/string_list" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "reachability_link": {
+      "type": "object",
+      "required": [
+        "id",
+        "route_id",
+        "mutation_id",
+        "evidence_id",
+        "confidence",
+        "notes"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "route_id": { "$ref": "#/$defs/id" },
+        "mutation_id": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "evidence_id": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "notes": { "$ref": "#/$defs/string_list" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "coverage": {
+      "type": "object",
+      "required": [
+        "route_id",
+        "class",
+        "risk",
+        "rationale",
+        "reviewer_questions",
+        "uncertainty_reasons"
+      ],
+      "properties": {
+        "route_id": { "$ref": "#/$defs/id" },
+        "class": { "$ref": "#/$defs/coverage_class" },
+        "risk": { "$ref": "#/$defs/risk_level" },
+        "rationale": { "$ref": "#/$defs/string_list" },
+        "reviewer_questions": { "$ref": "#/$defs/string_list" },
+        "uncertainty_reasons": { "$ref": "#/$defs/string_list" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": [
+        "category",
+        "code",
+        "severity",
+        "recoverability",
+        "span",
+        "message"
+      ],
+      "properties": {
+        "category": { "$ref": "#/$defs/diagnostic_category" },
+        "code": { "$ref": "#/$defs/diagnostic_code" },
+        "severity": { "$ref": "#/$defs/diagnostic_severity" },
+        "recoverability": { "$ref": "#/$defs/recoverability" },
+        "span": {
+          "anyOf": [
+            { "$ref": "#/$defs/span" },
+            { "type": "null" }
+          ]
+        },
+        "message": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "symbol_ref": {
+      "type": "object",
+      "required": ["name", "span"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "span": {
+          "anyOf": [
+            { "$ref": "#/$defs/span" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "span": {
+      "type": "object",
+      "required": ["file", "line", "column", "byte_range"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "byte_range": {
+          "anyOf": [
+            { "$ref": "#/$defs/byte_range" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "byte_range": {
+      "type": "object",
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*(\\.[A-Za-z0-9][A-Za-z0-9_-]*)+$"
+      },
+      "additionalProperties": true
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z][A-Za-z0-9_.:-]*$"
+    },
+    "diagnostic_code": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+    },
+    "string_list": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "scan_mode": {
+      "type": "string",
+      "enum": ["advisory", "enforce"]
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "python",
+        "java_script",
+        "java_script_react",
+        "type_script",
+        "type_script_react",
+        "unknown"
+      ]
+    },
+    "project_hint": {
+      "type": "string",
+      "enum": [
+        "fast_api",
+        "django",
+        "django_rest_framework",
+        "express",
+        "next_js",
+        "sql_alchemy",
+        "django_orm",
+        "prisma"
+      ]
+    },
+    "framework": {
+      "type": "string",
+      "enum": [
+        "fast_api",
+        "django",
+        "django_rest_framework",
+        "express",
+        "next_js",
+        "unknown"
+      ]
+    },
+    "evidence_type": {
+      "type": "string",
+      "enum": [
+        "authn",
+        "role_check",
+        "permission_check",
+        "ownership_check",
+        "tenant_check",
+        "admin_check",
+        "explicit_public",
+        "audit_log",
+        "unknown_dynamic_check"
+      ]
+    },
+    "mutation_operation": {
+      "type": "string",
+      "enum": [
+        "create",
+        "update",
+        "delete",
+        "save",
+        "bulk_update",
+        "raw_sql_mutation",
+        "unknown_mutation"
+      ]
+    },
+    "coverage_class": {
+      "type": "string",
+      "enum": [
+        "public_declared",
+        "unauthenticated",
+        "authn_only",
+        "role_guarded",
+        "permission_guarded",
+        "ownership_guarded",
+        "tenant_guarded",
+        "admin_guarded",
+        "unknown_or_dynamic"
+      ]
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "review_required"]
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    },
+    "diagnostic_severity": {
+      "type": "string",
+      "enum": ["info", "warning", "error"]
+    },
+    "diagnostic_category": {
+      "type": "string",
+      "enum": [
+        "config",
+        "discovery",
+        "parser",
+        "adapter",
+        "report",
+        "internal",
+        "policy"
+      ]
+    },
+    "recoverability": {
+      "type": "string",
+      "enum": ["recoverable", "fatal"]
+    }
+  }
 }

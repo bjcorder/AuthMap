@@ -1,18 +1,49 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use authmap_core::{
-    Confidence, Diagnostic, DiagnosticSeverity, Framework, Recoverability, Route, Span, SymbolRef,
+    Confidence, Diagnostic, DiagnosticCategory, DiagnosticSeverity, Evidence, Framework, Mutation,
+    Recoverability, Route, Span, SymbolRef,
 };
-use authmap_parsers::{Node, ParsedFile};
+use authmap_parsers::ParsedFile;
+use tree_sitter::{Node, Tree};
 
 #[derive(Clone, Debug, Default)]
 pub struct AdapterContext {
     pub enabled_frameworks: Vec<String>,
 }
 
+pub struct AdapterInput<'a> {
+    pub parsed: &'a ParsedFile,
+    pub context: &'a AdapterContext,
+}
+
+impl<'a> AdapterInput<'a> {
+    pub fn new(parsed: &'a ParsedFile, context: &'a AdapterContext) -> Self {
+        Self { parsed, context }
+    }
+
+    pub fn source_text(&self) -> &'a str {
+        &self.parsed.text
+    }
+
+    pub fn tree(&self) -> Option<&'a Tree> {
+        self.parsed.tree()
+    }
+
+    pub fn span_for_node(&self, node: Node<'_>) -> Span {
+        self.parsed.span_for_node(node)
+    }
+
+    pub fn snippet(&self, span: &Span) -> Option<&'a str> {
+        self.parsed.snippet(span)
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct AdapterOutput {
     pub routes: Vec<Route>,
+    pub evidence: Vec<Evidence>,
+    pub mutations: Vec<Mutation>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -59,6 +90,8 @@ impl AdapterRegistry {
 
             let adapter_output = adapter.discover_routes(parsed_files, context);
             output.routes.extend(adapter_output.routes);
+            output.evidence.extend(adapter_output.evidence);
+            output.mutations.extend(adapter_output.mutations);
             output.diagnostics.extend(adapter_output.diagnostics);
         }
         output
@@ -238,6 +271,7 @@ impl FastApiIndex {
         AdapterOutput {
             routes: emitted,
             diagnostics,
+            ..AdapterOutput::default()
         }
     }
 }
@@ -289,8 +323,10 @@ fn build_route(
         middleware: Vec::new(),
         handler: Some(route.handler.clone()),
         span: Some(route.span.clone()),
+        source_evidence: Vec::new(),
         confidence,
         notes,
+        extensions: authmap_core::ExtensionMap::new(),
     })
 }
 
@@ -880,6 +916,7 @@ fn join_paths(prefix: &str, path: &str) -> String {
 
 fn diagnostic(code: &str, span: Span, message: &str) -> Diagnostic {
     Diagnostic {
+        category: DiagnosticCategory::Adapter,
         code: code.to_string(),
         severity: DiagnosticSeverity::Warning,
         recoverability: Recoverability::Recoverable,
@@ -1135,6 +1172,7 @@ impl ExpressIndex {
         AdapterOutput {
             routes,
             diagnostics,
+            ..AdapterOutput::default()
         }
     }
 }
@@ -1170,8 +1208,10 @@ fn express_route(fact: &ExpressRouteFact, prefix: Option<&str>, dynamic_prefix: 
         middleware: fact.middleware.clone(),
         handler: Some(fact.handler.clone()),
         span: Some(fact.span.clone()),
+        source_evidence: Vec::new(),
         confidence,
         notes,
+        extensions: authmap_core::ExtensionMap::new(),
     }
 }
 
