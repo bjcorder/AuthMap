@@ -11,6 +11,14 @@
   },
   "source_files": [
     {
+      "path": "tests/fixtures/fastapi/app/main_relative.py",
+      "language": "python",
+      "size_bytes": 167,
+      "sha256": null,
+      "project_hints": [],
+      "skipped": null
+    },
+    {
       "path": "tests/fixtures/fastapi/app/routes/users.py",
       "language": "python",
       "size_bytes": 285,
@@ -30,6 +38,40 @@
   "routes": [
     {
       "id": "route_0001",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "/relative/users/{user_id}",
+      "name": "get_user",
+      "tags": [
+        "users"
+      ],
+      "middleware": [],
+      "handler": {
+        "name": "get_user",
+        "span": {
+          "file": "tests/fixtures/fastapi/app/routes/users.py",
+          "line": 7,
+          "column": 5,
+          "byte_range": {
+            "start": 132,
+            "end": 140
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/app/routes/users.py",
+        "line": 6,
+        "column": 2,
+        "byte_range": {
+          "start": 70,
+          "end": 127
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0002",
       "framework": "fast_api",
       "method": "GET",
       "path": "/v1/users/{user_id}",
@@ -63,7 +105,41 @@
       "notes": []
     },
     {
-      "id": "route_0002",
+      "id": "route_0003",
+      "framework": "fast_api",
+      "method": "PUT",
+      "path": "/relative/users/{user_id}",
+      "name": null,
+      "tags": [
+        "users"
+      ],
+      "middleware": [],
+      "handler": {
+        "name": "update_user",
+        "span": {
+          "file": "tests/fixtures/fastapi/app/routes/users.py",
+          "line": 12,
+          "column": 5,
+          "byte_range": {
+            "start": 231,
+            "end": 242
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/app/routes/users.py",
+        "line": 11,
+        "column": 2,
+        "byte_range": {
+          "start": 186,
+          "end": 226
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0004",
       "framework": "fast_api",
       "method": "PUT",
       "path": "/v1/users/{user_id}",
@@ -97,7 +173,7 @@
       "notes": []
     },
     {
-      "id": "route_0003",
+      "id": "route_0005",
       "framework": "fast_api",
       "method": "GET",
       "path": "/health",
@@ -131,7 +207,7 @@
       "notes": []
     },
     {
-      "id": "route_0004",
+      "id": "route_0006",
       "framework": "fast_api",
       "method": "POST",
       "path": "/items",
@@ -165,7 +241,7 @@
       "notes": []
     },
     {
-      "id": "route_0005",
+      "id": "route_0007",
       "framework": "fast_api",
       "method": "DELETE",
       "path": "/api/local/{item_id}",
@@ -199,7 +275,7 @@
       "notes": []
     },
     {
-      "id": "route_0006",
+      "id": "route_0008",
       "framework": "fast_api",
       "method": "GET",
       "path": "/reports",
@@ -234,7 +310,7 @@
       ]
     },
     {
-      "id": "route_0007",
+      "id": "route_0009",
       "framework": "fast_api",
       "method": "GET",
       "path": "/search",
@@ -268,7 +344,7 @@
       "notes": []
     },
     {
-      "id": "route_0008",
+      "id": "route_0010",
       "framework": "fast_api",
       "method": "POST",
       "path": "/search",
@@ -302,7 +378,7 @@
       "notes": []
     },
     {
-      "id": "route_0009",
+      "id": "route_0011",
       "framework": "fast_api",
       "method": "ANY",
       "path": "/fallback",
@@ -333,6 +409,41 @@
       "confidence": "medium",
       "notes": [
         "api_route methods are dynamic or missing; emitted as ANY"
+      ]
+    },
+    {
+      "id": "route_0012",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "<dynamic>",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "generated_path",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 42,
+          "column": 5,
+          "byte_range": {
+            "start": 848,
+            "end": 862
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 41,
+        "column": 2,
+        "byte_range": {
+          "start": 822,
+          "end": 843
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "route path is dynamic and was emitted as <dynamic>",
+        "route path is dynamic and was not fully resolved"
       ]
     }
   ],

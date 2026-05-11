@@ -363,24 +363,26 @@ impl<'a> FileCollector<'a> {
     }
 
     fn walk_for_bindings(&mut self, node: Node<'_>) {
-        if node.kind() == "assignment" {
-            self.collect_assignment(node);
-        }
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            self.walk_for_bindings(child);
+        let mut stack = vec![node];
+        while let Some(node) = stack.pop() {
+            if node.kind() == "assignment" {
+                self.collect_assignment(node);
+            }
+            let mut cursor = node.walk();
+            stack.extend(node.children(&mut cursor));
         }
     }
 
     fn walk_for_routes_and_includes(&mut self, node: Node<'_>) {
-        match node.kind() {
-            "decorated_definition" => self.collect_decorated_definition(node),
-            "call" => self.collect_include_router(node),
-            _ => {}
-        }
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            self.walk_for_routes_and_includes(child);
+        let mut stack = vec![node];
+        while let Some(node) = stack.pop() {
+            match node.kind() {
+                "decorated_definition" => self.collect_decorated_definition(node),
+                "call" => self.collect_include_router(node),
+                _ => {}
+            }
+            let mut cursor = node.walk();
+            stack.extend(node.children(&mut cursor));
         }
     }
 
@@ -458,16 +460,23 @@ impl<'a> FileCollector<'a> {
             let Some(methods) = methods_for_decorator(self.parsed, call, &decorator_name) else {
                 continue;
             };
-            let (path, dynamic_path) = route_path(self.parsed, call);
+            let (mut path, dynamic_path) = route_path(self.parsed, call);
             if path.is_none() {
                 self.index.diagnostics.push(diagnostic(
                     "fastapi_dynamic_route_path",
                     self.parsed.span_for(call),
                     "FastAPI route path is dynamic and could not be resolved",
                 ));
-                continue;
+                if dynamic_path {
+                    path = Some("<dynamic>".to_string());
+                } else {
+                    continue;
+                }
             }
             let mut notes = Vec::new();
+            if dynamic_path {
+                notes.push("route path is dynamic and was emitted as <dynamic>".to_string());
+            }
             if decorator_name == "api_route" && methods.iter().any(|method| method == "ANY") {
                 notes.push("api_route methods are dynamic or missing; emitted as ANY".to_string());
                 self.index.diagnostics.push(diagnostic(
@@ -584,10 +593,9 @@ fn parse_imports(
         let Some((module, imported_names)) = rest.split_once(" import ") else {
             continue;
         };
-        let module = module.trim();
-        if !module_index.contains_key(module) {
+        let Some(module) = resolve_python_import_module(parsed, module.trim(), module_index) else {
             continue;
-        }
+        };
         for imported in imported_names.split(',') {
             let imported = imported.trim();
             if imported.is_empty() || imported == "*" {
@@ -601,13 +609,54 @@ fn parse_imports(
             imports.insert(
                 local.to_string(),
                 ImportBinding {
-                    module: module.to_string(),
+                    module: module.clone(),
                     imported: original.to_string(),
                 },
             );
         }
     }
     imports
+}
+
+fn resolve_python_import_module(
+    parsed: &ParsedFile,
+    module: &str,
+    module_index: &BTreeMap<String, String>,
+) -> Option<String> {
+    if !module.starts_with('.') {
+        return module_index
+            .contains_key(module)
+            .then(|| module.to_string());
+    }
+
+    let level = module.chars().take_while(|ch| *ch == '.').count();
+    let rest = module.trim_start_matches('.');
+    let normalized = parsed.source.path.replace('\\', "/");
+    let stripped = normalized.strip_suffix(".py")?;
+    let mut parts = stripped
+        .strip_suffix("/__init__")
+        .unwrap_or(stripped)
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    if !normalized.ends_with("/__init__.py") {
+        parts.pop();
+    }
+
+    for start in 0..parts.len() {
+        let mut base = parts[start..].to_vec();
+        for _ in 1..level {
+            base.pop();
+        }
+        if !rest.is_empty() {
+            base.extend(rest.split('.').filter(|part| !part.is_empty()));
+        }
+        let candidate = base.join(".");
+        if module_index.contains_key(&candidate) {
+            return Some(candidate);
+        }
+    }
+    None
 }
 
 fn module_matches(file: &str, module: &str) -> bool {
@@ -620,14 +669,13 @@ fn module_matches(file: &str, module: &str) -> bool {
 }
 
 fn find_first_kind<'tree>(node: Node<'tree>, kind: &str) -> Option<Node<'tree>> {
-    if node.kind() == kind {
-        return Some(node);
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        if let Some(found) = find_first_kind(child, kind) {
-            return Some(found);
+    let mut stack = vec![node];
+    while let Some(node) = stack.pop() {
+        if node.kind() == kind {
+            return Some(node);
         }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
     }
     None
 }
@@ -910,6 +958,14 @@ struct ExpressMount {
 }
 
 #[derive(Clone, Debug)]
+struct MountedRouter {
+    binding: ExpressBinding,
+    prefixes: Vec<String>,
+    dynamic_prefix: bool,
+    lineage: Vec<(String, String)>,
+}
+
+#[derive(Clone, Debug)]
 struct ExpressRouteFact {
     owner_file: String,
     owner_name: String,
@@ -927,6 +983,7 @@ struct ExpressIndex {
     bindings: Vec<ExpressBinding>,
     imports_by_file: HashMap<String, HashMap<String, ExpressImport>>,
     exports_by_file: HashMap<String, ExpressExports>,
+    definitions_by_file: HashMap<String, HashMap<String, Span>>,
     mounts: Vec<ExpressMount>,
     routes: Vec<ExpressRouteFact>,
     diagnostics: Vec<Diagnostic>,
@@ -952,7 +1009,9 @@ impl ExpressIndex {
             }
         }
 
-        let mut mounted = Vec::<(ExpressBinding, Vec<String>, bool)>::new();
+        let mut mounted = Vec::<MountedRouter>::new();
+        let mut unresolved_mounts = BTreeSet::<(String, u32, String)>::new();
+        let mut cyclic_mounts = BTreeSet::<(String, u32, String)>::new();
         for mount in &self.mounts {
             let Some(parent) = bindings.get(&(mount.file.clone(), mount.parent_name.clone()))
             else {
@@ -964,11 +1023,13 @@ impl ExpressIndex {
 
             let target = resolve_express_mount_target(mount, &bindings, &self.exports_by_file);
             let Some(child) = target else {
-                diagnostics.push(diagnostic(
+                push_mount_diagnostic(
+                    &mut diagnostics,
+                    &mut unresolved_mounts,
+                    mount,
                     "express_unresolved_mount_router",
-                    mount.span.clone(),
                     "Express mounted router could not be resolved statically",
-                ));
+                );
                 continue;
             };
 
@@ -976,7 +1037,13 @@ impl ExpressIndex {
             if let Some(prefix) = &mount.prefix {
                 prefixes.push(prefix.clone());
             }
-            mounted.push((child, prefixes, mount.dynamic_prefix));
+            let lineage = vec![binding_key(&child)];
+            mounted.push(MountedRouter {
+                binding: child,
+                prefixes,
+                dynamic_prefix: mount.dynamic_prefix,
+                lineage,
+            });
         }
 
         let mut changed = true;
@@ -985,8 +1052,9 @@ impl ExpressIndex {
             for mount in &self.mounts {
                 let Some(parent_mount) = mounted
                     .iter()
-                    .find(|(binding, _, _)| {
-                        binding.file == mount.file && binding.name == mount.parent_name
+                    .find(|mounted| {
+                        mounted.binding.file == mount.file
+                            && mounted.binding.name == mount.parent_name
                     })
                     .cloned()
                 else {
@@ -994,41 +1062,56 @@ impl ExpressIndex {
                 };
                 let target = resolve_express_mount_target(mount, &bindings, &self.exports_by_file);
                 let Some(child) = target else {
-                    diagnostics.push(diagnostic(
+                    push_mount_diagnostic(
+                        &mut diagnostics,
+                        &mut unresolved_mounts,
+                        mount,
                         "express_unresolved_mount_router",
-                        mount.span.clone(),
                         "Express mounted router could not be resolved statically",
-                    ));
+                    );
                     continue;
                 };
-                let mut prefixes = parent_mount.1;
+                let child_key = binding_key(&child);
+                if parent_mount.lineage.contains(&child_key) {
+                    push_mount_diagnostic(
+                        &mut diagnostics,
+                        &mut cyclic_mounts,
+                        mount,
+                        "express_cyclic_mount_router",
+                        "Express mounted router cycle was ignored",
+                    );
+                    continue;
+                }
+                let mut prefixes = parent_mount.prefixes;
                 if let Some(prefix) = &mount.prefix {
                     prefixes.push(prefix.clone());
                 }
-                let dynamic = parent_mount.2 || mount.dynamic_prefix;
-                if mounted
-                    .iter()
-                    .any(|(binding, existing_prefixes, existing_dynamic)| {
-                        binding.file == child.file
-                            && binding.name == child.name
-                            && existing_prefixes == &prefixes
-                            && existing_dynamic == &dynamic
-                    })
-                {
+                let dynamic = parent_mount.dynamic_prefix || mount.dynamic_prefix;
+                let mut lineage = parent_mount.lineage;
+                lineage.push(child_key);
+                if mounted.iter().any(|mounted| {
+                    mounted.binding.file == child.file
+                        && mounted.binding.name == child.name
+                        && mounted.prefixes == prefixes
+                        && mounted.dynamic_prefix == dynamic
+                }) {
                     continue;
                 }
-                mounted.push((child, prefixes, dynamic));
+                mounted.push(MountedRouter {
+                    binding: child,
+                    prefixes,
+                    dynamic_prefix: dynamic,
+                    lineage,
+                });
                 changed = true;
             }
         }
 
-        for (binding, prefixes, dynamic_prefix) in &mounted {
-            for fact in self
-                .routes
-                .iter()
-                .filter(|fact| fact.owner_file == binding.file && fact.owner_name == binding.name)
-            {
-                let prefix = prefixes.iter().fold(String::new(), |prefix, next| {
+        for mounted in &mounted {
+            for fact in self.routes.iter().filter(|fact| {
+                fact.owner_file == mounted.binding.file && fact.owner_name == mounted.binding.name
+            }) {
+                let prefix = mounted.prefixes.iter().fold(String::new(), |prefix, next| {
                     if prefix.is_empty() {
                         next.clone()
                     } else {
@@ -1039,7 +1122,7 @@ impl ExpressIndex {
                 push_unique(
                     &mut routes,
                     &mut seen,
-                    express_route(fact, prefix.as_deref(), *dynamic_prefix),
+                    express_route(fact, prefix.as_deref(), mounted.dynamic_prefix),
                 );
             }
         }
@@ -1071,7 +1154,9 @@ fn express_route(fact: &ExpressRouteFact, prefix: Option<&str>, dynamic_prefix: 
         path = join_paths(prefix, &path);
     }
     if dynamic_prefix {
-        confidence = Confidence::Medium;
+        if confidence != Confidence::Low {
+            confidence = Confidence::Medium;
+        }
         notes.push(
             "Express mount prefix is dynamic and was not included in the route path".to_string(),
         );
@@ -1089,6 +1174,23 @@ fn express_route(fact: &ExpressRouteFact, prefix: Option<&str>, dynamic_prefix: 
         span: Some(fact.span.clone()),
         confidence,
         notes,
+    }
+}
+
+fn binding_key(binding: &ExpressBinding) -> (String, String) {
+    (binding.file.clone(), binding.name.clone())
+}
+
+fn push_mount_diagnostic(
+    diagnostics: &mut Vec<Diagnostic>,
+    seen: &mut BTreeSet<(String, u32, String)>,
+    mount: &ExpressMount,
+    code: &str,
+    message: &str,
+) {
+    let key = (mount.span.file.clone(), mount.span.line, code.to_string());
+    if seen.insert(key) {
+        diagnostics.push(diagnostic(code, mount.span.clone(), message));
     }
 }
 
@@ -1121,28 +1223,72 @@ struct ExpressCollector<'a> {
 
 impl<'a> ExpressCollector<'a> {
     fn collect(&mut self, root: Node<'_>) {
+        self.walk_for_definitions(root);
         self.walk_for_bindings(root);
         self.walk_for_routes_and_mounts(root);
     }
 
-    fn walk_for_bindings(&mut self, node: Node<'_>) {
-        if node.kind() == "call_expression" {
-            self.collect_binding(node);
+    fn walk_for_definitions(&mut self, node: Node<'_>) {
+        let mut stack = vec![node];
+        while let Some(node) = stack.pop() {
+            self.collect_definition(node);
+            let mut cursor = node.walk();
+            stack.extend(node.children(&mut cursor));
         }
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            self.walk_for_bindings(child);
+    }
+
+    fn walk_for_bindings(&mut self, node: Node<'_>) {
+        let mut stack = vec![node];
+        while let Some(node) = stack.pop() {
+            if node.kind() == "call_expression" {
+                self.collect_binding(node);
+            }
+            let mut cursor = node.walk();
+            stack.extend(node.children(&mut cursor));
         }
     }
 
     fn walk_for_routes_and_mounts(&mut self, node: Node<'_>) {
-        if node.kind() == "call_expression" {
-            self.collect_route_or_mount(node);
+        let mut stack = vec![node];
+        while let Some(node) = stack.pop() {
+            if node.kind() == "call_expression" {
+                self.collect_route_or_mount(node);
+            }
+            let mut cursor = node.walk();
+            stack.extend(node.children(&mut cursor));
         }
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            self.walk_for_routes_and_mounts(child);
-        }
+    }
+
+    fn collect_definition(&mut self, node: Node<'_>) {
+        let name_node = match node.kind() {
+            "function_declaration" => node.child_by_field_name("name"),
+            "variable_declarator" => {
+                let value = node.child_by_field_name("value");
+                if value.is_some_and(|value| {
+                    matches!(
+                        value.kind(),
+                        "arrow_function" | "function" | "function_expression"
+                    )
+                }) {
+                    node.child_by_field_name("name")
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        let Some(name_node) = name_node else {
+            return;
+        };
+        let Some(name) = self.parsed.text_for(name_node).map(str::to_string) else {
+            return;
+        };
+        self.index
+            .definitions_by_file
+            .entry(self.parsed.source.path.clone())
+            .or_default()
+            .entry(name)
+            .or_insert_with(|| self.parsed.span_for(name_node));
     }
 
     fn collect_binding(&mut self, call: Node<'_>) {
@@ -1190,9 +1336,12 @@ impl<'a> ExpressCollector<'a> {
         }
 
         if let Some(method) = express_method(&member) {
-            if let Some(chain) = express_route_chain(self.parsed, call, method) {
+            let definitions = self.index.definitions_by_file.get(&self.parsed.source.path);
+            if let Some(chain) = express_route_chain(self.parsed, call, method, definitions) {
                 self.push_route(chain);
-            } else if let Some(direct) = express_direct_route(self.parsed, call, &owner, method) {
+            } else if let Some(direct) =
+                express_direct_route(self.parsed, call, &owner, method, definitions)
+            {
                 self.push_route(direct);
             }
         }
@@ -1205,8 +1354,9 @@ impl<'a> ExpressCollector<'a> {
         }
 
         let mut dynamic_prefix = false;
-        let (prefix, child_node) = if let Some(prefix) = js_path_literal(self.parsed, args[0]) {
-            (Some(prefix), args.get(1).copied())
+        let (prefix, child_candidates) = if let Some(prefix) = js_path_literal(self.parsed, args[0])
+        {
+            (Some(prefix), &args[1..])
         } else if args.len() >= 2 {
             dynamic_prefix = true;
             self.index.diagnostics.push(diagnostic(
@@ -1214,9 +1364,9 @@ impl<'a> ExpressCollector<'a> {
                 self.parsed.span_for(args[0]),
                 "Express mount prefix is dynamic and could not be resolved",
             ));
-            (None, args.get(1).copied())
+            (None, &args[1..])
         } else if is_symbol_reference(args[0]) {
-            (None, Some(args[0]))
+            (None, &args[..])
         } else {
             dynamic_prefix = true;
             self.index.diagnostics.push(diagnostic(
@@ -1224,9 +1374,10 @@ impl<'a> ExpressCollector<'a> {
                 self.parsed.span_for(args[0]),
                 "Express mount prefix is dynamic and could not be resolved",
             ));
-            (None, args.get(1).copied())
+            (None, &args[1..])
         };
 
+        let child_node = select_mount_child(self.parsed, child_candidates, self.index);
         let Some(child_node) = child_node else {
             return;
         };
@@ -1292,13 +1443,14 @@ fn express_direct_route(
     call: Node<'_>,
     owner: &str,
     method: &str,
+    definitions: Option<&HashMap<String, Span>>,
 ) -> Option<ExpressRouteCandidate> {
     let args = call_arguments(call);
     if args.len() < 2 {
         return None;
     }
     let (path, dynamic_path) = express_path(parsed, args[0]);
-    let symbols = symbols_from_route_args(parsed, &args[1..]);
+    let symbols = symbols_from_route_args(parsed, &args[1..], definitions);
     let (handler, middleware) = split_handler_middleware(symbols)?;
     Some(ExpressRouteCandidate {
         owner: owner.to_string(),
@@ -1315,6 +1467,7 @@ fn express_route_chain(
     parsed: &ParsedFile,
     call: Node<'_>,
     method: &str,
+    definitions: Option<&HashMap<String, Span>>,
 ) -> Option<ExpressRouteCandidate> {
     let function = call.child_by_field_name("function")?;
     let object = function.child_by_field_name("object")?;
@@ -1328,7 +1481,7 @@ fn express_route_chain(
     let path_arg = *route_args.first()?;
     let (path, dynamic_path) = express_path(parsed, path_arg);
     let args = call_arguments(call);
-    let symbols = symbols_from_route_args(parsed, &args);
+    let symbols = symbols_from_route_args(parsed, &args, definitions);
     let (handler, middleware) = split_handler_middleware(symbols)?;
     Some(ExpressRouteCandidate {
         owner,
@@ -1341,8 +1494,14 @@ fn express_route_chain(
     })
 }
 
-fn find_route_call_in_chain<'tree>(parsed: &ParsedFile, node: Node<'tree>) -> Option<Node<'tree>> {
-    if node.kind() == "call_expression" {
+fn find_route_call_in_chain<'tree>(
+    parsed: &ParsedFile,
+    mut node: Node<'tree>,
+) -> Option<Node<'tree>> {
+    loop {
+        if node.kind() != "call_expression" {
+            return None;
+        }
         let function = node.child_by_field_name("function")?;
         if let Some((_, member)) = js_member_target(parsed, function) {
             if member == "route" {
@@ -1351,11 +1510,12 @@ fn find_route_call_in_chain<'tree>(parsed: &ParsedFile, node: Node<'tree>) -> Op
         }
         if function.kind() == "member_expression" {
             if let Some(object) = function.child_by_field_name("object") {
-                return find_route_call_in_chain(parsed, object);
+                node = object;
+                continue;
             }
         }
+        return None;
     }
-    None
 }
 
 fn split_handler_middleware(mut symbols: Vec<SymbolRef>) -> Option<(SymbolRef, Vec<SymbolRef>)> {
@@ -1379,31 +1539,41 @@ fn express_path(parsed: &ParsedFile, node: Node<'_>) -> (String, bool) {
         .map_or_else(|| ("<dynamic>".to_string(), true), |path| (path, false))
 }
 
-fn symbols_from_route_args(parsed: &ParsedFile, args: &[Node<'_>]) -> Vec<SymbolRef> {
+fn symbols_from_route_args(
+    parsed: &ParsedFile,
+    args: &[Node<'_>],
+    definitions: Option<&HashMap<String, Span>>,
+) -> Vec<SymbolRef> {
     let mut symbols = Vec::new();
     for arg in args {
         if arg.kind() == "array" {
             let mut cursor = arg.walk();
             for child in arg.children(&mut cursor).filter(|child| child.is_named()) {
-                if let Some(symbol) = symbol_ref(parsed, child, "<inline_middleware>") {
+                if let Some(symbol) = symbol_ref(parsed, child, "<inline_middleware>", definitions)
+                {
                     symbols.push(symbol);
                 }
             }
             continue;
         }
-        if let Some(symbol) = symbol_ref(parsed, *arg, "<inline_handler>") {
+        if let Some(symbol) = symbol_ref(parsed, *arg, "<inline_handler>", definitions) {
             symbols.push(symbol);
         }
     }
     symbols
 }
 
-fn symbol_ref(parsed: &ParsedFile, node: Node<'_>, inline_name: &str) -> Option<SymbolRef> {
+fn symbol_ref(
+    parsed: &ParsedFile,
+    node: Node<'_>,
+    inline_name: &str,
+    definitions: Option<&HashMap<String, Span>>,
+) -> Option<SymbolRef> {
     let name = symbol_name(parsed, node, inline_name)?;
-    Some(SymbolRef {
-        name,
-        span: Some(parsed.span_for(node)),
-    })
+    let span = definitions
+        .and_then(|definitions| definitions.get(&name).cloned())
+        .or_else(|| Some(parsed.span_for(node)));
+    Some(SymbolRef { name, span })
 }
 
 fn symbol_name(parsed: &ParsedFile, node: Node<'_>, inline_name: &str) -> Option<String> {
@@ -1422,6 +1592,37 @@ fn is_symbol_reference(node: Node<'_>) -> bool {
         node.kind(),
         "identifier" | "member_expression" | "call_expression"
     )
+}
+
+fn select_mount_child<'tree>(
+    parsed: &ParsedFile,
+    candidates: &[Node<'tree>],
+    index: &ExpressIndex,
+) -> Option<Node<'tree>> {
+    let symbol_candidates = candidates
+        .iter()
+        .copied()
+        .filter(|candidate| is_symbol_reference(*candidate))
+        .collect::<Vec<_>>();
+
+    symbol_candidates
+        .iter()
+        .rev()
+        .copied()
+        .find(|candidate| {
+            let Some(name) = symbol_name(parsed, *candidate, "<inline_middleware>") else {
+                return false;
+            };
+            index.bindings.iter().any(|binding| {
+                binding.file == parsed.source.path
+                    && binding.name == name
+                    && binding.kind == BindingKind::Router
+            }) || index
+                .imports_by_file
+                .get(&parsed.source.path)
+                .is_some_and(|imports| imports.contains_key(&name))
+        })
+        .or_else(|| symbol_candidates.last().copied())
 }
 
 fn call_arguments(call: Node<'_>) -> Vec<Node<'_>> {
@@ -1479,15 +1680,21 @@ fn decode_js_template(text: &str) -> Option<String> {
 }
 
 fn assigned_name(parsed: &ParsedFile, call: Node<'_>) -> Option<String> {
-    let parent = call.parent()?;
-    match parent.kind() {
-        "variable_declarator" => parent
-            .child_by_field_name("name")
-            .and_then(|node| parsed.text_for(node).map(str::to_string)),
-        "assignment_expression" => parent
-            .child_by_field_name("left")
-            .and_then(|node| parsed.text_for(node).map(str::to_string)),
-        _ => assigned_name(parsed, parent),
+    let mut current = call.parent()?;
+    loop {
+        match current.kind() {
+            "variable_declarator" => {
+                return current
+                    .child_by_field_name("name")
+                    .and_then(|node| parsed.text_for(node).map(str::to_string));
+            }
+            "assignment_expression" => {
+                return current
+                    .child_by_field_name("left")
+                    .and_then(|node| parsed.text_for(node).map(str::to_string));
+            }
+            _ => current = current.parent()?,
+        }
     }
 }
 
@@ -1661,6 +1868,17 @@ fn parse_js_exports(parsed: &ParsedFile) -> ExpressExports {
             exports.default = Some(value.trim().to_string());
             continue;
         }
+        for prefix in ["export const ", "export let ", "export var "] {
+            if let Some(rest) = trimmed.strip_prefix(prefix) {
+                if let Some((name, _)) = rest.split_once('=') {
+                    let name = name.trim();
+                    if !name.is_empty() {
+                        exports.named.insert(name.to_string(), name.to_string());
+                    }
+                }
+                continue;
+            }
+        }
         if let Some(rest) = trimmed.strip_prefix("export {") {
             let rest = rest.trim().trim_end_matches('}').trim();
             for part in rest.split(',') {
@@ -1727,7 +1945,11 @@ mod tests {
 
     #[test]
     fn discovers_fastapi_routes_from_apps_routers_and_imported_includes() {
-        let parsed = parse_fixtures(&["fastapi/main.py", "fastapi/app/routes/users.py"]);
+        let parsed = parse_fixtures(&[
+            "fastapi/main.py",
+            "fastapi/app/main_relative.py",
+            "fastapi/app/routes/users.py",
+        ]);
         let output = FastApiAdapter.discover_routes(&parsed, &AdapterContext::default());
 
         let summaries = output
@@ -1745,7 +1967,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        assert_eq!(output.routes.len(), 9);
+        assert_eq!(output.routes.len(), 12);
         assert!(summaries.contains(&(
             "GET",
             "/health",
@@ -1788,6 +2010,22 @@ mod tests {
         )));
         assert!(summaries.contains(&(
             "GET",
+            "/relative/users/{user_id}",
+            Some("get_user"),
+            Some("get_user"),
+            vec!["users".to_string()],
+            authmap_core::Confidence::High,
+        )));
+        assert!(summaries.contains(&(
+            "PUT",
+            "/relative/users/{user_id}",
+            Some("update_user"),
+            None,
+            vec!["users".to_string()],
+            authmap_core::Confidence::High,
+        )));
+        assert!(summaries.contains(&(
+            "GET",
             "/search",
             Some("search"),
             None,
@@ -1814,6 +2052,14 @@ mod tests {
             "GET",
             "/reports",
             Some("dynamic_reports"),
+            None,
+            Vec::<String>::new(),
+            authmap_core::Confidence::Medium,
+        )));
+        assert!(summaries.contains(&(
+            "GET",
+            "<dynamic>",
+            Some("generated_path"),
             None,
             Vec::<String>::new(),
             authmap_core::Confidence::Medium,
@@ -1858,11 +2104,12 @@ mod tests {
         let parsed = parse_fixtures(&[
             "express/app.js",
             "express/routes/admin.js",
+            "express/routes/exported.ts",
             "express/routes/users.ts",
         ]);
         let output = ExpressAdapter.discover_routes(&parsed, &AdapterContext::default());
 
-        assert_eq!(output.routes.len(), 9);
+        assert_eq!(output.routes.len(), 12);
         assert!(
             output
                 .routes
@@ -1895,6 +2142,14 @@ mod tests {
             Some("listAccounts")
         );
         assert_eq!(middleware_names(accounts), vec!["requireAuth", "audit"]);
+        assert_eq!(
+            accounts
+                .handler
+                .as_ref()
+                .and_then(|handler| handler.span.as_ref())
+                .map(|span| span.line),
+            Some(20)
+        );
 
         let dynamic = route(&output, "DELETE", "<dynamic>");
         assert_eq!(dynamic.confidence, Confidence::Low);
@@ -1940,6 +2195,9 @@ mod tests {
         );
         assert_eq!(middleware_names(users_get), vec!["requireUser"]);
 
+        let secure_users_get = route(&output, "GET", "/secure/:userId");
+        assert_eq!(middleware_names(secure_users_get), vec!["requireUser"]);
+
         let users_post = route(&output, "POST", "/v1/:userId");
         assert_eq!(
             users_post
@@ -1947,6 +2205,23 @@ mod tests {
                 .as_ref()
                 .map(|handler| handler.name.as_str()),
             Some("updateUser")
+        );
+        assert_eq!(
+            users_post
+                .handler
+                .as_ref()
+                .and_then(|handler| handler.span.as_ref())
+                .map(|span| span.line),
+            Some(9)
+        );
+
+        let exported = route(&output, "PATCH", "/exported/audit");
+        assert_eq!(
+            exported
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("exportAudit")
         );
 
         assert!(
@@ -1966,6 +2241,12 @@ mod tests {
                 .diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic.code == "express_unresolved_mount_router")
+        );
+        assert!(
+            output
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "express_cyclic_mount_router")
         );
     }
 

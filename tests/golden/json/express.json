@@ -13,7 +13,7 @@
     {
       "path": "tests/fixtures/express/app.js",
       "language": "java_script",
-      "size_bytes": 977,
+      "size_bytes": 1165,
       "sha256": null,
       "project_hints": [],
       "skipped": null
@@ -22,6 +22,14 @@
       "path": "tests/fixtures/express/routes/admin.js",
       "language": "java_script",
       "size_bytes": 253,
+      "sha256": null,
+      "project_hints": [],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/express/routes/exported.ts",
+      "language": "type_script",
+      "size_bytes": 317,
       "sha256": null,
       "project_hints": [],
       "skipped": null
@@ -48,11 +56,11 @@
           "name": "requireAuth",
           "span": {
             "file": "tests/fixtures/express/app.js",
-            "line": 23,
-            "column": 20,
+            "line": 12,
+            "column": 10,
             "byte_range": {
-              "start": 476,
-              "end": 487
+              "start": 380,
+              "end": 391
             }
           }
         }
@@ -61,21 +69,21 @@
         "name": "<inline_handler>",
         "span": {
           "file": "tests/fixtures/express/app.js",
-          "line": 23,
+          "line": 24,
           "column": 33,
           "byte_range": {
-            "start": 489,
-            "end": 532
+            "start": 554,
+            "end": 597
           }
         }
       },
       "span": {
         "file": "tests/fixtures/express/app.js",
-        "line": 23,
+        "line": 24,
         "column": 1,
         "byte_range": {
-          "start": 457,
-          "end": 533
+          "start": 522,
+          "end": 598
         }
       },
       "confidence": "high",
@@ -93,11 +101,11 @@
           "name": "requireAuth",
           "span": {
             "file": "tests/fixtures/express/app.js",
-            "line": 27,
-            "column": 24,
+            "line": 12,
+            "column": 10,
             "byte_range": {
-              "start": 559,
-              "end": 570
+              "start": 380,
+              "end": 391
             }
           }
         },
@@ -105,11 +113,11 @@
           "name": "audit",
           "span": {
             "file": "tests/fixtures/express/app.js",
-            "line": 27,
-            "column": 37,
+            "line": 16,
+            "column": 10,
             "byte_range": {
-              "start": 572,
-              "end": 577
+              "start": 432,
+              "end": 437
             }
           }
         }
@@ -118,21 +126,21 @@
         "name": "listAccounts",
         "span": {
           "file": "tests/fixtures/express/app.js",
-          "line": 27,
-          "column": 45,
+          "line": 20,
+          "column": 10,
           "byte_range": {
-            "start": 580,
-            "end": 592
+            "start": 478,
+            "end": 490
           }
         }
       },
       "span": {
         "file": "tests/fixtures/express/app.js",
-        "line": 27,
+        "line": 28,
         "column": 1,
         "byte_range": {
-          "start": 536,
-          "end": 593
+          "start": 601,
+          "end": 658
         }
       },
       "confidence": "high",
@@ -150,11 +158,11 @@
           "name": "requireAuth",
           "span": {
             "file": "tests/fixtures/express/app.js",
-            "line": 28,
-            "column": 25,
+            "line": 12,
+            "column": 10,
             "byte_range": {
-              "start": 619,
-              "end": 630
+              "start": 380,
+              "end": 391
             }
           }
         }
@@ -163,21 +171,21 @@
         "name": "listAccounts",
         "span": {
           "file": "tests/fixtures/express/app.js",
-          "line": 28,
-          "column": 38,
+          "line": 20,
+          "column": 10,
           "byte_range": {
-            "start": 632,
-            "end": 644
+            "start": 478,
+            "end": 490
           }
         }
       },
       "span": {
         "file": "tests/fixtures/express/app.js",
-        "line": 28,
+        "line": 29,
         "column": 1,
         "byte_range": {
-          "start": 595,
-          "end": 645
+          "start": 660,
+          "end": 710
         }
       },
       "confidence": "low",
@@ -197,11 +205,11 @@
           "name": "requireAuth",
           "span": {
             "file": "tests/fixtures/express/app.js",
-            "line": 30,
-            "column": 25,
+            "line": 12,
+            "column": 10,
             "byte_range": {
-              "start": 672,
-              "end": 683
+              "start": 380,
+              "end": 391
             }
           }
         }
@@ -210,21 +218,21 @@
         "name": "listAccounts",
         "span": {
           "file": "tests/fixtures/express/app.js",
-          "line": 30,
-          "column": 38,
+          "line": 20,
+          "column": 10,
           "byte_range": {
-            "start": 685,
-            "end": 697
+            "start": 478,
+            "end": 490
           }
         }
       },
       "span": {
         "file": "tests/fixtures/express/app.js",
-        "line": 30,
+        "line": 31,
         "column": 1,
         "byte_range": {
-          "start": 648,
-          "end": 698
+          "start": 713,
+          "end": 763
         }
       },
       "confidence": "high",
@@ -242,11 +250,11 @@
           "name": "audit",
           "span": {
             "file": "tests/fixtures/express/app.js",
-            "line": 31,
-            "column": 27,
+            "line": 16,
+            "column": 10,
             "byte_range": {
-              "start": 726,
-              "end": 731
+              "start": 432,
+              "end": 437
             }
           }
         }
@@ -255,21 +263,21 @@
         "name": "listAccounts",
         "span": {
           "file": "tests/fixtures/express/app.js",
-          "line": 31,
-          "column": 34,
+          "line": 20,
+          "column": 10,
           "byte_range": {
-            "start": 733,
-            "end": 745
+            "start": 478,
+            "end": 490
           }
         }
       },
       "span": {
         "file": "tests/fixtures/express/app.js",
-        "line": 31,
+        "line": 32,
         "column": 1,
         "byte_range": {
-          "start": 700,
-          "end": 746
+          "start": 765,
+          "end": 811
         }
       },
       "confidence": "high",
@@ -287,11 +295,11 @@
           "name": "audit",
           "span": {
             "file": "tests/fixtures/express/app.js",
-            "line": 31,
-            "column": 27,
+            "line": 16,
+            "column": 10,
             "byte_range": {
-              "start": 726,
-              "end": 731
+              "start": 432,
+              "end": 437
             }
           }
         }
@@ -300,21 +308,21 @@
         "name": "listAccounts",
         "span": {
           "file": "tests/fixtures/express/app.js",
-          "line": 31,
-          "column": 34,
+          "line": 20,
+          "column": 10,
           "byte_range": {
-            "start": 733,
-            "end": 745
+            "start": 478,
+            "end": 490
           }
         }
       },
       "span": {
         "file": "tests/fixtures/express/app.js",
-        "line": 31,
+        "line": 32,
         "column": 1,
         "byte_range": {
-          "start": 700,
-          "end": 746
+          "start": 765,
+          "end": 811
         }
       },
       "confidence": "medium",
@@ -334,11 +342,11 @@
           "name": "requireAdmin",
           "span": {
             "file": "tests/fixtures/express/routes/admin.js",
-            "line": 13,
-            "column": 26,
+            "line": 5,
+            "column": 10,
             "byte_range": {
-              "start": 200,
-              "end": 212
+              "start": 80,
+              "end": 92
             }
           }
         }
@@ -347,11 +355,11 @@
         "name": "listAdmins",
         "span": {
           "file": "tests/fixtures/express/routes/admin.js",
-          "line": 13,
-          "column": 40,
+          "line": 9,
+          "column": 10,
           "byte_range": {
-            "start": 214,
-            "end": 224
+            "start": 133,
+            "end": 143
           }
         }
       },
@@ -370,8 +378,53 @@
     {
       "id": "route_0008",
       "framework": "express",
+      "method": "PATCH",
+      "path": "/exported/audit",
+      "name": null,
+      "tags": [],
+      "middleware": [
+        {
+          "name": "audit",
+          "span": {
+            "file": "tests/fixtures/express/routes/exported.ts",
+            "line": 5,
+            "column": 10,
+            "byte_range": {
+              "start": 82,
+              "end": 87
+            }
+          }
+        }
+      ],
+      "handler": {
+        "name": "exportAudit",
+        "span": {
+          "file": "tests/fixtures/express/routes/exported.ts",
+          "line": 9,
+          "column": 10,
+          "byte_range": {
+            "start": 185,
+            "end": 196
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/routes/exported.ts",
+        "line": 13,
+        "column": 1,
+        "byte_range": {
+          "start": 273,
+          "end": 315
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0009",
+      "framework": "express",
       "method": "GET",
-      "path": "/v1/:userId",
+      "path": "/secure/:userId",
       "name": null,
       "tags": [],
       "middleware": [
@@ -379,11 +432,11 @@
           "name": "requireUser",
           "span": {
             "file": "tests/fixtures/express/routes/users.ts",
-            "line": 15,
-            "column": 8,
+            "line": 5,
+            "column": 10,
             "byte_range": {
-              "start": 300,
-              "end": 311
+              "start": 75,
+              "end": 86
             }
           }
         }
@@ -413,7 +466,97 @@
       "notes": []
     },
     {
-      "id": "route_0009",
+      "id": "route_0010",
+      "framework": "express",
+      "method": "GET",
+      "path": "/v1/:userId",
+      "name": null,
+      "tags": [],
+      "middleware": [
+        {
+          "name": "requireUser",
+          "span": {
+            "file": "tests/fixtures/express/routes/users.ts",
+            "line": 5,
+            "column": 10,
+            "byte_range": {
+              "start": 75,
+              "end": 86
+            }
+          }
+        }
+      ],
+      "handler": {
+        "name": "<inline_handler>",
+        "span": {
+          "file": "tests/fixtures/express/routes/users.ts",
+          "line": 15,
+          "column": 21,
+          "byte_range": {
+            "start": 313,
+            "end": 385
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/routes/users.ts",
+        "line": 13,
+        "column": 1,
+        "byte_range": {
+          "start": 265,
+          "end": 386
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0011",
+      "framework": "express",
+      "method": "POST",
+      "path": "/secure/:userId",
+      "name": null,
+      "tags": [],
+      "middleware": [
+        {
+          "name": "requireUser",
+          "span": {
+            "file": "tests/fixtures/express/routes/users.ts",
+            "line": 5,
+            "column": 10,
+            "byte_range": {
+              "start": 75,
+              "end": 86
+            }
+          }
+        }
+      ],
+      "handler": {
+        "name": "updateUser",
+        "span": {
+          "file": "tests/fixtures/express/routes/users.ts",
+          "line": 9,
+          "column": 7,
+          "byte_range": {
+            "start": 181,
+            "end": 191
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/routes/users.ts",
+        "line": 13,
+        "column": 1,
+        "byte_range": {
+          "start": 265,
+          "end": 419
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0012",
       "framework": "express",
       "method": "POST",
       "path": "/v1/:userId",
@@ -424,11 +567,11 @@
           "name": "requireUser",
           "span": {
             "file": "tests/fixtures/express/routes/users.ts",
-            "line": 18,
-            "column": 9,
+            "line": 5,
+            "column": 10,
             "byte_range": {
-              "start": 395,
-              "end": 406
+              "start": 75,
+              "end": 86
             }
           }
         }
@@ -437,11 +580,11 @@
         "name": "updateUser",
         "span": {
           "file": "tests/fixtures/express/routes/users.ts",
-          "line": 18,
-          "column": 22,
+          "line": 9,
+          "column": 7,
           "byte_range": {
-            "start": 408,
-            "end": 418
+            "start": 181,
+            "end": 191
           }
         }
       },
@@ -464,16 +607,31 @@
   "coverage": [],
   "diagnostics": [
     {
+      "code": "express_cyclic_mount_router",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 34,
+        "column": 1,
+        "byte_range": {
+          "start": 854,
+          "end": 891
+        }
+      },
+      "message": "Express mounted router cycle was ignored"
+    },
+    {
       "code": "express_dynamic_mount_prefix",
       "severity": "warning",
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/express/app.js",
-        "line": 37,
+        "line": 41,
         "column": 9,
         "byte_range": {
-          "start": 889,
-          "end": 902
+          "start": 1077,
+          "end": 1090
         }
       },
       "message": "Express mount prefix is dynamic and could not be resolved"
@@ -484,11 +642,11 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/express/app.js",
-        "line": 28,
+        "line": 29,
         "column": 1,
         "byte_range": {
-          "start": 595,
-          "end": 645
+          "start": 660,
+          "end": 710
         }
       },
       "message": "Express route path is dynamic and could not be resolved"
@@ -499,11 +657,11 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/express/app.js",
-        "line": 38,
+        "line": 42,
         "column": 1,
         "byte_range": {
-          "start": 918,
-          "end": 952
+          "start": 1106,
+          "end": 1140
         }
       },
       "message": "Express mounted router could not be resolved statically"

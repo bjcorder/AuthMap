@@ -6,8 +6,8 @@
 ## Summary
 
 - Mode: advisory
-- Targets: none
-- Source files: 0
+- Targets: tests/fixtures/negative/frontend_only
+- Source files: 1
 - Routes: 0
 - Evidence entries: 0
 - Mutations: 0

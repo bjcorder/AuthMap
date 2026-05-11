@@ -45,6 +45,10 @@ fn active_markdown_goldens_match_pipeline_output() {
         render_markdown(&scan_fixture("express")),
         "markdown/express.md",
     );
+    assert_golden_eq(
+        render_markdown(&scan_fixture("negative/frontend_only")),
+        "markdown/frontend_only.md",
+    );
 }
 
 #[test]

@@ -115,14 +115,14 @@ mod tests {
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 9);
+        assert_eq!(document.routes.len(), 12);
         assert_eq!(
             document.routes.first().map(|route| route.id.as_str()),
             Some("route_0001")
         );
         assert_eq!(
             document.routes.last().map(|route| route.id.as_str()),
-            Some("route_0009")
+            Some("route_0012")
         );
         assert!(document.routes.iter().any(|route| {
             route.method == "GET"
@@ -146,7 +146,7 @@ mod tests {
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 9);
+        assert_eq!(document.routes.len(), 12);
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::Express
                 && route.method == "POST"

@@ -206,7 +206,7 @@ fn render_review_required(
             ));
         }
         if !route.notes.is_empty() {
-            reasons.extend(route.notes.iter().map(|note| escape_inline(note)));
+            reasons.extend(route.notes.iter().cloned());
         }
         if let Some(coverage) = index.coverage_by_route.get(route.id.as_str()) {
             if matches!(coverage.risk, RiskLevel::High | RiskLevel::ReviewRequired) {
@@ -230,9 +230,8 @@ fn render_review_required(
         }
     }
 
-    for diagnostic in document
-        .diagnostics
-        .iter()
+    for diagnostic in sorted_diagnostics(document)
+        .into_iter()
         .filter(|diagnostic| diagnostic.severity != DiagnosticSeverity::Info)
     {
         rows.push(vec![
@@ -241,7 +240,7 @@ fn render_review_required(
             escape_table(&format!(
                 "{} at {}",
                 diagnostic.message,
-                format_optional_span(diagnostic.span.as_ref())
+                format_optional_span_table(diagnostic.span.as_ref())
             )),
         ]);
     }
@@ -292,8 +291,8 @@ fn render_route_inventory(
                 framework_label(route.framework).to_string(),
                 escape_table(&route.method),
                 escape_table(&route.path),
-                escape_table(&format_optional_symbol(route.handler.as_ref())),
-                escape_table(&format_symbols(&route.middleware)),
+                escape_table(&format_optional_symbol_table(route.handler.as_ref())),
+                escape_table(&format_symbols_table(&route.middleware)),
                 confidence_label(route.confidence).to_string(),
                 coverage.map_or_else(
                     || "not classified".to_string(),
@@ -483,7 +482,7 @@ fn render_diagnostics(output: &mut String, document: &AuthMapDocument) {
             vec![
                 diagnostic_severity_label(diagnostic.severity).to_string(),
                 escape_table(&diagnostic.code),
-                escape_table(&format_optional_span(diagnostic.span.as_ref())),
+                escape_table(&format_optional_span_table(diagnostic.span.as_ref())),
                 escape_table(&diagnostic.message),
             ]
         })
@@ -626,11 +625,23 @@ fn format_optional_symbol(symbol: Option<&SymbolRef>) -> String {
     symbol.map_or_else(|| "unknown".to_string(), format_symbol)
 }
 
+fn format_optional_symbol_table(symbol: Option<&SymbolRef>) -> String {
+    symbol.map_or_else(|| "unknown".to_string(), format_symbol_table)
+}
+
 fn format_symbol(symbol: &SymbolRef) -> String {
     format!(
         "`{}` ({})",
         escape_inline(&symbol.name),
         format_optional_span(symbol.span.as_ref())
+    )
+}
+
+fn format_symbol_table(symbol: &SymbolRef) -> String {
+    format!(
+        "`{}` ({})",
+        symbol.name,
+        format_optional_span_table(symbol.span.as_ref())
     )
 }
 
@@ -645,8 +656,23 @@ fn format_symbols(symbols: &[SymbolRef]) -> String {
         .join(", ")
 }
 
+fn format_symbols_table(symbols: &[SymbolRef]) -> String {
+    if symbols.is_empty() {
+        return "none".to_string();
+    }
+    symbols
+        .iter()
+        .map(format_symbol_table)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 fn format_optional_span(span: Option<&Span>) -> String {
     span.map_or_else(|| "unknown".to_string(), format_span)
+}
+
+fn format_optional_span_table(span: Option<&Span>) -> String {
+    span.map_or_else(|| "unknown".to_string(), format_span_table)
 }
 
 fn format_span(span: &Span) -> String {
@@ -656,6 +682,10 @@ fn format_span(span: &Span) -> String {
         span.line,
         span.column
     )
+}
+
+fn format_span_table(span: &Span) -> String {
+    format!("{}:{}:{}", span.file, span.line, span.column)
 }
 
 fn list_or_none(items: Vec<String>) -> String {
@@ -674,7 +704,11 @@ fn escape_table(input: &str) -> String {
 }
 
 fn escape_inline(input: &str) -> String {
-    input.replace('`', "\\`")
+    input
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('`', "\\`")
 }
 
 fn scan_mode_label(mode: ScanMode) -> &'static str {
