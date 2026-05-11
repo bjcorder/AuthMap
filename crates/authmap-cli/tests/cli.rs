@@ -367,6 +367,67 @@ fn config_mode_is_loaded_and_cli_mode_overrides_it() {
 }
 
 #[test]
+fn config_authorization_rules_are_loaded_by_scan() {
+    let temp = TestDir::new("auth-rules-config");
+    let project = temp.path().join("project");
+    let config = temp.path().join("authmap.yml");
+    let output_path = temp.path().join("authmap.json");
+    write_file(
+        &project.join("app.js"),
+        r#"
+const express = require("express");
+const app = express();
+
+function ensurePaidPlan(req, res, next) {
+  next();
+}
+
+function updateBilling(req, res) {
+  res.sendStatus(204);
+}
+
+app.patch("/billing/:id", ensurePaidPlan, updateBilling);
+module.exports = app;
+"#,
+    );
+    write_file(
+        &config,
+        r#"
+authorization:
+  rules:
+    - name: paid plan permission
+      evidence_type: permission_check
+      mechanism: billing_plan_guard
+      match:
+        exact: [ensurePaidPlan]
+"#,
+    );
+
+    let output = authmap(&[
+        "scan",
+        project.to_str().expect("path should be UTF-8"),
+        "--config",
+        config.to_str().expect("path should be UTF-8"),
+        "--output",
+        output_path.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 0);
+    let document: Value =
+        serde_json::from_str(&fs::read_to_string(output_path).expect("output should exist"))
+            .expect("output should be valid JSON");
+    assert_valid_authmap_document(&document);
+    assert!(
+        document["evidence"]
+            .as_array()
+            .expect("evidence should be an array")
+            .iter()
+            .any(|evidence| evidence["evidence_type"] == "permission_check"
+                && evidence["mechanism"] == "billing_plan_guard")
+    );
+}
+
+#[test]
 fn unsupported_format_exits_with_clap_usage_code() {
     let output = authmap(&["scan", ".", "--format", "xml"]);
 

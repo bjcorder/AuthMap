@@ -33,7 +33,7 @@
     {
       "path": "tests/fixtures/fastapi/main.py",
       "language": "python",
-      "size_bytes": 1035,
+      "size_bytes": 1905,
       "sha256": null,
       "project_hints": [
         "fast_api"
@@ -196,21 +196,21 @@
         "name": "health",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 12,
+          "line": 30,
           "column": 5,
           "byte_range": {
-            "start": 343,
-            "end": 349
+            "start": 708,
+            "end": 714
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 11,
+        "line": 29,
         "column": 2,
         "byte_range": {
-          "start": 283,
-          "end": 338
+          "start": 648,
+          "end": 703
         }
       },
       "source_evidence": [],
@@ -231,21 +231,21 @@
         "name": "create_item",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 17,
+          "line": 35,
           "column": 5,
           "byte_range": {
-            "start": 424,
-            "end": 435
+            "start": 789,
+            "end": 800
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 16,
+        "line": 34,
         "column": 2,
         "byte_range": {
-          "start": 380,
-          "end": 419
+          "start": 745,
+          "end": 784
         }
       },
       "source_evidence": [],
@@ -254,6 +254,105 @@
     },
     {
       "id": "route_0007",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "/profile",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "profile",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 40,
+          "column": 5,
+          "byte_range": {
+            "start": 860,
+            "end": 867
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 39,
+        "column": 2,
+        "byte_range": {
+          "start": 836,
+          "end": 855
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0008",
+      "framework": "fast_api",
+      "method": "DELETE",
+      "path": "/admin/accounts/{account_id}",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "delete_account",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 45,
+          "column": 5,
+          "byte_range": {
+            "start": 1002,
+            "end": 1016
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 44,
+        "column": 2,
+        "byte_range": {
+          "start": 916,
+          "end": 997
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0009",
+      "framework": "fast_api",
+      "method": "PATCH",
+      "path": "/accounts/{account_id}/permissions",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "grant_permission",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 50,
+          "column": 5,
+          "byte_range": {
+            "start": 1167,
+            "end": 1183
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 49,
+        "column": 2,
+        "byte_range": {
+          "start": 1073,
+          "end": 1162
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0010",
       "framework": "fast_api",
       "method": "DELETE",
       "path": "/api/local/{item_id}",
@@ -266,21 +365,21 @@
         "name": "delete_local",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 22,
+          "line": 57,
           "column": 5,
           "byte_range": {
-            "start": 530,
-            "end": 542
+            "start": 1400,
+            "end": 1412
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 21,
+        "line": 56,
         "column": 2,
         "byte_range": {
-          "start": 471,
-          "end": 525
+          "start": 1341,
+          "end": 1395
         }
       },
       "source_evidence": [],
@@ -288,7 +387,7 @@
       "notes": []
     },
     {
-      "id": "route_0008",
+      "id": "route_0011",
       "framework": "fast_api",
       "method": "GET",
       "path": "/reports",
@@ -299,21 +398,21 @@
         "name": "dynamic_reports",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 27,
+          "line": 62,
           "column": 5,
           "byte_range": {
-            "start": 628,
-            "end": 643
+            "start": 1498,
+            "end": 1513
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 26,
+        "line": 61,
         "column": 2,
         "byte_range": {
-          "start": 593,
-          "end": 623
+          "start": 1463,
+          "end": 1493
         }
       },
       "source_evidence": [],
@@ -324,7 +423,7 @@
       ]
     },
     {
-      "id": "route_0009",
+      "id": "route_0012",
       "framework": "fast_api",
       "method": "GET",
       "path": "/search",
@@ -337,21 +436,21 @@
         "name": "search",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 32,
+          "line": 67,
           "column": 5,
           "byte_range": {
-            "start": 735,
-            "end": 741
+            "start": 1605,
+            "end": 1611
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 31,
+        "line": 66,
         "column": 2,
         "byte_range": {
-          "start": 664,
-          "end": 730
+          "start": 1534,
+          "end": 1600
         }
       },
       "source_evidence": [],
@@ -359,7 +458,7 @@
       "notes": []
     },
     {
-      "id": "route_0010",
+      "id": "route_0013",
       "framework": "fast_api",
       "method": "POST",
       "path": "/search",
@@ -372,21 +471,21 @@
         "name": "search",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 32,
+          "line": 67,
           "column": 5,
           "byte_range": {
-            "start": 735,
-            "end": 741
+            "start": 1605,
+            "end": 1611
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 31,
+        "line": 66,
         "column": 2,
         "byte_range": {
-          "start": 664,
-          "end": 730
+          "start": 1534,
+          "end": 1600
         }
       },
       "source_evidence": [],
@@ -394,7 +493,7 @@
       "notes": []
     },
     {
-      "id": "route_0011",
+      "id": "route_0014",
       "framework": "fast_api",
       "method": "ANY",
       "path": "/fallback",
@@ -405,21 +504,21 @@
         "name": "fallback",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 37,
+          "line": 72,
           "column": 5,
           "byte_range": {
-            "start": 793,
-            "end": 801
+            "start": 1663,
+            "end": 1671
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 36,
+        "line": 71,
         "column": 2,
         "byte_range": {
-          "start": 762,
-          "end": 788
+          "start": 1632,
+          "end": 1658
         }
       },
       "source_evidence": [],
@@ -429,7 +528,7 @@
       ]
     },
     {
-      "id": "route_0012",
+      "id": "route_0015",
       "framework": "fast_api",
       "method": "GET",
       "path": "<dynamic>",
@@ -440,21 +539,21 @@
         "name": "generated_path",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 42,
+          "line": 77,
           "column": 5,
           "byte_range": {
-            "start": 848,
-            "end": 862
+            "start": 1718,
+            "end": 1732
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 41,
+        "line": 76,
         "column": 2,
         "byte_range": {
-          "start": 822,
-          "end": 843
+          "start": 1692,
+          "end": 1713
         }
       },
       "source_evidence": [],
@@ -465,10 +564,428 @@
       ]
     }
   ],
-  "evidence": [],
+  "evidence": [
+    {
+      "id": "evidence_0001",
+      "route_id": "route_0007",
+      "evidence_type": "authn",
+      "mechanism": "handler_body",
+      "symbol": {
+        "name": "profile",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 40,
+          "column": 5,
+          "byte_range": {
+            "start": 860,
+            "end": 867
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 40,
+        "column": 5,
+        "byte_range": {
+          "start": 860,
+          "end": 867
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "user/session reference"
+      ]
+    },
+    {
+      "id": "evidence_0002",
+      "route_id": "route_0007",
+      "evidence_type": "authn",
+      "mechanism": "authn_guard",
+      "symbol": {
+        "name": "require_user",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 40,
+          "column": 26,
+          "byte_range": {
+            "start": 881,
+            "end": 893
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 40,
+        "column": 18,
+        "byte_range": {
+          "start": 873,
+          "end": 894
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0003",
+      "route_id": "route_0008",
+      "evidence_type": "admin_check",
+      "mechanism": "admin_guard",
+      "symbol": {
+        "name": "require_admin",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 44,
+          "column": 67,
+          "byte_range": {
+            "start": 981,
+            "end": 994
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 44,
+        "column": 59,
+        "byte_range": {
+          "start": 973,
+          "end": 995
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0004",
+      "route_id": "route_0008",
+      "evidence_type": "admin_check",
+      "mechanism": "handler_body",
+      "symbol": {
+        "name": "delete_account",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 45,
+          "column": 5,
+          "byte_range": {
+            "start": 1002,
+            "end": 1016
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 45,
+        "column": 5,
+        "byte_range": {
+          "start": 1002,
+          "end": 1016
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "admin reference"
+      ]
+    },
+    {
+      "id": "evidence_0005",
+      "route_id": "route_0009",
+      "evidence_type": "permission_check",
+      "mechanism": "permission_guard",
+      "symbol": {
+        "name": "can_edit_account",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 49,
+          "column": 72,
+          "byte_range": {
+            "start": 1143,
+            "end": 1159
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 49,
+        "column": 64,
+        "byte_range": {
+          "start": 1135,
+          "end": 1160
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0006",
+      "route_id": "route_0009",
+      "evidence_type": "permission_check",
+      "mechanism": "handler_body",
+      "symbol": {
+        "name": "grant_permission",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 50,
+          "column": 5,
+          "byte_range": {
+            "start": 1167,
+            "end": 1183
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 50,
+        "column": 5,
+        "byte_range": {
+          "start": 1167,
+          "end": 1183
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "permission reference"
+      ]
+    },
+    {
+      "id": "evidence_0007",
+      "route_id": "route_0009",
+      "evidence_type": "unknown_dynamic_check",
+      "mechanism": "dynamic_policy",
+      "symbol": {
+        "name": "dynamic_policy_check",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 51,
+          "column": 12,
+          "byte_range": {
+            "start": 1213,
+            "end": 1233
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 51,
+        "column": 12,
+        "byte_range": {
+          "start": 1213,
+          "end": 1251
+        }
+      },
+      "confidence": "low",
+      "notes": []
+    },
+    {
+      "id": "evidence_0008",
+      "route_id": "route_0009",
+      "evidence_type": "permission_check",
+      "mechanism": "permission_guard",
+      "symbol": {
+        "name": "PermissionError",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 52,
+          "column": 15,
+          "byte_range": {
+            "start": 1267,
+            "end": 1282
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 52,
+        "column": 15,
+        "byte_range": {
+          "start": 1267,
+          "end": 1299
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    }
+  ],
   "mutations": [],
   "links": [],
-  "coverage": [],
+  "coverage": [
+    {
+      "route_id": "route_0001",
+      "class": "unknown_or_dynamic",
+      "risk": "review_required",
+      "rationale": [
+        "No authorization evidence was detected for a sensitive-looking route."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": []
+    },
+    {
+      "route_id": "route_0002",
+      "class": "unknown_or_dynamic",
+      "risk": "review_required",
+      "rationale": [
+        "No authorization evidence was detected for a sensitive-looking route."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": []
+    },
+    {
+      "route_id": "route_0003",
+      "class": "unknown_or_dynamic",
+      "risk": "review_required",
+      "rationale": [
+        "No authorization evidence was detected for a sensitive-looking route."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": []
+    },
+    {
+      "route_id": "route_0004",
+      "class": "unknown_or_dynamic",
+      "risk": "review_required",
+      "rationale": [
+        "No authorization evidence was detected for a sensitive-looking route."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": []
+    },
+    {
+      "route_id": "route_0005",
+      "class": "unauthenticated",
+      "risk": "low",
+      "rationale": [
+        "No authorization evidence was detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "route_id": "route_0006",
+      "class": "unknown_or_dynamic",
+      "risk": "review_required",
+      "rationale": [
+        "No authorization evidence was detected for a sensitive-looking route."
+      ],
+      "reviewer_questions": [
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": []
+    },
+    {
+      "route_id": "route_0007",
+      "class": "authn_only",
+      "risk": "low",
+      "rationale": [
+        "2 strong authorization evidence item(s) were detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "route_id": "route_0008",
+      "class": "admin_guarded",
+      "risk": "low",
+      "rationale": [
+        "2 strong authorization evidence item(s) were detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "route_id": "route_0009",
+      "class": "permission_guarded",
+      "risk": "low",
+      "rationale": [
+        "3 strong authorization evidence item(s) were detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [
+        "Low-confidence authorization evidence was detected.",
+        "Dynamic authorization evidence requires review."
+      ]
+    },
+    {
+      "route_id": "route_0010",
+      "class": "unknown_or_dynamic",
+      "risk": "review_required",
+      "rationale": [
+        "No authorization evidence was detected for a sensitive-looking route."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": []
+    },
+    {
+      "route_id": "route_0011",
+      "class": "unauthenticated",
+      "risk": "low",
+      "rationale": [
+        "No authorization evidence was detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ]
+    },
+    {
+      "route_id": "route_0012",
+      "class": "unauthenticated",
+      "risk": "low",
+      "rationale": [
+        "No authorization evidence was detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "route_id": "route_0013",
+      "class": "unknown_or_dynamic",
+      "risk": "review_required",
+      "rationale": [
+        "No authorization evidence was detected for a sensitive-looking route."
+      ],
+      "reviewer_questions": [
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": []
+    },
+    {
+      "route_id": "route_0014",
+      "class": "unknown_or_dynamic",
+      "risk": "review_required",
+      "rationale": [
+        "No authorization evidence was detected for a sensitive-looking route."
+      ],
+      "reviewer_questions": [
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ]
+    },
+    {
+      "route_id": "route_0015",
+      "class": "unauthenticated",
+      "risk": "low",
+      "rationale": [
+        "No authorization evidence was detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ]
+    }
+  ],
   "diagnostics": [
     {
       "category": "adapter",
@@ -477,11 +994,11 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 36,
+        "line": 71,
         "column": 2,
         "byte_range": {
-          "start": 762,
-          "end": 788
+          "start": 1632,
+          "end": 1658
         }
       },
       "message": "FastAPI api_route methods are dynamic or missing"
@@ -493,11 +1010,11 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 48,
+        "line": 83,
         "column": 1,
         "byte_range": {
-          "start": 977,
-          "end": 1034
+          "start": 1847,
+          "end": 1904
         }
       },
       "message": "FastAPI include_router prefix is dynamic and could not be resolved"
@@ -509,11 +1026,11 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 41,
+        "line": 76,
         "column": 2,
         "byte_range": {
-          "start": 822,
-          "end": 843
+          "start": 1692,
+          "end": 1713
         }
       },
       "message": "FastAPI route path is dynamic and could not be resolved"
@@ -528,8 +1045,8 @@
         "line": 8,
         "column": 18,
         "byte_range": {
-          "start": 247,
-          "end": 279
+          "start": 256,
+          "end": 288
         }
       },
       "message": "FastAPI router prefix is dynamic and could not be resolved"

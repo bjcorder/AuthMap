@@ -50,6 +50,28 @@ Coverage and risk fields should avoid overstating findings. When a check is
 dynamic or incomplete, prefer `unknown_or_dynamic` or `review_required` with a
 clear reviewer question.
 
+## Project Authorization Rules
+
+Projects can extend built-in guard detection through `authmap.yml`:
+
+```yaml
+authorization:
+  rules:
+    - name: billing permission guard
+      evidence_type: permission_check
+      mechanism: billing_plan_guard
+      confidence: medium
+      match:
+        exact: [ensurePaidPlan]
+        contains: [permission]
+      notes:
+        - configured by project
+```
+
+Rule matching supports exact symbol names and case-insensitive substring
+matches. Rules emit canonical evidence entries and keep the core output schema
+unchanged.
+
 ## Extensions
 
 Core objects are closed to catch typos and accidental contract drift. Forward

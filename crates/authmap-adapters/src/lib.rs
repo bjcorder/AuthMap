@@ -2011,7 +2011,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        assert_eq!(output.routes.len(), 12);
+        assert_eq!(output.routes.len(), 15);
         assert!(summaries.contains(&(
             "GET",
             "/health",
@@ -2153,7 +2153,7 @@ mod tests {
         ]);
         let output = ExpressAdapter.discover_routes(&parsed, &AdapterContext::default());
 
-        assert_eq!(output.routes.len(), 12);
+        assert_eq!(output.routes.len(), 16);
         assert!(
             output
                 .routes
@@ -2192,8 +2192,17 @@ mod tests {
                 .as_ref()
                 .and_then(|handler| handler.span.as_ref())
                 .map(|span| span.line),
-            Some(20)
+            Some(42)
         );
+
+        let admin_jobs = route(&output, "POST", "/admin/jobs");
+        assert_eq!(
+            middleware_names(admin_jobs),
+            vec!["requireAuth", "requireRole"]
+        );
+
+        let permissions = route(&output, "PATCH", "/accounts/:id/permissions");
+        assert_eq!(middleware_names(permissions), vec!["requirePermission"]);
 
         let dynamic = route(&output, "DELETE", "<dynamic>");
         assert_eq!(dynamic.confidence, Confidence::Low);
@@ -2256,8 +2265,11 @@ mod tests {
                 .as_ref()
                 .and_then(|handler| handler.span.as_ref())
                 .map(|span| span.line),
-            Some(9)
+            Some(16)
         );
+
+        let tenant_settings = route(&output, "GET", "/v1/:tenantId/settings");
+        assert_eq!(middleware_names(tenant_settings), vec!["requireTenant"]);
 
         let exported = route(&output, "PATCH", "/exported/audit");
         assert_eq!(
