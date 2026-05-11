@@ -1,8 +1,13 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 pub const SCHEMA_VERSION: &str = "0.1.0";
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub type ExtensionMap = BTreeMap<String, Value>;
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AuthMapDocument {
     pub schema_version: String,
     pub metadata: ScanMetadata,
@@ -13,6 +18,8 @@ pub struct AuthMapDocument {
     pub links: Vec<ReachabilityLink>,
     pub coverage: Vec<Coverage>,
     pub diagnostics: Vec<Diagnostic>,
+    #[serde(default, skip_serializing_if = "ExtensionMap::is_empty")]
+    pub extensions: ExtensionMap,
 }
 
 impl AuthMapDocument {
@@ -27,6 +34,7 @@ impl AuthMapDocument {
             links: Vec::new(),
             coverage: Vec::new(),
             diagnostics: Vec::new(),
+            extensions: ExtensionMap::new(),
         }
     }
 }
@@ -137,7 +145,7 @@ pub enum Recoverability {
     Fatal,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Route {
     pub id: String,
     pub framework: Framework,
@@ -145,8 +153,12 @@ pub struct Route {
     pub path: String,
     pub handler: Option<SymbolRef>,
     pub span: Option<Span>,
+    #[serde(default)]
+    pub source_evidence: Vec<SourceEvidence>,
     pub confidence: Confidence,
     pub notes: Vec<String>,
+    #[serde(default, skip_serializing_if = "ExtensionMap::is_empty")]
+    pub extensions: ExtensionMap,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -166,7 +178,18 @@ pub struct SymbolRef {
     pub span: Option<Span>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct SourceEvidence {
+    pub mechanism: String,
+    pub symbol: Option<SymbolRef>,
+    pub span: Option<Span>,
+    pub confidence: Confidence,
+    pub notes: Vec<String>,
+    #[serde(default, skip_serializing_if = "ExtensionMap::is_empty")]
+    pub extensions: ExtensionMap,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Evidence {
     pub id: String,
     pub route_id: Option<String>,
@@ -176,6 +199,8 @@ pub struct Evidence {
     pub span: Option<Span>,
     pub confidence: Confidence,
     pub notes: Vec<String>,
+    #[serde(default, skip_serializing_if = "ExtensionMap::is_empty")]
+    pub extensions: ExtensionMap,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -192,7 +217,7 @@ pub enum EvidenceType {
     UnknownDynamicCheck,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Mutation {
     pub id: String,
     pub operation: MutationOperation,
@@ -201,6 +226,8 @@ pub struct Mutation {
     pub span: Option<Span>,
     pub confidence: Confidence,
     pub notes: Vec<String>,
+    #[serde(default, skip_serializing_if = "ExtensionMap::is_empty")]
+    pub extensions: ExtensionMap,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -215,7 +242,7 @@ pub enum MutationOperation {
     UnknownMutation,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ReachabilityLink {
     pub id: String,
     pub route_id: String,
@@ -223,15 +250,21 @@ pub struct ReachabilityLink {
     pub evidence_id: Option<String>,
     pub confidence: Confidence,
     pub notes: Vec<String>,
+    #[serde(default, skip_serializing_if = "ExtensionMap::is_empty")]
+    pub extensions: ExtensionMap,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Coverage {
     pub route_id: String,
     pub class: CoverageClass,
     pub risk: RiskLevel,
     pub rationale: Vec<String>,
     pub reviewer_questions: Vec<String>,
+    #[serde(default)]
+    pub uncertainty_reasons: Vec<String>,
+    #[serde(default, skip_serializing_if = "ExtensionMap::is_empty")]
+    pub extensions: ExtensionMap,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]

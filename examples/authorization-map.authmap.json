@@ -1,0 +1,411 @@
+{
+  "schema_version": "0.1.0",
+  "metadata": {
+    "tool_name": "authmap",
+    "tool_version": "0.1.0",
+    "mode": "advisory",
+    "target_roots": ["examples/fixtures/authorization-map"],
+    "config_path": "authmap.yml"
+  },
+  "source_files": [
+    {
+      "path": "app/api/admin/users/[id]/route.ts",
+      "language": "type_script",
+      "size_bytes": 2184,
+      "sha256": null,
+      "project_hints": ["next_js"],
+      "skipped": null
+    },
+    {
+      "path": "src/policies/account_policy.py",
+      "language": "python",
+      "size_bytes": 960,
+      "sha256": null,
+      "project_hints": ["fast_api", "sql_alchemy"],
+      "skipped": null
+    }
+  ],
+  "routes": [
+    {
+      "id": "route.admin.users.disable",
+      "framework": "next_js",
+      "method": "POST",
+      "path": "/api/admin/users/:id/disable",
+      "handler": {
+        "name": "POST",
+        "span": {
+          "file": "app/api/admin/users/[id]/route.ts",
+          "line": 8,
+          "column": 23,
+          "byte_range": null
+        }
+      },
+      "span": {
+        "file": "app/api/admin/users/[id]/route.ts",
+        "line": 8,
+        "column": 1,
+        "byte_range": null
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_app_router_handler",
+          "symbol": {
+            "name": "POST",
+            "span": {
+              "file": "app/api/admin/users/[id]/route.ts",
+              "line": 8,
+              "column": 23,
+              "byte_range": null
+            }
+          },
+          "span": {
+            "file": "app/api/admin/users/[id]/route.ts",
+            "line": 8,
+            "column": 1,
+            "byte_range": null
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.sample": {
+          "source": "documentation"
+        }
+      }
+    },
+    {
+      "id": "route.accounts.delete",
+      "framework": "fast_api",
+      "method": "DELETE",
+      "path": "/accounts/{account_id}",
+      "handler": {
+        "name": "delete_account",
+        "span": {
+          "file": "src/policies/account_policy.py",
+          "line": 42,
+          "column": 5,
+          "byte_range": null
+        }
+      },
+      "span": {
+        "file": "src/policies/account_policy.py",
+        "line": 41,
+        "column": 1,
+        "byte_range": null
+      },
+      "source_evidence": [
+        {
+          "mechanism": "fastapi_route_decorator",
+          "symbol": {
+            "name": "router.delete",
+            "span": {
+              "file": "src/policies/account_policy.py",
+              "line": 41,
+              "column": 1,
+              "byte_range": null
+            }
+          },
+          "span": {
+            "file": "src/policies/account_policy.py",
+            "line": 41,
+            "column": 1,
+            "byte_range": null
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": []
+    }
+  ],
+  "evidence": [
+    {
+      "id": "evidence.admin.authn",
+      "route_id": "route.admin.users.disable",
+      "evidence_type": "authn",
+      "mechanism": "session_lookup",
+      "symbol": {
+        "name": "requireSession",
+        "span": {
+          "file": "app/api/admin/users/[id]/route.ts",
+          "line": 10,
+          "column": 17,
+          "byte_range": null
+        }
+      },
+      "span": {
+        "file": "app/api/admin/users/[id]/route.ts",
+        "line": 10,
+        "column": 17,
+        "byte_range": null
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence.admin.role",
+      "route_id": "route.admin.users.disable",
+      "evidence_type": "role_check",
+      "mechanism": "role_guard",
+      "symbol": {
+        "name": "requireRole",
+        "span": {
+          "file": "app/api/admin/users/[id]/route.ts",
+          "line": 12,
+          "column": 9,
+          "byte_range": null
+        }
+      },
+      "span": {
+        "file": "app/api/admin/users/[id]/route.ts",
+        "line": 12,
+        "column": 9,
+        "byte_range": null
+      },
+      "confidence": "high",
+      "notes": ["Role value requires later adapter enrichment."]
+    },
+    {
+      "id": "evidence.admin.permission",
+      "route_id": "route.admin.users.disable",
+      "evidence_type": "permission_check",
+      "mechanism": "permission_guard",
+      "symbol": {
+        "name": "canDisableUser",
+        "span": {
+          "file": "app/api/admin/users/[id]/route.ts",
+          "line": 13,
+          "column": 12,
+          "byte_range": null
+        }
+      },
+      "span": {
+        "file": "app/api/admin/users/[id]/route.ts",
+        "line": 13,
+        "column": 12,
+        "byte_range": null
+      },
+      "confidence": "medium",
+      "notes": []
+    },
+    {
+      "id": "evidence.account.ownership",
+      "route_id": "route.accounts.delete",
+      "evidence_type": "ownership_check",
+      "mechanism": "policy_object",
+      "symbol": {
+        "name": "AccountPolicy.can_delete",
+        "span": {
+          "file": "src/policies/account_policy.py",
+          "line": 47,
+          "column": 9,
+          "byte_range": null
+        }
+      },
+      "span": {
+        "file": "src/policies/account_policy.py",
+        "line": 47,
+        "column": 9,
+        "byte_range": null
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence.account.tenant",
+      "route_id": "route.accounts.delete",
+      "evidence_type": "tenant_check",
+      "mechanism": "tenant_filter",
+      "symbol": {
+        "name": "tenant_id",
+        "span": {
+          "file": "src/policies/account_policy.py",
+          "line": 48,
+          "column": 28,
+          "byte_range": null
+        }
+      },
+      "span": {
+        "file": "src/policies/account_policy.py",
+        "line": 48,
+        "column": 28,
+        "byte_range": null
+      },
+      "confidence": "medium",
+      "notes": []
+    },
+    {
+      "id": "evidence.admin.admin",
+      "route_id": "route.admin.users.disable",
+      "evidence_type": "admin_check",
+      "mechanism": "admin_gate",
+      "symbol": {
+        "name": "isAdmin",
+        "span": {
+          "file": "app/api/admin/users/[id]/route.ts",
+          "line": 14,
+          "column": 7,
+          "byte_range": null
+        }
+      },
+      "span": {
+        "file": "app/api/admin/users/[id]/route.ts",
+        "line": 14,
+        "column": 7,
+        "byte_range": null
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence.health.public",
+      "route_id": null,
+      "evidence_type": "explicit_public",
+      "mechanism": "public_route_annotation",
+      "symbol": null,
+      "span": {
+        "file": "app/api/admin/users/[id]/route.ts",
+        "line": 3,
+        "column": 1,
+        "byte_range": null
+      },
+      "confidence": "low",
+      "notes": ["Included to exercise the canonical evidence enum."]
+    },
+    {
+      "id": "evidence.admin.audit",
+      "route_id": "route.admin.users.disable",
+      "evidence_type": "audit_log",
+      "mechanism": "audit_logger",
+      "symbol": {
+        "name": "audit.userDisabled",
+        "span": {
+          "file": "app/api/admin/users/[id]/route.ts",
+          "line": 22,
+          "column": 5,
+          "byte_range": null
+        }
+      },
+      "span": {
+        "file": "app/api/admin/users/[id]/route.ts",
+        "line": 22,
+        "column": 5,
+        "byte_range": null
+      },
+      "confidence": "medium",
+      "notes": []
+    },
+    {
+      "id": "evidence.admin.dynamic",
+      "route_id": "route.admin.users.disable",
+      "evidence_type": "unknown_dynamic_check",
+      "mechanism": "dynamic_policy_dispatch",
+      "symbol": {
+        "name": "policy.evaluate",
+        "span": {
+          "file": "app/api/admin/users/[id]/route.ts",
+          "line": 16,
+          "column": 11,
+          "byte_range": null
+        }
+      },
+      "span": {
+        "file": "app/api/admin/users/[id]/route.ts",
+        "line": 16,
+        "column": 11,
+        "byte_range": null
+      },
+      "confidence": "low",
+      "notes": ["Dynamic dispatch requires reviewer interpretation."]
+    }
+  ],
+  "mutations": [
+    {
+      "id": "mutation.admin.user.disable",
+      "operation": "update",
+      "library": "prisma",
+      "resource": "User",
+      "span": {
+        "file": "app/api/admin/users/[id]/route.ts",
+        "line": 20,
+        "column": 9,
+        "byte_range": null
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "mutation.account.delete",
+      "operation": "delete",
+      "library": "sqlalchemy",
+      "resource": "Account",
+      "span": {
+        "file": "src/policies/account_policy.py",
+        "line": 51,
+        "column": 5,
+        "byte_range": null
+      },
+      "confidence": "medium",
+      "notes": []
+    }
+  ],
+  "links": [
+    {
+      "id": "link.admin.authn",
+      "route_id": "route.admin.users.disable",
+      "mutation_id": null,
+      "evidence_id": "evidence.admin.authn",
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "link.admin.mutation",
+      "route_id": "route.admin.users.disable",
+      "mutation_id": "mutation.admin.user.disable",
+      "evidence_id": null,
+      "confidence": "medium",
+      "notes": ["Static link approximated through handler body."]
+    },
+    {
+      "id": "link.account.mutation",
+      "route_id": "route.accounts.delete",
+      "mutation_id": "mutation.account.delete",
+      "evidence_id": "evidence.account.ownership",
+      "confidence": "medium",
+      "notes": []
+    }
+  ],
+  "coverage": [
+    {
+      "route_id": "route.admin.users.disable",
+      "class": "admin_guarded",
+      "risk": "review_required",
+      "rationale": ["Authentication and admin evidence were detected."],
+      "reviewer_questions": ["Confirm dynamic policy dispatch covers disable-user permission."],
+      "uncertainty_reasons": ["Permission check target is dynamic."]
+    },
+    {
+      "route_id": "route.accounts.delete",
+      "class": "ownership_guarded",
+      "risk": "low",
+      "rationale": ["Ownership and tenant evidence are both present near the mutation."],
+      "reviewer_questions": [],
+      "uncertainty_reasons": ["Service-call reachability is approximate in this sample."],
+      "extensions": {
+        "authmap.sample": {
+          "reviewed": true
+        }
+      }
+    }
+  ],
+  "diagnostics": [],
+  "extensions": {
+    "authmap.sample": {
+      "purpose": "canonical schema example"
+    }
+  }
+}

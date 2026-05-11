@@ -47,6 +47,9 @@ Initial outputs:
 - SARIF for code-scanning integration
 - GitHub Actions summary
 
+The canonical JSON contract is documented in [docs/SCHEMA.md](docs/SCHEMA.md)
+and defined by [schemas/authmap.schema.json](schemas/authmap.schema.json).
+
 ## Example report shape
 
 ```text
