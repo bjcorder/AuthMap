@@ -97,6 +97,8 @@ Race-condition rules:
 - avoid concurrent maps unless profiling proves they are needed
 - have workers return owned result structs
 - accumulate diagnostics as data rather than relying on threaded logging
+- keep diagnostic categories, codes, and CI exit behavior aligned with
+  [`docs/DIAGNOSTICS.md`](DIAGNOSTICS.md)
 - make report output a single final step after the document is complete
 
 ## Dependency Defaults

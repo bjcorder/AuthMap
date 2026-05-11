@@ -37,6 +37,11 @@ impl AuthMapDocument {
             extensions: ExtensionMap::new(),
         }
     }
+
+    pub fn has_enforce_blocking_diagnostics(&self) -> bool {
+        self.metadata.mode == ScanMode::Enforce
+            && self.diagnostics.iter().any(Diagnostic::is_enforce_blocking)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -123,11 +128,30 @@ pub struct ByteRange {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Diagnostic {
+    pub category: DiagnosticCategory,
     pub code: String,
     pub severity: DiagnosticSeverity,
     pub recoverability: Recoverability,
     pub span: Option<Span>,
     pub message: String,
+}
+
+impl Diagnostic {
+    pub fn is_enforce_blocking(&self) -> bool {
+        self.severity == DiagnosticSeverity::Error || self.recoverability == Recoverability::Fatal
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DiagnosticCategory {
+    Config,
+    Discovery,
+    Parser,
+    Adapter,
+    Report,
+    Internal,
+    Policy,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -144,6 +168,112 @@ pub enum Recoverability {
     Recoverable,
     Fatal,
 }
+
+pub mod diagnostic_codes {
+    pub const CONFIG_READ_FAILED: &str = "config.read_failed";
+    pub const CONFIG_PARSE_FAILED: &str = "config.parse_failed";
+    pub const CONFIG_VALIDATION_FAILED: &str = "config.validation_failed";
+    pub const CONFIG_INVALID_PATTERN: &str = "config.invalid_pattern";
+
+    pub const DISCOVERY_NO_CANDIDATE_SOURCES: &str = "discovery.no_candidate_sources";
+    pub const DISCOVERY_FILE_TOO_LARGE: &str = "discovery.file_too_large";
+    pub const DISCOVERY_FILE_LIMIT_REACHED: &str = "discovery.file_limit_reached";
+    pub const DISCOVERY_TARGET_UNAVAILABLE: &str = "discovery.target_unavailable";
+    pub const DISCOVERY_EMPTY_TARGET: &str = "discovery.empty_target";
+    pub const DISCOVERY_METADATA_FAILED: &str = "discovery.metadata_failed";
+
+    pub const PARSER_SOURCE_LANGUAGE_UNSUPPORTED: &str = "parser.source_language_unsupported";
+    pub const PARSER_SOURCE_PARSE_RECOVERED: &str = "parser.source_parse_recovered";
+    pub const PARSER_SOURCE_READ_FAILED: &str = "parser.source_read_failed";
+    pub const PARSER_SOURCE_PARSE_FAILED: &str = "parser.source_parse_failed";
+
+    pub const ADAPTER_UNSUPPORTED_FRAMEWORK: &str = "adapter.unsupported_framework";
+    pub const ADAPTER_PARTIAL_RESULT: &str = "adapter.partial_result";
+
+    pub const REPORT_RENDER_FAILED: &str = "report.render_failed";
+    pub const REPORT_WRITE_FAILED: &str = "report.write_failed";
+
+    pub const INTERNAL_SCAN_FAILED: &str = "internal.scan_failed";
+}
+
+pub const FIRST_PARTY_DIAGNOSTIC_CODES: &[(&str, DiagnosticCategory)] = &[
+    (
+        diagnostic_codes::CONFIG_READ_FAILED,
+        DiagnosticCategory::Config,
+    ),
+    (
+        diagnostic_codes::CONFIG_PARSE_FAILED,
+        DiagnosticCategory::Config,
+    ),
+    (
+        diagnostic_codes::CONFIG_VALIDATION_FAILED,
+        DiagnosticCategory::Config,
+    ),
+    (
+        diagnostic_codes::CONFIG_INVALID_PATTERN,
+        DiagnosticCategory::Config,
+    ),
+    (
+        diagnostic_codes::DISCOVERY_NO_CANDIDATE_SOURCES,
+        DiagnosticCategory::Discovery,
+    ),
+    (
+        diagnostic_codes::DISCOVERY_FILE_TOO_LARGE,
+        DiagnosticCategory::Discovery,
+    ),
+    (
+        diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED,
+        DiagnosticCategory::Discovery,
+    ),
+    (
+        diagnostic_codes::DISCOVERY_TARGET_UNAVAILABLE,
+        DiagnosticCategory::Discovery,
+    ),
+    (
+        diagnostic_codes::DISCOVERY_EMPTY_TARGET,
+        DiagnosticCategory::Discovery,
+    ),
+    (
+        diagnostic_codes::DISCOVERY_METADATA_FAILED,
+        DiagnosticCategory::Discovery,
+    ),
+    (
+        diagnostic_codes::PARSER_SOURCE_LANGUAGE_UNSUPPORTED,
+        DiagnosticCategory::Parser,
+    ),
+    (
+        diagnostic_codes::PARSER_SOURCE_PARSE_RECOVERED,
+        DiagnosticCategory::Parser,
+    ),
+    (
+        diagnostic_codes::PARSER_SOURCE_READ_FAILED,
+        DiagnosticCategory::Parser,
+    ),
+    (
+        diagnostic_codes::PARSER_SOURCE_PARSE_FAILED,
+        DiagnosticCategory::Parser,
+    ),
+    (
+        diagnostic_codes::ADAPTER_UNSUPPORTED_FRAMEWORK,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::ADAPTER_PARTIAL_RESULT,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::REPORT_RENDER_FAILED,
+        DiagnosticCategory::Report,
+    ),
+    (
+        diagnostic_codes::REPORT_WRITE_FAILED,
+        DiagnosticCategory::Report,
+    ),
+    (
+        diagnostic_codes::INTERNAL_SCAN_FAILED,
+        DiagnosticCategory::Internal,
+    ),
+];
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Route {

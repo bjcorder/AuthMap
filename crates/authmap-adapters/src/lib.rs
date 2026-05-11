@@ -68,8 +68,9 @@ impl AdapterRegistry {
 mod tests {
     use super::*;
     use authmap_core::{
-        Confidence, DiagnosticSeverity, EvidenceType, ExtensionMap, Framework, Language,
-        MutationOperation, ProjectHint, Recoverability, SkipReason, SourceFile,
+        Confidence, DiagnosticCategory, DiagnosticSeverity, EvidenceType, ExtensionMap, Framework,
+        Language, MutationOperation, ProjectHint, Recoverability, SkipReason, SourceFile,
+        diagnostic_codes,
     };
     use authmap_parsers::{ParserBackend, TreeSitterBackend};
 
@@ -133,7 +134,8 @@ mod tests {
                     extensions: ExtensionMap::new(),
                 }],
                 diagnostics: vec![Diagnostic {
-                    code: "fake_adapter_warning".to_string(),
+                    category: DiagnosticCategory::Adapter,
+                    code: diagnostic_codes::ADAPTER_PARTIAL_RESULT.to_string(),
                     severity: DiagnosticSeverity::Warning,
                     recoverability: Recoverability::Recoverable,
                     span: Some(route_span),
@@ -171,7 +173,10 @@ mod tests {
         let context = AdapterContext::default();
         let output = FakeAdapter.analyze(AdapterInput::new(&parsed, &context));
 
-        assert_eq!(output.diagnostics[0].code, "fake_adapter_warning");
+        assert_eq!(
+            output.diagnostics[0].code,
+            diagnostic_codes::ADAPTER_PARTIAL_RESULT
+        );
         assert_eq!(output.routes[0].id, "route.fake");
         assert_eq!(output.evidence[0].id, "evidence.fake.authn");
         assert_eq!(output.mutations[0].id, "mutation.fake");

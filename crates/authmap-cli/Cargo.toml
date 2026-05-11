@@ -15,6 +15,7 @@ path = "src/main.rs"
 authmap-analysis.workspace = true
 authmap-config.workspace = true
 authmap-core.workspace = true
+authmap-discovery.workspace = true
 authmap-report.workspace = true
 clap.workspace = true
 miette.workspace = true

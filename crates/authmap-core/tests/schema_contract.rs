@@ -1,9 +1,10 @@
 use std::path::{Path, PathBuf};
 
 use authmap_core::{
-    AuthMapDocument, Confidence, Coverage, CoverageClass, Evidence, EvidenceType, ExtensionMap,
-    Framework, Mutation, MutationOperation, ReachabilityLink, RiskLevel, Route, SCHEMA_VERSION,
-    ScanMetadata, SourceEvidence, Span, SymbolRef,
+    AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticCategory,
+    DiagnosticSeverity, Evidence, EvidenceType, ExtensionMap, FIRST_PARTY_DIAGNOSTIC_CODES,
+    Framework, Mutation, MutationOperation, ReachabilityLink, Recoverability, RiskLevel, Route,
+    SCHEMA_VERSION, ScanMetadata, ScanMode, SourceEvidence, Span, SymbolRef, diagnostic_codes,
 };
 use serde_json::{Value, json};
 
@@ -186,4 +187,85 @@ fn schema_lists_all_documented_evidence_types() {
             "unknown_dynamic_check"
         ]
     );
+}
+
+#[test]
+fn diagnostics_require_category_and_namespaced_codes() {
+    let schema = schema();
+    let mut document = read_json("examples/route-inventory.authmap.json");
+    document["diagnostics"] = json!([
+        {
+            "category": "parser",
+            "code": "parser.source_parse_recovered",
+            "severity": "warning",
+            "recoverability": "recoverable",
+            "span": null,
+            "message": "partial tree is available"
+        }
+    ]);
+    assert_valid(&schema, &document);
+
+    document["diagnostics"][0]["category"] = json!("unknown");
+    let validator = jsonschema::validator_for(&schema).expect("schema should compile");
+    assert!(
+        !validator.is_valid(&document),
+        "unknown diagnostic categories should be rejected"
+    );
+
+    document["diagnostics"][0]["category"] = json!("parser");
+    document["diagnostics"][0]["code"] = json!("source_parse_recovered");
+    assert!(
+        !validator.is_valid(&document),
+        "un-namespaced diagnostic codes should be rejected"
+    );
+}
+
+#[test]
+fn first_party_diagnostic_codes_cover_initial_categories() {
+    let categories = FIRST_PARTY_DIAGNOSTIC_CODES
+        .iter()
+        .map(|(_, category)| *category)
+        .collect::<std::collections::BTreeSet<_>>();
+
+    for expected in [
+        DiagnosticCategory::Config,
+        DiagnosticCategory::Discovery,
+        DiagnosticCategory::Parser,
+        DiagnosticCategory::Adapter,
+        DiagnosticCategory::Report,
+        DiagnosticCategory::Internal,
+    ] {
+        assert!(
+            categories.contains(&expected),
+            "first-party diagnostic codes should include {expected:?}"
+        );
+    }
+    assert!(
+        FIRST_PARTY_DIAGNOSTIC_CODES
+            .iter()
+            .any(|(code, _)| *code == diagnostic_codes::INTERNAL_SCAN_FAILED)
+    );
+}
+
+#[test]
+fn enforce_blocking_diagnostics_are_error_or_fatal_only_in_enforce_mode() {
+    let mut document = AuthMapDocument::empty(ScanMetadata {
+        mode: ScanMode::Enforce,
+        ..ScanMetadata::default()
+    });
+    document.diagnostics.push(Diagnostic {
+        category: DiagnosticCategory::Parser,
+        code: diagnostic_codes::PARSER_SOURCE_PARSE_RECOVERED.to_string(),
+        severity: DiagnosticSeverity::Warning,
+        recoverability: Recoverability::Recoverable,
+        span: None,
+        message: "warning only".to_string(),
+    });
+    assert!(!document.has_enforce_blocking_diagnostics());
+
+    document.diagnostics[0].severity = DiagnosticSeverity::Error;
+    assert!(document.has_enforce_blocking_diagnostics());
+
+    document.metadata.mode = ScanMode::Advisory;
+    assert!(!document.has_enforce_blocking_diagnostics());
 }

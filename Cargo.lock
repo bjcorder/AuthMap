@@ -125,6 +125,7 @@ dependencies = [
  "authmap-analysis",
  "authmap-config",
  "authmap-core",
+ "authmap-discovery",
  "authmap-report",
  "clap",
  "miette",
@@ -179,6 +180,7 @@ name = "authmap-report"
 version = "0.1.0"
 dependencies = [
  "authmap-core",
+ "serde",
  "serde_json",
  "thiserror",
 ]

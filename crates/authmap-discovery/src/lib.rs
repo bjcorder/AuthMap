@@ -5,7 +5,8 @@ use std::sync::{Arc, Mutex};
 
 use authmap_config::ScanPlan;
 use authmap_core::{
-    Diagnostic, DiagnosticSeverity, Language, ProjectHint, Recoverability, SkipReason, SourceFile,
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, Language, ProjectHint, Recoverability,
+    SkipReason, SourceFile, diagnostic_codes,
 };
 use ignore::overrides::{Override, OverrideBuilder};
 use ignore::{DirEntry, WalkBuilder, WalkState};
@@ -118,7 +119,7 @@ pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryErr
             });
         }
         diagnostics.push(diagnostic(
-            "no_candidate_sources",
+            diagnostic_codes::DISCOVERY_NO_CANDIDATE_SOURCES,
             format!(
                 "scan targets contain no supported source files after discovery filters: {}",
                 plan.targets
@@ -137,7 +138,7 @@ pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryErr
     let candidate_count = candidates.len();
     if candidate_count > plan.config.limits.max_files {
         diagnostics.push(diagnostic(
-            "scan_file_limit_reached",
+            diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED,
             format!(
                 "discovered {candidate_count} candidate source files; scanning first {} after deterministic sorting",
                 plan.config.limits.max_files
@@ -153,7 +154,7 @@ pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryErr
         })?;
         let skipped =
             (metadata.len() > plan.config.limits.max_file_size_bytes).then(|| SkipReason {
-                code: "file_too_large".to_string(),
+                code: diagnostic_codes::DISCOVERY_FILE_TOO_LARGE.to_string(),
                 message: format!(
                     "file is {} bytes, exceeding configured max_file_size_bytes",
                     metadata.len()
@@ -161,7 +162,7 @@ pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryErr
             });
         if let Some(skip) = skipped.as_ref() {
             diagnostics.push(diagnostic(
-                "file_too_large",
+                diagnostic_codes::DISCOVERY_FILE_TOO_LARGE,
                 format!("{}: {}", normalize_path(&path), skip.message),
             ));
         }
@@ -398,6 +399,7 @@ fn hints_for_path(
 
 fn diagnostic(code: impl Into<String>, message: impl Into<String>) -> Diagnostic {
     Diagnostic {
+        category: DiagnosticCategory::Discovery,
         code: code.into(),
         severity: DiagnosticSeverity::Warning,
         recoverability: Recoverability::Recoverable,
@@ -504,7 +506,7 @@ pub enum DiscoveryError {
 mod tests {
     use super::*;
     use authmap_config::{ScanConfig, ScanLimits, ScanPlan};
-    use authmap_core::ScanMode;
+    use authmap_core::{ScanMode, diagnostic_codes};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     struct TestDir {
@@ -610,7 +612,10 @@ mod tests {
             discover_sources(&plan).expect("advisory scan with only hard-excluded files warns");
 
         assert!(result.files.is_empty());
-        assert_eq!(result.diagnostics[0].code, "no_candidate_sources");
+        assert_eq!(
+            result.diagnostics[0].code,
+            diagnostic_codes::DISCOVERY_NO_CANDIDATE_SOURCES
+        );
     }
 
     #[test]
@@ -627,7 +632,10 @@ mod tests {
         let result =
             discover_sources(&plan(&unsupported)).expect("unsupported advisory file should warn");
         assert!(result.files.is_empty());
-        assert_eq!(result.diagnostics[0].code, "no_candidate_sources");
+        assert_eq!(
+            result.diagnostics[0].code,
+            diagnostic_codes::DISCOVERY_NO_CANDIDATE_SOURCES
+        );
     }
 
     #[test]
@@ -693,13 +701,13 @@ mod tests {
                 .as_ref()
                 .expect("file should be skipped")
                 .code,
-            "file_too_large"
+            diagnostic_codes::DISCOVERY_FILE_TOO_LARGE
         );
         assert!(
             result
                 .diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.code == "file_too_large")
+                .any(|diagnostic| diagnostic.code == diagnostic_codes::DISCOVERY_FILE_TOO_LARGE)
         );
     }
 
@@ -715,12 +723,9 @@ mod tests {
         let result = discover_sources(&plan).expect("discovery should succeed");
 
         assert_eq!(names(&result), vec!["a.ts", "b.ts"]);
-        assert!(
-            result
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.code == "scan_file_limit_reached")
-        );
+        assert!(result.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED
+        }));
     }
 
     #[test]

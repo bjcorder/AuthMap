@@ -16,9 +16,12 @@ Every document contains:
 - `mutations`: sensitive operations such as ORM writes or deletes.
 - `links`: normalized relationships between routes, evidence, and mutations.
 - `coverage`: review-oriented classification for routes.
-- `diagnostics`: recoverable or fatal scan diagnostics.
+- `diagnostics`: structured scan diagnostics with stable categories and codes.
 
 The JSON schema is strict: misspelled core fields are rejected.
+
+Diagnostic categories, severity semantics, and exit-code behavior are documented
+in [`docs/DIAGNOSTICS.md`](DIAGNOSTICS.md).
 
 ## Locations And Relationships
 

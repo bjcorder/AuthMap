@@ -58,9 +58,11 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
     document.diagnostics = discovery.diagnostics;
     document.diagnostics.extend(parse_output.diagnostics);
     document.diagnostics.sort_by(|left, right| {
-        left.code
-            .cmp(&right.code)
-            .then(left.message.cmp(&right.message))
+        left.category.cmp(&right.category).then(
+            left.code
+                .cmp(&right.code)
+                .then(left.message.cmp(&right.message)),
+        )
     });
     Ok(document)
 }

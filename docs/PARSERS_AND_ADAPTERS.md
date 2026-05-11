@@ -19,8 +19,8 @@ behind the same `authmap-parsers` facade.
 
 Unsupported languages produce a recoverable diagnostic and no parse tree. Source
 read failures produce diagnostics through the scan pipeline. Syntax-error trees
-produce `source_parse_recovered` diagnostics while still returning the partial
-tree so adapters can emit any facts they can prove.
+produce `parser.source_parse_recovered` diagnostics while still returning the
+partial tree so adapters can emit any facts they can prove.
 
 ## Span Conventions
 
@@ -62,6 +62,9 @@ Diagnostics are data. If an adapter can prove one route and encounters ambiguity
 elsewhere, it should return the route plus a diagnostic rather than failing the
 whole scan. Use `confidence`, `notes`, `extensions`, and diagnostics to make
 uncertainty explicit without overstating findings.
+
+Diagnostic categories, stable codes, and enforce-mode exit behavior are defined
+in [`docs/DIAGNOSTICS.md`](DIAGNOSTICS.md).
 
 ## Fixture Expectations
 

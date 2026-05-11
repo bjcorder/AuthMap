@@ -49,6 +49,8 @@ Initial outputs:
 
 The canonical JSON contract is documented in [docs/SCHEMA.md](docs/SCHEMA.md)
 and defined by [schemas/authmap.schema.json](schemas/authmap.schema.json).
+Diagnostic categories, stable codes, and CI exit behavior are documented in
+[docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md).
 
 ## Example report shape
 
@@ -136,13 +138,14 @@ AuthMap is implemented as a Rust Cargo workspace. Useful local commands:
 ```bash
 cargo run -p authmap-cli -- --help
 cargo run -p authmap-cli -- scan . --format json --output authmap.json
+cargo run -p authmap-cli -- scan . --format sarif --output authmap.sarif.json
 cargo test --workspace
 cargo install --path crates/authmap-cli
 ```
 
-`authmap scan` supports `--mode advisory|enforce`. In v0.1.0, enforce mode is
-recorded in scan metadata but does not fail builds until policy checks are
-implemented.
+`authmap scan` supports `--mode advisory|enforce`. In v0.1.0, enforce mode
+writes the requested report and exits `20` when the completed document contains
+any `error` or `fatal` diagnostic. Warnings remain non-blocking.
 
 Discovery honors gitignore-style `include` and `exclude` entries in
 `authmap.yml`. Includes narrow the supported source-file set, excludes win over
@@ -160,7 +163,7 @@ report output directories.
 | 12 | Config file cannot be read, parsed, or validated |
 | 13 | Scan pipeline failed for another reason |
 | 14 | Report rendering or writing failed |
-| 20 | Reserved for future enforcement failure |
+| 20 | Enforce-mode diagnostic failure after the report was written |
 
 ## GitHub Action sketch
 

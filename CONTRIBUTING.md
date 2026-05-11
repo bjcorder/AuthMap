@@ -13,6 +13,8 @@ This repository is early-stage and design-first. Contributions should preserve t
 
 Parser and adapter contributors should follow the shared contract in
 [docs/PARSERS_AND_ADAPTERS.md](docs/PARSERS_AND_ADAPTERS.md).
+Diagnostic categories and stable codes should follow
+[docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md).
 
 ## Ground rules
 

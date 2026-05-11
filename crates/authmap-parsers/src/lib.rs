@@ -1,5 +1,6 @@
 use authmap_core::{
-    ByteRange, Diagnostic, DiagnosticSeverity, Language, Recoverability, SourceFile, Span,
+    ByteRange, Diagnostic, DiagnosticCategory, DiagnosticSeverity, Language, Recoverability,
+    SourceFile, Span, diagnostic_codes,
 };
 use rayon::prelude::*;
 use thiserror::Error;
@@ -84,8 +85,9 @@ impl ParserBackend for TreeSitterBackend {
     fn parse(&self, source: &SourceFile, text: &str) -> Result<ParsedFile, ParseError> {
         let Some(language) = language_for(source.language) else {
             let diagnostic = diagnostic(
-                "source_language_unsupported",
+                diagnostic_codes::PARSER_SOURCE_LANGUAGE_UNSUPPORTED,
                 source.path.clone(),
+                DiagnosticSeverity::Warning,
                 format!("no parser backend is configured for {:?}", source.language),
             );
             return Ok(ParsedFile {
@@ -113,8 +115,9 @@ impl ParserBackend for TreeSitterBackend {
         let mut diagnostics = Vec::new();
         let status = if tree.root_node().has_error() {
             diagnostics.push(diagnostic(
-                "source_parse_recovered",
+                diagnostic_codes::PARSER_SOURCE_PARSE_RECOVERED,
                 source.path.clone(),
+                DiagnosticSeverity::Warning,
                 "source parsed with syntax errors; partial tree is available".to_string(),
             ));
             ParseStatus::Recovered
@@ -158,10 +161,16 @@ fn language_for(language: Language) -> Option<tree_sitter::Language> {
     }
 }
 
-fn diagnostic(code: impl Into<String>, path: String, message: impl Into<String>) -> Diagnostic {
+fn diagnostic(
+    code: impl Into<String>,
+    path: String,
+    severity: DiagnosticSeverity,
+    message: impl Into<String>,
+) -> Diagnostic {
     Diagnostic {
+        category: DiagnosticCategory::Parser,
         code: code.into(),
-        severity: DiagnosticSeverity::Warning,
+        severity,
         recoverability: Recoverability::Recoverable,
         span: Some(Span {
             file: path,
@@ -184,8 +193,18 @@ pub enum ParseError {
 impl ParseError {
     pub fn into_diagnostic(self) -> Diagnostic {
         match self {
-            ParseError::Read { path, message } => diagnostic("source_read_failed", path, message),
-            ParseError::Parse { path, message } => diagnostic("source_parse_failed", path, message),
+            ParseError::Read { path, message } => diagnostic(
+                diagnostic_codes::PARSER_SOURCE_READ_FAILED,
+                path,
+                DiagnosticSeverity::Error,
+                message,
+            ),
+            ParseError::Parse { path, message } => diagnostic(
+                diagnostic_codes::PARSER_SOURCE_PARSE_FAILED,
+                path,
+                DiagnosticSeverity::Error,
+                message,
+            ),
         }
     }
 }
@@ -193,7 +212,7 @@ impl ParseError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use authmap_core::{ProjectHint, SkipReason};
+    use authmap_core::{ProjectHint, SkipReason, diagnostic_codes};
 
     fn source(path: &str, language: Language) -> SourceFile {
         SourceFile {
@@ -245,7 +264,10 @@ mod tests {
 
         assert_eq!(parsed.status, ParseStatus::Recovered);
         assert!(parsed.tree().is_some());
-        assert_eq!(parsed.diagnostics[0].code, "source_parse_recovered");
+        assert_eq!(
+            parsed.diagnostics[0].code,
+            diagnostic_codes::PARSER_SOURCE_PARSE_RECOVERED
+        );
     }
 
     #[test]
@@ -257,7 +279,10 @@ mod tests {
 
         assert_eq!(parsed.status, ParseStatus::Unsupported);
         assert!(parsed.tree().is_none());
-        assert_eq!(parsed.diagnostics[0].code, "source_language_unsupported");
+        assert_eq!(
+            parsed.diagnostics[0].code,
+            diagnostic_codes::PARSER_SOURCE_LANGUAGE_UNSUPPORTED
+        );
     }
 
     #[test]

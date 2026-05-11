@@ -3,8 +3,8 @@ use std::process::ExitCode;
 
 use authmap_analysis::run_scan;
 use authmap_config::{ScanPlan, load_config};
-use authmap_core::ScanMode;
-use authmap_report::{JsonReporter, MarkdownReporter, Reporter, write_atomic};
+use authmap_core::{ScanMode, diagnostic_codes};
+use authmap_report::{JsonReporter, MarkdownReporter, Reporter, SarifReporter, write_atomic};
 use clap::{Parser, Subcommand, ValueEnum};
 use thiserror::Error;
 
@@ -54,6 +54,7 @@ enum Command {
 enum OutputFormat {
     Json,
     Markdown,
+    Sarif,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -83,15 +84,15 @@ enum RulesCommand {
 
 fn main() -> ExitCode {
     match run() {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(exit_code) => exit_code,
         Err(error) => {
-            eprintln!("error: {error}");
+            eprintln!("error [{}]: {error}", error.diagnostic_code());
             ExitCode::from(error.exit_code())
         }
     }
 }
 
-fn run() -> Result<(), CliError> {
+fn run() -> Result<ExitCode, CliError> {
     let cli = Cli::parse();
     match cli.command {
         Command::Init => Err(CliError::NotImplemented("authmap init")),
@@ -113,6 +114,7 @@ fn run() -> Result<(), CliError> {
                 OutputFormat::Markdown => MarkdownReporter
                     .render(&document)
                     .map_err(CliError::Report)?,
+                OutputFormat::Sarif => SarifReporter.render(&document).map_err(CliError::Report)?,
             };
 
             if let Some(output) = output {
@@ -120,7 +122,11 @@ fn run() -> Result<(), CliError> {
             } else {
                 println!("{rendered}");
             }
-            Ok(())
+            if document.has_enforce_blocking_diagnostics() {
+                Ok(ExitCode::from(20))
+            } else {
+                Ok(ExitCode::SUCCESS)
+            }
         }
         Command::Diff { range } => Err(CliError::NotImplementedWithArg("authmap diff", range)),
         Command::Explain { id } => Err(CliError::NotImplementedWithArg("authmap explain", id)),
@@ -157,6 +163,42 @@ impl CliError {
             CliError::Scan(_) => 13,
             CliError::Report(_) => 14,
             CliError::NotImplemented(_) | CliError::NotImplementedWithArg(_, _) => 13,
+        }
+    }
+
+    fn diagnostic_code(&self) -> &'static str {
+        match self {
+            CliError::Config(authmap_config::ConfigError::Read { .. }) => {
+                diagnostic_codes::CONFIG_READ_FAILED
+            }
+            CliError::Config(authmap_config::ConfigError::Parse { .. }) => {
+                diagnostic_codes::CONFIG_PARSE_FAILED
+            }
+            CliError::Config(authmap_config::ConfigError::Validate { .. }) => {
+                diagnostic_codes::CONFIG_VALIDATION_FAILED
+            }
+            CliError::Scan(authmap_analysis::ScanError::Discovery(
+                authmap_discovery::DiscoveryError::InvalidPattern { .. },
+            )) => diagnostic_codes::CONFIG_INVALID_PATTERN,
+            CliError::Scan(authmap_analysis::ScanError::Discovery(
+                authmap_discovery::DiscoveryError::TargetUnavailable { .. }
+                | authmap_discovery::DiscoveryError::UnsupportedTarget { .. },
+            )) => diagnostic_codes::DISCOVERY_TARGET_UNAVAILABLE,
+            CliError::Scan(authmap_analysis::ScanError::Discovery(
+                authmap_discovery::DiscoveryError::EmptyTarget { .. },
+            )) => diagnostic_codes::DISCOVERY_EMPTY_TARGET,
+            CliError::Scan(authmap_analysis::ScanError::Discovery(
+                authmap_discovery::DiscoveryError::Metadata { .. },
+            )) => diagnostic_codes::DISCOVERY_METADATA_FAILED,
+            CliError::Report(authmap_report::ReportError::Json(_)) => {
+                diagnostic_codes::REPORT_RENDER_FAILED
+            }
+            CliError::Report(authmap_report::ReportError::Write { .. }) => {
+                diagnostic_codes::REPORT_WRITE_FAILED
+            }
+            CliError::NotImplemented(_) | CliError::NotImplementedWithArg(_, _) => {
+                diagnostic_codes::INTERNAL_SCAN_FAILED
+            }
         }
     }
 }

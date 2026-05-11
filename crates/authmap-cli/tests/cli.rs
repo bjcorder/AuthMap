@@ -48,6 +48,13 @@ fn write_file(path: &Path, contents: &str) {
     fs::write(path, contents).expect("test fixture should be written");
 }
 
+fn write_bytes(path: &Path, contents: &[u8]) {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("test fixture parent should be created");
+    }
+    fs::write(path, contents).expect("test fixture should be written");
+}
+
 fn assert_exit(output: &Output, code: i32) {
     assert_eq!(
         output.status.code(),
@@ -168,6 +175,100 @@ fn scan_mode_flag_overrides_metadata() {
 }
 
 #[test]
+fn enforce_mode_with_recoverable_warning_writes_report_and_exits_success() {
+    let temp = TestDir::new("enforce-warning");
+    let project = temp.path().join("project");
+    let output_path = temp.path().join("authmap.json");
+    write_file(&project.join("broken.py"), "def broken(:\n");
+
+    let output = authmap(&[
+        "scan",
+        project.to_str().expect("path should be UTF-8"),
+        "--mode",
+        "enforce",
+        "--output",
+        output_path.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 0);
+    let document: Value =
+        serde_json::from_str(&fs::read_to_string(output_path).expect("output should exist"))
+            .expect("output should be valid JSON");
+    assert!(
+        document["diagnostics"]
+            .as_array()
+            .expect("diagnostics should be an array")
+            .iter()
+            .any(
+                |diagnostic| diagnostic["code"] == "parser.source_parse_recovered"
+                    && diagnostic["severity"] == "warning"
+            )
+    );
+}
+
+#[test]
+fn enforce_mode_with_error_diagnostic_writes_report_and_exits_enforcement_code() {
+    let temp = TestDir::new("enforce-error");
+    let project = temp.path().join("project");
+    let output_path = temp.path().join("authmap.json");
+    write_bytes(&project.join("invalid.py"), &[0xff, 0xfe, b'\n']);
+
+    let output = authmap(&[
+        "scan",
+        project.to_str().expect("path should be UTF-8"),
+        "--mode",
+        "enforce",
+        "--output",
+        output_path.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 20);
+    let document: Value =
+        serde_json::from_str(&fs::read_to_string(output_path).expect("output should exist"))
+            .expect("output should be valid JSON");
+    assert_eq!(document["metadata"]["mode"], "enforce");
+    assert!(
+        document["diagnostics"]
+            .as_array()
+            .expect("diagnostics should be an array")
+            .iter()
+            .any(|diagnostic| diagnostic["category"] == "parser"
+                && diagnostic["code"] == "parser.source_read_failed"
+                && diagnostic["severity"] == "error")
+    );
+}
+
+#[test]
+fn scan_writes_sarif_for_diagnostics() {
+    let temp = TestDir::new("sarif-output");
+    let project = temp.path().join("project");
+    let output_path = temp.path().join("authmap.sarif.json");
+    write_file(&project.join("broken.py"), "def broken(:\n");
+
+    let output = authmap(&[
+        "scan",
+        project.to_str().expect("path should be UTF-8"),
+        "--format",
+        "sarif",
+        "--output",
+        output_path.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 0);
+    let document: Value =
+        serde_json::from_str(&fs::read_to_string(output_path).expect("output should exist"))
+            .expect("output should be valid SARIF JSON");
+    assert_eq!(document["version"], "2.1.0");
+    assert!(
+        document["runs"][0]["results"]
+            .as_array()
+            .expect("SARIF results should be an array")
+            .iter()
+            .any(|result| result["ruleId"] == "parser.source_parse_recovered")
+    );
+}
+
+#[test]
 fn config_mode_is_loaded_and_cli_mode_overrides_it() {
     let temp = TestDir::new("mode-precedence");
     let project = temp.path().join("project");
@@ -259,7 +360,7 @@ fn advisory_empty_directory_writes_empty_map_with_warning() {
             .as_array()
             .expect("diagnostics should be an array")
             .iter()
-            .any(|diagnostic| diagnostic["code"] == "no_candidate_sources")
+            .any(|diagnostic| diagnostic["code"] == "discovery.no_candidate_sources")
     );
 }
 
