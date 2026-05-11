@@ -16,13 +16,30 @@ pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryErr
     let paths = Arc::new(Mutex::new(Vec::<PathBuf>::new()));
 
     for target in &plan.targets {
-        if target.is_file() {
+        let metadata =
+            fs::metadata(target).map_err(|source| DiscoveryError::TargetUnavailable {
+                path: target.clone(),
+                source,
+            })?;
+
+        if metadata.is_file() {
             paths
                 .lock()
                 .expect("discovery path mutex poisoned")
                 .push(target.clone());
             continue;
         }
+
+        if !metadata.is_dir() {
+            return Err(DiscoveryError::UnsupportedTarget {
+                path: target.clone(),
+            });
+        }
+
+        fs::read_dir(target).map_err(|source| DiscoveryError::TargetUnavailable {
+            path: target.clone(),
+            source,
+        })?;
 
         let mut builder = WalkBuilder::new(target);
         builder
@@ -57,6 +74,12 @@ pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryErr
         .expect("discovery path mutex poisoned");
     paths.sort();
     paths.dedup();
+
+    if paths.is_empty() {
+        return Err(DiscoveryError::EmptyTarget {
+            targets: plan.targets.clone(),
+        });
+    }
 
     let mut files = Vec::new();
     for path in paths.into_iter().take(plan.config.limits.max_files) {
@@ -131,6 +154,15 @@ fn detect_project_hints(path: &Path) -> Vec<ProjectHint> {
 
 #[derive(Debug, Error)]
 pub enum DiscoveryError {
+    #[error("scan target is missing or unreadable: {path}: {source}")]
+    TargetUnavailable {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error("scan target is not a regular file or directory: {path}")]
+    UnsupportedTarget { path: PathBuf },
+    #[error("scan target contains no discoverable regular files: {targets:?}")]
+    EmptyTarget { targets: Vec<PathBuf> },
     #[error("failed to read metadata for {path}: {source}")]
     Metadata {
         path: PathBuf,

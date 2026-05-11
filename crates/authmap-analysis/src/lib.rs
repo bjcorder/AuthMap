@@ -69,3 +69,22 @@ pub enum ScanError {
     #[error(transparent)]
     Discovery(#[from] authmap_discovery::DiscoveryError),
 }
+
+impl ScanError {
+    pub fn is_target_unavailable(&self) -> bool {
+        matches!(
+            self,
+            ScanError::Discovery(
+                authmap_discovery::DiscoveryError::TargetUnavailable { .. }
+                    | authmap_discovery::DiscoveryError::UnsupportedTarget { .. }
+            )
+        )
+    }
+
+    pub fn is_empty_target(&self) -> bool {
+        matches!(
+            self,
+            ScanError::Discovery(authmap_discovery::DiscoveryError::EmptyTarget { .. })
+        )
+    }
+}

@@ -103,9 +103,11 @@ version = "0.1.0"
 dependencies = [
  "authmap-analysis",
  "authmap-config",
+ "authmap-core",
  "authmap-report",
  "clap",
  "miette",
+ "serde_json",
  "thiserror",
 ]
 

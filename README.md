@@ -126,6 +126,34 @@ authmap baseline create
 authmap rules suggest
 ```
 
+## Local development
+
+AuthMap is implemented as a Rust Cargo workspace. Useful local commands:
+
+```bash
+cargo run -p authmap-cli -- --help
+cargo run -p authmap-cli -- scan . --format json --output authmap.json
+cargo test --workspace
+cargo install --path crates/authmap-cli
+```
+
+`authmap scan` supports `--mode advisory|enforce`. In v0.1.0, enforce mode is
+recorded in scan metadata but does not fail builds until policy checks are
+implemented.
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Success |
+| 2 | CLI usage error, including unsupported `--format` values |
+| 10 | Target path does not exist or is not readable |
+| 11 | Target exists but contains no discoverable regular files |
+| 12 | Config file cannot be read, parsed, or validated |
+| 13 | Scan pipeline failed for another reason |
+| 14 | Report rendering or writing failed |
+| 20 | Reserved for future enforcement failure |
+
 ## GitHub Action sketch
 
 ```yaml
