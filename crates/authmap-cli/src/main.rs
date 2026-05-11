@@ -151,6 +151,7 @@ impl CliError {
     fn exit_code(&self) -> u8 {
         match self {
             CliError::Config(_) => 12,
+            CliError::Scan(error) if error.is_config_error() => 12,
             CliError::Scan(error) if error.is_target_unavailable() => 10,
             CliError::Scan(error) if error.is_empty_target() => 11,
             CliError::Scan(_) => 13,

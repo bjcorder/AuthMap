@@ -144,6 +144,11 @@ cargo install --path crates/authmap-cli
 recorded in scan metadata but does not fail builds until policy checks are
 implemented.
 
+Discovery honors gitignore-style `include` and `exclude` entries in
+`authmap.yml`. Includes narrow the supported source-file set, excludes win over
+includes, and AuthMap always skips dependency, build, VCS, cache, and generated
+report output directories.
+
 ### Exit codes
 
 | Code | Meaning |
@@ -151,7 +156,7 @@ implemented.
 | 0 | Success |
 | 2 | CLI usage error, including unsupported `--format` values |
 | 10 | Target path does not exist or is not readable |
-| 11 | Target exists but contains no discoverable regular files |
+| 11 | Enforce-mode target exists but contains no supported source files |
 | 12 | Config file cannot be read, parsed, or validated |
 | 13 | Scan pipeline failed for another reason |
 | 14 | Report rendering or writing failed |

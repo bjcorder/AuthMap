@@ -55,7 +55,8 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
         ..ScanMetadata::default()
     });
     document.source_files = discovery.files;
-    document.diagnostics = parse_output.diagnostics;
+    document.diagnostics = discovery.diagnostics;
+    document.diagnostics.extend(parse_output.diagnostics);
     document.diagnostics.sort_by(|left, right| {
         left.code
             .cmp(&right.code)
@@ -85,6 +86,13 @@ impl ScanError {
         matches!(
             self,
             ScanError::Discovery(authmap_discovery::DiscoveryError::EmptyTarget { .. })
+        )
+    }
+
+    pub fn is_config_error(&self) -> bool {
+        matches!(
+            self,
+            ScanError::Discovery(authmap_discovery::DiscoveryError::InvalidPattern { .. })
         )
     }
 }

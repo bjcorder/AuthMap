@@ -232,13 +232,50 @@ fn missing_target_exits_with_target_code() {
 }
 
 #[test]
-fn empty_directory_exits_with_empty_target_code() {
+fn advisory_empty_directory_writes_empty_map_with_warning() {
     let temp = TestDir::new("empty-target");
+    let output_path = temp.path().join("authmap.json");
 
-    let output = authmap(&["scan", temp.path().to_str().expect("path should be UTF-8")]);
+    let output = authmap(&[
+        "scan",
+        temp.path().to_str().expect("path should be UTF-8"),
+        "--output",
+        output_path.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 0);
+    let document: Value =
+        serde_json::from_str(&fs::read_to_string(output_path).expect("output should exist"))
+            .expect("output should be valid JSON");
+    assert_eq!(
+        document["source_files"]
+            .as_array()
+            .expect("source files should be an array")
+            .len(),
+        0
+    );
+    assert!(
+        document["diagnostics"]
+            .as_array()
+            .expect("diagnostics should be an array")
+            .iter()
+            .any(|diagnostic| diagnostic["code"] == "no_candidate_sources")
+    );
+}
+
+#[test]
+fn enforce_empty_directory_exits_with_empty_target_code() {
+    let temp = TestDir::new("empty-target-enforce");
+
+    let output = authmap(&[
+        "scan",
+        temp.path().to_str().expect("path should be UTF-8"),
+        "--mode",
+        "enforce",
+    ]);
 
     assert_exit(&output, 11);
-    assert!(String::from_utf8_lossy(&output.stderr).contains("no discoverable regular files"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("no supported source files"));
 }
 
 #[test]
@@ -258,6 +295,25 @@ fn invalid_config_exits_with_config_code() {
 
     assert_exit(&output, 12);
     assert!(String::from_utf8_lossy(&output.stderr).contains("failed to parse config"));
+}
+
+#[test]
+fn invalid_include_pattern_exits_with_config_code() {
+    let temp = TestDir::new("invalid-include-pattern");
+    let project = temp.path().join("project");
+    let config = temp.path().join("authmap.yml");
+    write_file(&project.join("app.py"), "print('hello')\n");
+    write_file(&config, "include:\n  - \"[abc\"\n");
+
+    let output = authmap(&[
+        "scan",
+        project.to_str().expect("path should be UTF-8"),
+        "--config",
+        config.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 12);
+    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid include pattern"));
 }
 
 #[test]
