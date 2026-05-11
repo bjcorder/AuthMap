@@ -1,0 +1,9 @@
+name: AuthMap CodeQL config
+
+paths:
+  - crates
+
+paths-ignore:
+  - target
+  - tests/fixtures
+  - tests/golden
