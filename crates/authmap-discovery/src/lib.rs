@@ -154,10 +154,55 @@ pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryErr
     }
 
     candidates.truncate(plan.config.limits.max_files);
+    let mut candidate_records = Vec::new();
+    let mut total_included_bytes = 0_u64;
+    for path in candidates {
+        let metadata = fs::metadata(&path).map_err(|source| DiscoveryError::Metadata {
+            path: path.clone(),
+            source,
+        })?;
+        let skipped = if metadata.len() > plan.config.limits.max_file_size_bytes {
+            Some(SkipReason {
+                code: diagnostic_codes::DISCOVERY_FILE_TOO_LARGE.to_string(),
+                message: format!(
+                    "file is {} bytes, exceeding configured max_file_size_bytes",
+                    metadata.len()
+                ),
+            })
+        } else if total_included_bytes.saturating_add(metadata.len())
+            > plan.config.limits.max_total_bytes
+        {
+            Some(SkipReason {
+                code: diagnostic_codes::DISCOVERY_TOTAL_BYTES_LIMIT_REACHED.to_string(),
+                message: format!(
+                    "including file would exceed configured max_total_bytes of {} bytes",
+                    plan.config.limits.max_total_bytes
+                ),
+            })
+        } else {
+            total_included_bytes = total_included_bytes.saturating_add(metadata.len());
+            None
+        };
+        if let Some(skip) = skipped.as_ref() {
+            let code = skip.code.as_str();
+            diagnostics.push(diagnostic_with_severity(
+                code,
+                incomplete_scan_severity(plan.config.mode),
+                format!("{}: {}", normalize_path(&path), skip.message),
+            ));
+        }
+        candidate_records.push((path, metadata.len(), skipped));
+    }
+
     hint_paths.sort();
     hint_paths.dedup();
     hint_paths.truncate(plan.config.limits.max_files);
-    hint_paths.extend(candidates.iter().cloned());
+    hint_paths.extend(
+        candidate_records
+            .iter()
+            .filter(|(_, _, skipped)| skipped.is_none())
+            .map(|(path, _, _)| path.clone()),
+    );
     hint_paths.sort();
     hint_paths.dedup();
     let target_hints = detect_project_hints(
@@ -167,30 +212,11 @@ pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryErr
     );
 
     let mut files = Vec::new();
-    for path in candidates {
-        let metadata = fs::metadata(&path).map_err(|source| DiscoveryError::Metadata {
-            path: path.clone(),
-            source,
-        })?;
-        let skipped =
-            (metadata.len() > plan.config.limits.max_file_size_bytes).then(|| SkipReason {
-                code: diagnostic_codes::DISCOVERY_FILE_TOO_LARGE.to_string(),
-                message: format!(
-                    "file is {} bytes, exceeding configured max_file_size_bytes",
-                    metadata.len()
-                ),
-            });
-        if let Some(skip) = skipped.as_ref() {
-            diagnostics.push(diagnostic_with_severity(
-                diagnostic_codes::DISCOVERY_FILE_TOO_LARGE,
-                incomplete_scan_severity(plan.config.mode),
-                format!("{}: {}", normalize_path(&path), skip.message),
-            ));
-        }
+    for (path, size_bytes, skipped) in candidate_records {
         files.push(SourceFile {
             path: normalize_path(&path),
             language: detect_language(&path),
-            size_bytes: metadata.len(),
+            size_bytes,
             sha256: None,
             project_hints: hints_for_path(&path, &target_hints),
             skipped,
@@ -848,6 +874,69 @@ mod tests {
         assert_eq!(names(&result), vec!["a.ts", "b.ts"]);
         assert!(result.diagnostics.iter().any(|diagnostic| {
             diagnostic.code == diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED
+        }));
+    }
+
+    #[test]
+    fn max_total_bytes_skips_files_after_deterministic_budget() {
+        let temp = TestDir::new("max-total-bytes");
+        write_file(&temp.path().join("b.ts"), "bb\n");
+        write_file(&temp.path().join("a.ts"), "aa\n");
+        write_file(&temp.path().join("c.ts"), "cc\n");
+        let mut plan = plan(temp.path());
+        plan.config.limits.max_total_bytes = 6;
+
+        let first = discover_sources(&plan).expect("discovery should succeed");
+        let second = discover_sources(&plan).expect("discovery should be stable");
+
+        assert_eq!(
+            first
+                .files
+                .iter()
+                .map(|file| (
+                    &file.path,
+                    file.skipped.as_ref().map(|skip| skip.code.as_str())
+                ))
+                .collect::<Vec<_>>(),
+            second
+                .files
+                .iter()
+                .map(|file| (
+                    &file.path,
+                    file.skipped.as_ref().map(|skip| skip.code.as_str())
+                ))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(names(&first), vec!["a.ts", "b.ts", "c.ts"]);
+        assert!(first.files[0].skipped.is_none());
+        assert!(first.files[1].skipped.is_none());
+        assert_eq!(
+            first.files[2]
+                .skipped
+                .as_ref()
+                .expect("third file should exceed total budget")
+                .code,
+            diagnostic_codes::DISCOVERY_TOTAL_BYTES_LIMIT_REACHED
+        );
+        assert!(first.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == diagnostic_codes::DISCOVERY_TOTAL_BYTES_LIMIT_REACHED
+        }));
+    }
+
+    #[test]
+    fn enforce_max_total_bytes_marks_incomplete_discovery_as_error() {
+        let temp = TestDir::new("max-total-bytes-enforce");
+        write_file(&temp.path().join("a.ts"), "aa\n");
+        write_file(&temp.path().join("b.ts"), "bb\n");
+        let mut plan = plan(temp.path());
+        plan.config.mode = ScanMode::Enforce;
+        plan.config.limits.max_total_bytes = 3;
+
+        let result = discover_sources(&plan).expect("discovery should succeed");
+
+        assert!(result.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == diagnostic_codes::DISCOVERY_TOTAL_BYTES_LIMIT_REACHED
+                && diagnostic.severity == DiagnosticSeverity::Error
         }));
     }
 

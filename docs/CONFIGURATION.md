@@ -18,11 +18,31 @@ exclude: []
 limits:
   max_files: 50000
   max_file_size_bytes: 2097152
+  max_total_bytes: 268435456
+  max_runtime_ms: 120000
 ```
 
 `mode` may be `advisory` or `enforce`. CLI `--mode` overrides the config value.
 `include` and `exclude` use gitignore-style patterns. Includes narrow scanned
 source files; excludes take precedence. Limits must be greater than zero.
+
+`limits.max_files` caps supported source candidates after deterministic sorting.
+`limits.max_file_size_bytes` skips individual source files that are too large to
+read safely. `limits.max_total_bytes` bounds the total bytes AuthMap will read
+from included source files; later files are represented as skipped partial input.
+`limits.max_runtime_ms` is a cooperative wall-clock budget checked between scan
+phases. It does not cancel an in-flight parser call.
+
+The CLI can override scan limits without editing `authmap.yml`:
+
+```sh
+authmap scan . --max-files 10000 --max-total-bytes 134217728
+authmap rules suggest . --max-file-size-bytes 1048576 --max-runtime-ms 60000
+```
+
+Memory usage is bounded indirectly by `max_files`, `max_file_size_bytes`, and
+`max_total_bytes`. The defaults are intended for typical CI runners; lower them
+for constrained environments.
 
 ## Authorization Rules
 

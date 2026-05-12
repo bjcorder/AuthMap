@@ -95,6 +95,8 @@ pub struct ResourceSensitivityRule {
 pub struct ScanLimits {
     pub max_files: usize,
     pub max_file_size_bytes: u64,
+    pub max_total_bytes: u64,
+    pub max_runtime_ms: u64,
 }
 
 impl Default for ScanLimits {
@@ -102,6 +104,8 @@ impl Default for ScanLimits {
         Self {
             max_files: 50_000,
             max_file_size_bytes: 2 * 1024 * 1024,
+            max_total_bytes: 256 * 1024 * 1024,
+            max_runtime_ms: 120_000,
         }
     }
 }
@@ -152,6 +156,18 @@ impl ScanConfig {
             return Err(ConfigError::Validate {
                 path: path.to_path_buf(),
                 message: "limits.max_file_size_bytes must be greater than zero".to_string(),
+            });
+        }
+        if self.limits.max_total_bytes == 0 {
+            return Err(ConfigError::Validate {
+                path: path.to_path_buf(),
+                message: "limits.max_total_bytes must be greater than zero".to_string(),
+            });
+        }
+        if self.limits.max_runtime_ms == 0 {
+            return Err(ConfigError::Validate {
+                path: path.to_path_buf(),
+                message: "limits.max_runtime_ms must be greater than zero".to_string(),
             });
         }
         for (index, rule) in self.authorization.rules.iter().enumerate() {
@@ -350,6 +366,30 @@ mod tests {
     }
 
     #[test]
+    fn scan_limits_parse_all_budget_fields() {
+        let config: ScanConfig = serde_yaml::from_str(
+            r#"
+limits:
+  max_files: 42
+  max_file_size_bytes: 1024
+  max_total_bytes: 4096
+  max_runtime_ms: 5000
+"#,
+        )
+        .expect("scan limits should parse");
+
+        assert_eq!(
+            config.limits,
+            ScanLimits {
+                max_files: 42,
+                max_file_size_bytes: 1024,
+                max_total_bytes: 4096,
+                max_runtime_ms: 5000,
+            }
+        );
+    }
+
+    #[test]
     fn unknown_config_fields_are_rejected() {
         let error = serde_yaml::from_str::<ScanConfig>("unknown_key: true\n")
             .expect_err("unknown fields should be rejected");
@@ -445,6 +485,38 @@ authorization:
                 .to_string()
                 .contains("authorization.rules[0].match must include exact or contains")
         );
+    }
+
+    #[test]
+    fn scan_limits_reject_zero_values() {
+        for (name, field) in [
+            ("max-files", "max_files"),
+            ("max-file-size", "max_file_size_bytes"),
+            ("max-total-bytes", "max_total_bytes"),
+            ("max-runtime", "max_runtime_ms"),
+        ] {
+            let temp = std::env::temp_dir().join(format!("authmap-config-{name}.yml"));
+            std::fs::write(
+                &temp,
+                format!(
+                    r#"
+limits:
+  {field}: 0
+"#
+                ),
+            )
+            .expect("test config should be written");
+
+            let error = load_config(Some(temp.clone())).expect_err("zero limit should be invalid");
+            let _ = std::fs::remove_file(temp);
+
+            assert!(
+                error
+                    .to_string()
+                    .contains(&format!("limits.{field} must be greater than zero")),
+                "unexpected error for {field}: {error}"
+            );
+        }
     }
 
     #[test]

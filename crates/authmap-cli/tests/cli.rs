@@ -208,6 +208,25 @@ fn scan_help_works() {
     assert!(stdout.contains("--output"));
     assert!(stdout.contains("--config"));
     assert!(stdout.contains("--mode"));
+    assert!(stdout.contains("--max-files"));
+    assert!(stdout.contains("--max-file-size-bytes"));
+    assert!(stdout.contains("--max-total-bytes"));
+    assert!(stdout.contains("--max-runtime-ms"));
+}
+
+#[test]
+fn rules_suggest_help_shows_limit_overrides() {
+    let output = authmap(&["rules", "suggest", "--help"]);
+
+    assert_exit(&output, 0);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--format"));
+    assert!(stdout.contains("--output"));
+    assert!(stdout.contains("--config"));
+    assert!(stdout.contains("--max-files"));
+    assert!(stdout.contains("--max-file-size-bytes"));
+    assert!(stdout.contains("--max-total-bytes"));
+    assert!(stdout.contains("--max-runtime-ms"));
 }
 
 #[test]
@@ -350,6 +369,8 @@ fn init_yes_creates_valid_starter_config() {
     let text = fs::read_to_string(config).expect("starter config should exist");
     assert!(text.contains("authorization:"));
     assert!(text.contains("sensitivity:"));
+    assert!(text.contains("max_total_bytes: 268435456"));
+    assert!(text.contains("max_runtime_ms: 120000"));
     assert!(text.contains("Starter examples:"));
 }
 
@@ -656,6 +677,48 @@ fn enforce_mode_with_incomplete_discovery_writes_report_and_exits_enforcement_co
 }
 
 #[test]
+fn enforce_mode_with_cli_total_byte_limit_writes_report_and_exits_enforcement_code() {
+    let temp = TestDir::new("enforce-total-byte-limit");
+    let project = temp.path().join("project");
+    let output_path = temp.path().join("authmap.json");
+    write_file(&project.join("a.py"), "print('a')\n");
+    write_file(&project.join("b.py"), "print('b')\n");
+
+    let output = authmap(&[
+        "scan",
+        project.to_str().expect("path should be UTF-8"),
+        "--mode",
+        "enforce",
+        "--max-total-bytes",
+        "12",
+        "--output",
+        output_path.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 20);
+    let document: Value =
+        serde_json::from_str(&fs::read_to_string(output_path).expect("output should exist"))
+            .expect("output should be valid JSON");
+    assert!(
+        document["diagnostics"]
+            .as_array()
+            .expect("diagnostics should be an array")
+            .iter()
+            .any(
+                |diagnostic| diagnostic["code"] == "discovery.total_bytes_limit_reached"
+                    && diagnostic["severity"] == "error"
+            )
+    );
+    assert!(
+        document["source_files"]
+            .as_array()
+            .expect("source files should be an array")
+            .iter()
+            .any(|file| file["skipped"]["code"] == "discovery.total_bytes_limit_reached")
+    );
+}
+
+#[test]
 fn scan_writes_sarif_for_diagnostics() {
     let temp = TestDir::new("sarif-output");
     let project = temp.path().join("project");
@@ -726,6 +789,53 @@ fn config_mode_is_loaded_and_cli_mode_overrides_it() {
         serde_json::from_str(&fs::read_to_string(override_output).expect("output should exist"))
             .expect("output should be valid JSON");
     assert_eq!(document["metadata"]["mode"], "advisory");
+}
+
+#[test]
+fn cli_limit_flags_override_config_for_scan_and_rules_suggest() {
+    let temp = TestDir::new("limit-precedence");
+    let project = temp.path().join("project");
+    let config = temp.path().join("authmap.yml");
+    let scan_output = temp.path().join("authmap.json");
+    write_file(
+        &project.join("app.py"),
+        "print('large enough for config limit')\n",
+    );
+    write_file(&config, "limits:\n  max_file_size_bytes: 4\n");
+
+    let scan = authmap(&[
+        "scan",
+        project.to_str().expect("path should be UTF-8"),
+        "--config",
+        config.to_str().expect("path should be UTF-8"),
+        "--max-file-size-bytes",
+        "1024",
+        "--output",
+        scan_output.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&scan, 0);
+    let document: Value =
+        serde_json::from_str(&fs::read_to_string(scan_output).expect("output should exist"))
+            .expect("scan output should be valid JSON");
+    assert!(
+        document["source_files"][0]["skipped"].is_null(),
+        "CLI limit should override config file-size limit"
+    );
+
+    let rules = authmap(&[
+        "rules",
+        "suggest",
+        project.to_str().expect("path should be UTF-8"),
+        "--format",
+        "json",
+        "--config",
+        config.to_str().expect("path should be UTF-8"),
+        "--max-file-size-bytes",
+        "1024",
+    ]);
+    assert_exit(&rules, 0);
+    let report: Value = serde_json::from_slice(&rules.stdout).expect("rules output should parse");
+    assert_eq!(report["source_files_scanned"], 1);
 }
 
 #[test]
@@ -1002,6 +1112,14 @@ fn unsupported_format_exits_with_clap_usage_code() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("invalid value 'xml'"));
     assert!(stderr.contains("possible values"));
+}
+
+#[test]
+fn zero_cli_limit_exits_with_usage_code() {
+    let output = authmap(&["scan", ".", "--max-total-bytes", "0"]);
+
+    assert_exit(&output, 2);
+    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid CLI limit"));
 }
 
 #[test]

@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::time::Instant;
 
 use authmap_adapters::{AdapterContext, AdapterRegistry};
 use authmap_config::{
@@ -210,35 +211,42 @@ impl ReachabilityLinker for BuiltInReachabilityLinker {
 }
 
 pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
+    run_scan_with_started_at(plan, Instant::now())
+}
+
+fn run_scan_with_started_at(
+    plan: &ScanPlan,
+    started_at: Instant,
+) -> Result<AuthMapDocument, ScanError> {
+    let budget = RuntimeBudget::new(started_at, plan.config.limits.max_runtime_ms);
     let discovery = discover_sources(plan)?;
     let backend = TreeSitterBackend;
-    let parse_output = parse_files_in_parallel(&backend, &discovery.files, |file| {
+    let mut document = empty_document(plan);
+    document.source_files = discovery.files.clone();
+    document.diagnostics = discovery.diagnostics;
+    if budget.is_exceeded() {
+        push_runtime_limit_diagnostic(&mut document, plan);
+        finalize_diagnostics(&mut document);
+        return Ok(document);
+    }
+
+    let parse_output = parse_files_in_parallel(&backend, &document.source_files, |file| {
         fs::read_to_string(&file.path).map_err(|source| ParseError::Read {
             path: file.path.clone(),
             message: source.to_string(),
         })
     });
+    document.diagnostics.extend(parse_output.diagnostics);
+    if budget.is_exceeded() {
+        push_runtime_limit_diagnostic(&mut document, plan);
+        finalize_diagnostics(&mut document);
+        return Ok(document);
+    }
 
     let adapter_registry = AdapterRegistry::built_in();
     let adapter_output =
         adapter_registry.discover_routes(&parse_output.parsed_files, &AdapterContext::default());
 
-    let mut document = AuthMapDocument::empty(ScanMetadata {
-        mode: plan.config.mode,
-        target_roots: plan
-            .targets
-            .iter()
-            .map(|path| path.to_string_lossy().replace('\\', "/"))
-            .collect(),
-        config_path: plan
-            .config_path
-            .as_ref()
-            .map(|path| path.to_string_lossy().replace('\\', "/")),
-        ..ScanMetadata::default()
-    });
-    document.source_files = discovery.files;
-    document.diagnostics = discovery.diagnostics;
-    document.diagnostics.extend(parse_output.diagnostics);
     document.routes = adapter_output.routes;
     document.diagnostics.extend(adapter_output.diagnostics);
     document.routes.sort_by_key(route_sort_key);
@@ -249,6 +257,12 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
         &route_id_remaps,
         &mut document.diagnostics,
     );
+    if budget.is_exceeded() {
+        push_runtime_limit_diagnostic(&mut document, plan);
+        finalize_diagnostics(&mut document);
+        return Ok(document);
+    }
+
     let input = AnalysisInput {
         routes: &document.routes,
         parsed_files: &parse_output.parsed_files,
@@ -262,6 +276,12 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
     document.mutations = mutation_facts.mutations;
     document.diagnostics.extend(facts.diagnostics);
     document.diagnostics.extend(mutation_facts.diagnostics);
+    if budget.is_exceeded() {
+        push_runtime_limit_diagnostic(&mut document, plan);
+        finalize_diagnostics(&mut document);
+        return Ok(document);
+    }
+
     let link_input = AnalysisInput {
         routes: &document.routes,
         parsed_files: &parse_output.parsed_files,
@@ -272,6 +292,12 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
     let link_facts = BuiltInReachabilityLinker.link_reachability(&link_input);
     document.links = link_facts.links;
     document.diagnostics.extend(link_facts.diagnostics);
+    if budget.is_exceeded() {
+        push_runtime_limit_diagnostic(&mut document, plan);
+        finalize_diagnostics(&mut document);
+        return Ok(document);
+    }
+
     document.coverage = classify_coverage(
         &document.routes,
         &document.evidence,
@@ -279,13 +305,89 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
         &document.links,
         &plan.config,
     );
-    document.diagnostics.sort_by(|left, right| {
+    if budget.is_exceeded() {
+        push_runtime_limit_diagnostic(&mut document, plan);
+    }
+    finalize_diagnostics(&mut document);
+    Ok(document)
+}
+
+fn empty_document(plan: &ScanPlan) -> AuthMapDocument {
+    AuthMapDocument::empty(ScanMetadata {
+        mode: plan.config.mode,
+        target_roots: plan
+            .targets
+            .iter()
+            .map(|path| path.to_string_lossy().replace('\\', "/"))
+            .collect(),
+        config_path: plan
+            .config_path
+            .as_ref()
+            .map(|path| path.to_string_lossy().replace('\\', "/")),
+        ..ScanMetadata::default()
+    })
+}
+
+#[derive(Clone, Copy, Debug)]
+struct RuntimeBudget {
+    started_at: Instant,
+    max_runtime_ms: u64,
+}
+
+impl RuntimeBudget {
+    fn new(started_at: Instant, max_runtime_ms: u64) -> Self {
+        Self {
+            started_at,
+            max_runtime_ms,
+        }
+    }
+
+    fn is_exceeded(self) -> bool {
+        self.started_at.elapsed().as_millis() >= u128::from(self.max_runtime_ms)
+    }
+}
+
+fn push_runtime_limit_diagnostic(document: &mut AuthMapDocument, plan: &ScanPlan) {
+    if document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == authmap_core::diagnostic_codes::INTERNAL_RUNTIME_LIMIT_REACHED
+    }) {
+        return;
+    }
+    document.diagnostics.push(runtime_limit_diagnostic(plan));
+}
+
+fn runtime_limit_diagnostic(plan: &ScanPlan) -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Internal,
+        code: authmap_core::diagnostic_codes::INTERNAL_RUNTIME_LIMIT_REACHED.to_string(),
+        severity: incomplete_scan_severity(plan.config.mode),
+        recoverability: Recoverability::Recoverable,
+        span: None,
+        message: format!(
+            "scan exceeded configured max_runtime_ms of {}; returning deterministic partial results",
+            plan.config.limits.max_runtime_ms
+        ),
+    }
+}
+
+fn incomplete_scan_severity(mode: authmap_core::ScanMode) -> DiagnosticSeverity {
+    match mode {
+        authmap_core::ScanMode::Advisory => DiagnosticSeverity::Warning,
+        authmap_core::ScanMode::Enforce => DiagnosticSeverity::Error,
+    }
+}
+
+fn finalize_diagnostics(document: &mut AuthMapDocument) {
+    sort_diagnostics(&mut document.diagnostics);
+}
+
+fn sort_diagnostics(diagnostics: &mut [Diagnostic]) {
+    diagnostics.sort_by(|left, right| {
         left.category
             .cmp(&right.category)
             .then(left.code.cmp(&right.code))
             .then(left.message.cmp(&right.message))
     });
-    Ok(document)
 }
 
 fn route_id_remaps(routes: &mut [authmap_core::Route]) -> BTreeMap<String, BTreeSet<String>> {
@@ -355,7 +457,32 @@ fn internal_diagnostic(span: Option<Span>, message: String) -> Diagnostic {
 }
 
 pub fn suggest_rules(plan: &ScanPlan) -> Result<RuleSuggestionReport, ScanError> {
+    suggest_rules_with_started_at(plan, Instant::now())
+}
+
+fn suggest_rules_with_started_at(
+    plan: &ScanPlan,
+    started_at: Instant,
+) -> Result<RuleSuggestionReport, ScanError> {
+    let budget = RuntimeBudget::new(started_at, plan.config.limits.max_runtime_ms);
     let discovery = discover_sources(plan)?;
+    let target_roots = plan
+        .targets
+        .iter()
+        .map(|path| path.to_string_lossy().replace('\\', "/"))
+        .collect::<Vec<_>>();
+    let mut diagnostics = discovery.diagnostics.clone();
+    if budget.is_exceeded() {
+        diagnostics.push(runtime_limit_diagnostic(plan));
+        sort_diagnostics(&mut diagnostics);
+        return Ok(RuleSuggestionReport {
+            target_roots,
+            source_files_scanned: 0,
+            suggestions: Vec::new(),
+            diagnostics,
+        });
+    }
+
     let backend = TreeSitterBackend;
     let parse_output = parse_files_in_parallel(&backend, &discovery.files, |file| {
         fs::read_to_string(&file.path).map_err(|source| ParseError::Read {
@@ -363,10 +490,33 @@ pub fn suggest_rules(plan: &ScanPlan) -> Result<RuleSuggestionReport, ScanError>
             message: source.to_string(),
         })
     });
+    diagnostics.extend(parse_output.diagnostics.clone());
+    if budget.is_exceeded() {
+        diagnostics.push(runtime_limit_diagnostic(plan));
+        sort_diagnostics(&mut diagnostics);
+        return Ok(RuleSuggestionReport {
+            target_roots,
+            source_files_scanned: parse_output.parsed_files.len(),
+            suggestions: Vec::new(),
+            diagnostics,
+        });
+    }
 
     let adapter_registry = AdapterRegistry::built_in();
     let adapter_output =
         adapter_registry.discover_routes(&parse_output.parsed_files, &AdapterContext::default());
+    diagnostics.extend(adapter_output.diagnostics.clone());
+    if budget.is_exceeded() {
+        diagnostics.push(runtime_limit_diagnostic(plan));
+        sort_diagnostics(&mut diagnostics);
+        return Ok(RuleSuggestionReport {
+            target_roots,
+            source_files_scanned: parse_output.parsed_files.len(),
+            suggestions: Vec::new(),
+            diagnostics,
+        });
+    }
+
     let route_handlers = adapter_output
         .routes
         .iter()
@@ -386,23 +536,14 @@ pub fn suggest_rules(plan: &ScanPlan) -> Result<RuleSuggestionReport, ScanError>
         .map(RuleCandidate::into_suggestion)
         .collect::<Vec<_>>();
     suggestions.sort_by_key(rule_suggestion_sort_key);
-
-    let mut diagnostics = discovery.diagnostics;
-    diagnostics.extend(parse_output.diagnostics);
-    diagnostics.extend(adapter_output.diagnostics);
-    diagnostics.sort_by(|left, right| {
-        left.category
-            .cmp(&right.category)
-            .then(left.code.cmp(&right.code))
-            .then(left.message.cmp(&right.message))
-    });
+    if budget.is_exceeded() {
+        suggestions.clear();
+        diagnostics.push(runtime_limit_diagnostic(plan));
+    }
+    sort_diagnostics(&mut diagnostics);
 
     Ok(RuleSuggestionReport {
-        target_roots: plan
-            .targets
-            .iter()
-            .map(|path| path.to_string_lossy().replace('\\', "/"))
-            .collect(),
+        target_roots,
         source_files_scanned: parse_output.parsed_files.len(),
         suggestions,
         diagnostics,
@@ -3305,17 +3446,18 @@ impl ScanError {
 mod tests {
     use std::collections::BTreeSet;
     use std::path::{Path, PathBuf};
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
     use authmap_config::{ScanConfig, ScanPlan};
     use authmap_core::{
         Confidence, CoverageClass, Evidence, EvidenceType, Framework, Mutation, MutationOperation,
-        ReachabilityLink, RiskLevel, Route,
+        ReachabilityLink, RiskLevel, Route, ScanMode, diagnostic_codes,
     };
     use authmap_testkit::fixture_path;
 
     use super::{
-        classify_coverage, normalize_adapter_evidence, route_id_remaps, run_scan, suggest_rules,
+        classify_coverage, normalize_adapter_evidence, route_id_remaps, run_scan,
+        run_scan_with_started_at, suggest_rules, suggest_rules_with_started_at,
     };
 
     #[test]
@@ -4080,6 +4222,66 @@ sensitivity:
                 "{path} should retain uncertainty link support"
             );
         }
+    }
+
+    #[test]
+    fn scan_pipeline_emits_runtime_limit_partial_document() {
+        let temp = TestDir::new("runtime-limit");
+        write_file(&temp.path().join("app.py"), "print('hello')\n");
+        let mut config = ScanConfig::default();
+        config.limits.max_runtime_ms = 1;
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, config);
+        let started_at = Instant::now() - Duration::from_millis(2);
+
+        let document =
+            run_scan_with_started_at(&plan, started_at).expect("partial scan should succeed");
+
+        assert_eq!(document.metadata.mode, ScanMode::Advisory);
+        assert_eq!(document.source_files.len(), 1);
+        assert!(document.routes.is_empty());
+        assert!(document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == diagnostic_codes::INTERNAL_RUNTIME_LIMIT_REACHED
+                && diagnostic.severity == authmap_core::DiagnosticSeverity::Warning
+        }));
+    }
+
+    #[test]
+    fn enforce_runtime_limit_is_enforce_blocking() {
+        let temp = TestDir::new("runtime-limit-enforce");
+        write_file(&temp.path().join("app.py"), "print('hello')\n");
+        let mut config = ScanConfig::default();
+        config.mode = ScanMode::Enforce;
+        config.limits.max_runtime_ms = 1;
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, config);
+        let started_at = Instant::now() - Duration::from_millis(2);
+
+        let document =
+            run_scan_with_started_at(&plan, started_at).expect("partial scan should succeed");
+
+        assert!(document.has_enforce_blocking_diagnostics());
+        assert!(document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == diagnostic_codes::INTERNAL_RUNTIME_LIMIT_REACHED
+                && diagnostic.severity == authmap_core::DiagnosticSeverity::Error
+        }));
+    }
+
+    #[test]
+    fn rules_suggest_emits_runtime_limit_partial_report() {
+        let temp = TestDir::new("rules-runtime-limit");
+        write_file(&temp.path().join("app.js"), "function requireUser() {}\n");
+        let mut config = ScanConfig::default();
+        config.limits.max_runtime_ms = 1;
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, config);
+        let started_at = Instant::now() - Duration::from_millis(2);
+
+        let report = suggest_rules_with_started_at(&plan, started_at)
+            .expect("partial suggestions should succeed");
+
+        assert_eq!(report.source_files_scanned, 0);
+        assert!(report.suggestions.is_empty());
+        assert!(report.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == diagnostic_codes::INTERNAL_RUNTIME_LIMIT_REACHED
+        }));
     }
 
     #[test]

@@ -178,6 +178,7 @@ pub mod diagnostic_codes {
     pub const DISCOVERY_NO_CANDIDATE_SOURCES: &str = "discovery.no_candidate_sources";
     pub const DISCOVERY_FILE_TOO_LARGE: &str = "discovery.file_too_large";
     pub const DISCOVERY_FILE_LIMIT_REACHED: &str = "discovery.file_limit_reached";
+    pub const DISCOVERY_TOTAL_BYTES_LIMIT_REACHED: &str = "discovery.total_bytes_limit_reached";
     pub const DISCOVERY_TARGET_UNAVAILABLE: &str = "discovery.target_unavailable";
     pub const DISCOVERY_EMPTY_TARGET: &str = "discovery.empty_target";
     pub const DISCOVERY_METADATA_FAILED: &str = "discovery.metadata_failed";
@@ -194,6 +195,7 @@ pub mod diagnostic_codes {
     pub const REPORT_WRITE_FAILED: &str = "report.write_failed";
 
     pub const INTERNAL_SCAN_FAILED: &str = "internal.scan_failed";
+    pub const INTERNAL_RUNTIME_LIMIT_REACHED: &str = "internal.runtime_limit_reached";
 }
 
 pub const FIRST_PARTY_DIAGNOSTIC_CODES: &[(&str, DiagnosticCategory)] = &[
@@ -223,6 +225,10 @@ pub const FIRST_PARTY_DIAGNOSTIC_CODES: &[(&str, DiagnosticCategory)] = &[
     ),
     (
         diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED,
+        DiagnosticCategory::Discovery,
+    ),
+    (
+        diagnostic_codes::DISCOVERY_TOTAL_BYTES_LIMIT_REACHED,
         DiagnosticCategory::Discovery,
     ),
     (
@@ -271,6 +277,10 @@ pub const FIRST_PARTY_DIAGNOSTIC_CODES: &[(&str, DiagnosticCategory)] = &[
     ),
     (
         diagnostic_codes::INTERNAL_SCAN_FAILED,
+        DiagnosticCategory::Internal,
+    ),
+    (
+        diagnostic_codes::INTERNAL_RUNTIME_LIMIT_REACHED,
         DiagnosticCategory::Internal,
     ),
 ];
