@@ -168,6 +168,26 @@ fn ambiguous_explain_document_json() -> String {
     explain_document_json().replace("\"id\": \"evidence_0001\"", "\"id\": \"route_0001\"")
 }
 
+fn write_rules_suggest_project(project: &Path) {
+    write_file(
+        &project.join("app.js"),
+        r#"
+const express = require("express");
+const app = express();
+
+function ensurePaidPlan(req, res, next) {
+  next();
+}
+
+function updateBilling(req, res) {
+  res.sendStatus(204);
+}
+
+app.patch("/billing/:id", ensurePaidPlan, updateBilling);
+"#,
+    );
+}
+
 #[test]
 fn root_help_works() {
     let output = authmap(&["--help"]);
@@ -802,6 +822,140 @@ sensitivity:
             .iter()
             .any(|reason| reason == "config_route:business_critical")
     );
+}
+
+#[test]
+fn rules_suggest_prints_markdown_and_json() {
+    let temp = TestDir::new("rules-suggest");
+    let project = temp.path().join("project");
+    write_rules_suggest_project(&project);
+
+    let markdown = authmap(&[
+        "rules",
+        "suggest",
+        project.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&markdown, 0);
+    let stdout = String::from_utf8_lossy(&markdown.stdout);
+    assert!(stdout.contains("# AuthMap Rule Suggestions"));
+    assert!(stdout.contains("ensurePaidPlan"));
+    assert!(stdout.contains("authorization:"));
+    assert!(stdout.contains("Suggestions are local heuristics"));
+
+    let json = authmap(&[
+        "rules",
+        "suggest",
+        project.to_str().expect("path should be UTF-8"),
+        "--format",
+        "json",
+    ]);
+    assert_exit(&json, 0);
+    let document: Value =
+        serde_json::from_slice(&json.stdout).expect("rules suggestions should be JSON");
+    assert!(
+        document["suggestions"]
+            .as_array()
+            .expect("suggestions should be an array")
+            .iter()
+            .any(
+                |suggestion| suggestion["match"]["exact"][0] == "ensurePaidPlan"
+                    && suggestion["evidence_type"] == "permission_check"
+            )
+    );
+}
+
+#[test]
+fn rules_suggest_writes_output_and_is_deterministic() {
+    let temp = TestDir::new("rules-suggest-output");
+    let project = temp.path().join("project");
+    let first = temp.path().join("first.json");
+    let second = temp.path().join("second.json");
+    write_rules_suggest_project(&project);
+
+    for output_path in [&first, &second] {
+        let output = authmap(&[
+            "rules",
+            "suggest",
+            project.to_str().expect("path should be UTF-8"),
+            "--format",
+            "json",
+            "--output",
+            output_path.to_str().expect("path should be UTF-8"),
+        ]);
+        assert_exit(&output, 0);
+    }
+
+    assert_eq!(
+        fs::read_to_string(first).expect("first output should exist"),
+        fs::read_to_string(second).expect("second output should exist")
+    );
+}
+
+#[test]
+fn rules_suggest_config_suppresses_duplicates() {
+    let temp = TestDir::new("rules-suggest-config");
+    let project = temp.path().join("project");
+    let config = temp.path().join("authmap.yml");
+    write_rules_suggest_project(&project);
+    write_file(
+        &config,
+        r#"
+authorization:
+  rules:
+    - name: paid plan permission
+      evidence_type: permission_check
+      mechanism: billing_plan_guard
+      match:
+        exact: [ensurePaidPlan]
+"#,
+    );
+
+    let output = authmap(&[
+        "rules",
+        "suggest",
+        project.to_str().expect("path should be UTF-8"),
+        "--format",
+        "json",
+        "--config",
+        config.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 0);
+    let document: Value =
+        serde_json::from_slice(&output.stdout).expect("rules suggestions should be JSON");
+    assert!(
+        document["suggestions"]
+            .as_array()
+            .expect("suggestions should be an array")
+            .iter()
+            .all(|suggestion| suggestion["match"]["exact"][0] != "ensurePaidPlan")
+    );
+}
+
+#[test]
+fn rules_suggest_reports_missing_targets_and_invalid_config() {
+    let temp = TestDir::new("rules-suggest-errors");
+    let missing = temp.path().join("missing");
+    let config = temp.path().join("authmap.yml");
+    write_file(&config, "unknown_key: true\n");
+
+    let missing_output = authmap(&[
+        "rules",
+        "suggest",
+        missing.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&missing_output, 10);
+    assert!(String::from_utf8_lossy(&missing_output.stderr).contains("missing or unreadable"));
+
+    let invalid_config = authmap(&[
+        "rules",
+        "suggest",
+        temp.path().to_str().expect("path should be UTF-8"),
+        "--config",
+        config.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&invalid_config, 12);
+    assert!(String::from_utf8_lossy(&invalid_config.stderr).contains("failed to parse config"));
 }
 
 #[test]

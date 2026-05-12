@@ -14,6 +14,7 @@ authmap-core.workspace = true
 authmap-discovery.workspace = true
 authmap-parsers.workspace = true
 rayon.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tree-sitter.workspace = true

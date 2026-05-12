@@ -3,11 +3,12 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use authmap_analysis::run_scan;
+use authmap_analysis::{run_scan, suggest_rules};
 use authmap_config::{ScanPlan, load_config};
 use authmap_core::{AuthMapDocument, ScanMode, diagnostic_codes};
 use authmap_report::{
-    JsonReporter, MarkdownReporter, Reporter, SarifReporter, render_explain, write_atomic,
+    JsonReporter, MarkdownReporter, Reporter, SarifReporter, render_explain,
+    render_rule_suggestions_json, render_rule_suggestions_markdown, write_atomic,
 };
 use clap::{Parser, Subcommand, ValueEnum};
 use thiserror::Error;
@@ -92,7 +93,22 @@ enum BaselineCommand {
 
 #[derive(Debug, Subcommand)]
 enum RulesCommand {
-    Suggest,
+    Suggest {
+        #[arg(default_value = ".")]
+        target: PathBuf,
+        #[arg(long, value_enum, default_value_t = RuleSuggestOutputFormat::Markdown)]
+        format: RuleSuggestOutputFormat,
+        #[arg(long)]
+        output: Option<PathBuf>,
+        #[arg(long)]
+        config: Option<PathBuf>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum RuleSuggestOutputFormat {
+    Markdown,
+    Json,
 }
 
 fn main() -> ExitCode {
@@ -147,9 +163,39 @@ fn run() -> Result<ExitCode, CliError> {
             command: BaselineCommand::Create,
         } => Err(CliError::NotImplemented("authmap baseline create")),
         Command::Rules {
-            command: RulesCommand::Suggest,
-        } => Err(CliError::NotImplemented("authmap rules suggest")),
+            command:
+                RulesCommand::Suggest {
+                    target,
+                    format,
+                    output,
+                    config,
+                },
+        } => run_rules_suggest(target, format, output, config),
     }
+}
+
+fn run_rules_suggest(
+    target: PathBuf,
+    format: RuleSuggestOutputFormat,
+    output: Option<PathBuf>,
+    config: Option<PathBuf>,
+) -> Result<ExitCode, CliError> {
+    let (config_path, config) = load_config(config).map_err(CliError::Config)?;
+    let plan = ScanPlan::new(vec![target], config_path, config);
+    let suggestions = suggest_rules(&plan).map_err(CliError::Scan)?;
+    let rendered = match format {
+        RuleSuggestOutputFormat::Markdown => render_rule_suggestions_markdown(&suggestions),
+        RuleSuggestOutputFormat::Json => {
+            render_rule_suggestions_json(&suggestions).map_err(CliError::Report)?
+        }
+    };
+
+    if let Some(output) = output {
+        write_atomic(&output, &rendered).map_err(CliError::Report)?;
+    } else {
+        println!("{rendered}");
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 fn run_explain(id: &str, input: &Path) -> Result<ExitCode, CliError> {

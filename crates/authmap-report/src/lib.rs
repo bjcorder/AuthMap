@@ -4,6 +4,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
+use authmap_analysis::RuleSuggestionReport;
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticSeverity, Evidence,
     EvidenceType, Framework, Mutation, MutationOperation, ReachabilityLink, RiskLevel,
@@ -590,6 +591,194 @@ fn render_skipped_files(output: &mut String, document: &AuthMapDocument) {
         .collect::<Vec<_>>();
     render_table(output, &["File", "Code", "Message"], &rows);
     let _ = writeln!(output);
+}
+
+pub fn render_rule_suggestions_markdown(report: &RuleSuggestionReport) -> String {
+    let mut output = String::new();
+    let _ = writeln!(output, "# AuthMap Rule Suggestions");
+    let _ = writeln!(output);
+    let _ = writeln!(
+        output,
+        "- Note: Suggestions are local heuristics for reviewer consideration; they are not proof of security controls."
+    );
+    let _ = writeln!(
+        output,
+        "- Targets: {}",
+        list_or_none(
+            report
+                .target_roots
+                .iter()
+                .map(|target| escape_inline(target))
+                .collect::<Vec<_>>()
+        )
+    );
+    let _ = writeln!(
+        output,
+        "- Source files scanned: {}",
+        report.source_files_scanned
+    );
+    let _ = writeln!(output, "- Suggestions: {}", report.suggestions.len());
+    let _ = writeln!(output);
+
+    if report.suggestions.is_empty() {
+        let _ = writeln!(
+            output,
+            "No custom authorization rule suggestions were found."
+        );
+        let _ = writeln!(output);
+        render_rule_suggestion_diagnostics(&mut output, report);
+        return output;
+    }
+
+    let _ = writeln!(output, "## Suggested Config");
+    let _ = writeln!(output);
+    let _ = writeln!(output, "```yaml");
+    let _ = writeln!(output, "authorization:");
+    let _ = writeln!(output, "  rules:");
+    for suggestion in &report.suggestions {
+        let _ = writeln!(output, "    - name: {}", yaml_string(&suggestion.name));
+        let _ = writeln!(
+            output,
+            "      evidence_type: {}",
+            evidence_type_label(suggestion.evidence_type)
+        );
+        let _ = writeln!(
+            output,
+            "      mechanism: {}",
+            yaml_string(&suggestion.mechanism)
+        );
+        let _ = writeln!(
+            output,
+            "      confidence: {}",
+            confidence_label(suggestion.confidence)
+        );
+        let _ = writeln!(output, "      match:");
+        if !suggestion.matcher.exact.is_empty() {
+            let _ = writeln!(
+                output,
+                "        exact: [{}]",
+                suggestion
+                    .matcher
+                    .exact
+                    .iter()
+                    .map(|item| yaml_string(item))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+        if !suggestion.matcher.contains.is_empty() {
+            let _ = writeln!(
+                output,
+                "        contains: [{}]",
+                suggestion
+                    .matcher
+                    .contains
+                    .iter()
+                    .map(|item| yaml_string(item))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+        if !suggestion.rationale.is_empty() {
+            let _ = writeln!(output, "      notes:");
+            for rationale in &suggestion.rationale {
+                let _ = writeln!(output, "        - {}", yaml_string(rationale));
+            }
+        }
+    }
+    let _ = writeln!(output, "```");
+    let _ = writeln!(output);
+
+    let _ = writeln!(output, "## Suggestion Details");
+    let _ = writeln!(output);
+    for suggestion in &report.suggestions {
+        let _ = writeln!(
+            output,
+            "### {}",
+            escape_inline(
+                suggestion
+                    .matcher
+                    .exact
+                    .first()
+                    .or_else(|| suggestion.matcher.contains.first())
+                    .map(String::as_str)
+                    .unwrap_or(suggestion.name.as_str())
+            )
+        );
+        let _ = writeln!(
+            output,
+            "- Evidence type: {}",
+            evidence_type_label(suggestion.evidence_type)
+        );
+        let _ = writeln!(
+            output,
+            "- Mechanism: {}",
+            escape_inline(&suggestion.mechanism)
+        );
+        let _ = writeln!(
+            output,
+            "- Confidence: {}",
+            confidence_label(suggestion.confidence)
+        );
+        render_named_markdown_list(&mut output, "Rationale", &suggestion.rationale);
+        let examples = suggestion
+            .examples
+            .iter()
+            .map(|example| {
+                format!(
+                    "{} at {}:{}:{} ({})",
+                    escape_inline(&example.symbol),
+                    escape_inline(&example.file),
+                    example.line,
+                    example.column,
+                    escape_inline(&example.context)
+                )
+            })
+            .collect::<Vec<_>>();
+        render_named_markdown_list(&mut output, "Examples", &examples);
+        let _ = writeln!(output);
+    }
+
+    render_rule_suggestion_diagnostics(&mut output, report);
+    output
+}
+
+pub fn render_rule_suggestions_json(report: &RuleSuggestionReport) -> Result<String, ReportError> {
+    serde_json::to_string_pretty(report).map_err(ReportError::Json)
+}
+
+fn render_rule_suggestion_diagnostics(output: &mut String, report: &RuleSuggestionReport) {
+    if report.diagnostics.is_empty() {
+        return;
+    }
+    let _ = writeln!(output, "## Diagnostics");
+    let _ = writeln!(output);
+    for diagnostic in &report.diagnostics {
+        let _ = writeln!(
+            output,
+            "- {} {} at {}: {}",
+            diagnostic_severity_label(diagnostic.severity),
+            escape_inline(&diagnostic.code),
+            format_optional_span(diagnostic.span.as_ref()),
+            escape_inline(&diagnostic.message)
+        );
+    }
+    let _ = writeln!(output);
+}
+
+fn render_named_markdown_list(output: &mut String, label: &str, items: &[String]) {
+    if items.is_empty() {
+        let _ = writeln!(output, "- {label}: none");
+        return;
+    }
+    let _ = writeln!(output, "- {label}:");
+    for item in items {
+        let _ = writeln!(output, "  - {}", escape_inline(item));
+    }
+}
+
+fn yaml_string(value: &str) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_string())
 }
 
 pub fn render_explain(document: &AuthMapDocument, id: &str) -> Result<String, ExplainError> {
@@ -1585,6 +1774,9 @@ pub enum ReportError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use authmap_analysis::{
+        RuleSuggestion, RuleSuggestionExample, RuleSuggestionMatch, RuleSuggestionReport,
+    };
     use authmap_core::{
         AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticCategory,
         DiagnosticSeverity, Evidence, EvidenceType, ExtensionMap, Framework, Mutation,
@@ -1617,6 +1809,29 @@ mod tests {
         assert!(rendered.contains("update `user.disabled` via `sqlalchemy`"));
         assert!(rendered.contains("Should this require a tenant check?"));
         assert!(rendered.contains("risk is review_required"));
+    }
+
+    #[test]
+    fn renders_rule_suggestions_markdown_and_json() {
+        let report = rule_suggestion_report();
+
+        let markdown = render_rule_suggestions_markdown(&report);
+        assert!(markdown.contains("# AuthMap Rule Suggestions"));
+        assert!(markdown.contains("Suggestions are local heuristics"));
+        assert!(markdown.contains("authorization:"));
+        assert!(markdown.contains("exact: [\"ensurePaidPlan\"]"));
+        assert!(markdown.contains("name suggests a permission"));
+        assert!(markdown.contains("src/app.js:4:10"));
+
+        let json: Value = serde_json::from_str(
+            &render_rule_suggestions_json(&report).expect("JSON should render"),
+        )
+        .expect("suggestion report should be JSON");
+        assert_eq!(
+            json["suggestions"][0]["match"]["exact"][0],
+            "ensurePaidPlan"
+        );
+        assert_eq!(json["suggestions"][0]["evidence_type"], "permission_check");
     }
 
     #[test]
@@ -1873,6 +2088,34 @@ mod tests {
                 byte_range: None,
             }),
             message: "source parsed with syntax errors; partial tree is available".to_string(),
+        }
+    }
+
+    fn rule_suggestion_report() -> RuleSuggestionReport {
+        RuleSuggestionReport {
+            target_roots: vec!["src".to_string()],
+            source_files_scanned: 1,
+            suggestions: vec![RuleSuggestion {
+                name: "Suggested permission_check: ensurePaidPlan".to_string(),
+                evidence_type: EvidenceType::PermissionCheck,
+                mechanism: "suggested_permission_guard".to_string(),
+                confidence: Confidence::Medium,
+                matcher: RuleSuggestionMatch {
+                    exact: vec!["ensurePaidPlan".to_string()],
+                    contains: Vec::new(),
+                },
+                rationale: vec![
+                    "name suggests a permission, entitlement, or access guard".to_string(),
+                ],
+                examples: vec![RuleSuggestionExample {
+                    symbol: "ensurePaidPlan".to_string(),
+                    file: "src/app.js".to_string(),
+                    line: 4,
+                    column: 10,
+                    context: "Express middleware".to_string(),
+                }],
+            }],
+            diagnostics: Vec::new(),
         }
     }
 

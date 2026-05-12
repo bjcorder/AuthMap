@@ -12,6 +12,7 @@ use authmap_core::{
 };
 use authmap_discovery::discover_sources;
 use authmap_parsers::{ParseError, ParsedFile, TreeSitterBackend, parse_files_in_parallel};
+use serde::Serialize;
 use thiserror::Error;
 use tree_sitter::Node;
 
@@ -37,6 +38,41 @@ pub struct AnalysisFacts {
     pub evidence: Vec<Evidence>,
     pub mutations: Vec<Mutation>,
     pub diagnostics: Vec<Diagnostic>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct RuleSuggestionReport {
+    pub target_roots: Vec<String>,
+    pub source_files_scanned: usize,
+    pub suggestions: Vec<RuleSuggestion>,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct RuleSuggestion {
+    pub name: String,
+    pub evidence_type: EvidenceType,
+    pub mechanism: String,
+    pub confidence: Confidence,
+    #[serde(rename = "match")]
+    pub matcher: RuleSuggestionMatch,
+    pub rationale: Vec<String>,
+    pub examples: Vec<RuleSuggestionExample>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
+pub struct RuleSuggestionMatch {
+    pub exact: Vec<String>,
+    pub contains: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct RuleSuggestionExample {
+    pub symbol: String,
+    pub file: String,
+    pub line: u32,
+    pub column: u32,
+    pub context: String,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -139,6 +175,560 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
             .then(left.message.cmp(&right.message))
     });
     Ok(document)
+}
+
+pub fn suggest_rules(plan: &ScanPlan) -> Result<RuleSuggestionReport, ScanError> {
+    let discovery = discover_sources(plan)?;
+    let backend = TreeSitterBackend;
+    let parse_output = parse_files_in_parallel(&backend, &discovery.files, |file| {
+        fs::read_to_string(&file.path).map_err(|source| ParseError::Read {
+            path: file.path.clone(),
+            message: source.to_string(),
+        })
+    });
+
+    let adapter_registry = AdapterRegistry::built_in();
+    let adapter_output =
+        adapter_registry.discover_routes(&parse_output.parsed_files, &AdapterContext::default());
+    let route_handlers = adapter_output
+        .routes
+        .iter()
+        .filter_map(|route| route.handler.as_ref())
+        .map(|handler| handler.name.as_str())
+        .filter(|name| !name.starts_with('<'))
+        .collect::<BTreeSet<_>>();
+
+    let rules = EvidenceRules::new(&plan.config);
+    let mut candidates = BTreeMap::<String, RuleCandidate>::new();
+    for parsed in &parse_output.parsed_files {
+        collect_rule_candidates(parsed, &route_handlers, &rules, &mut candidates);
+    }
+
+    let mut suggestions = candidates
+        .into_values()
+        .map(RuleCandidate::into_suggestion)
+        .collect::<Vec<_>>();
+    suggestions.sort_by_key(rule_suggestion_sort_key);
+
+    let mut diagnostics = discovery.diagnostics;
+    diagnostics.extend(parse_output.diagnostics);
+    diagnostics.extend(adapter_output.diagnostics);
+    diagnostics.sort_by(|left, right| {
+        left.category
+            .cmp(&right.category)
+            .then(left.code.cmp(&right.code))
+            .then(left.message.cmp(&right.message))
+    });
+
+    Ok(RuleSuggestionReport {
+        target_roots: plan
+            .targets
+            .iter()
+            .map(|path| path.to_string_lossy().replace('\\', "/"))
+            .collect(),
+        source_files_scanned: parse_output.parsed_files.len(),
+        suggestions,
+        diagnostics,
+    })
+}
+
+#[derive(Clone, Debug)]
+struct RuleCandidate {
+    symbol: String,
+    evidence_type: EvidenceType,
+    confidence: Confidence,
+    rationale: BTreeSet<String>,
+    examples: Vec<RuleSuggestionExample>,
+}
+
+impl RuleCandidate {
+    fn into_suggestion(mut self) -> RuleSuggestion {
+        self.examples.sort_by(|left, right| {
+            left.file
+                .cmp(&right.file)
+                .then(left.line.cmp(&right.line))
+                .then(left.column.cmp(&right.column))
+                .then(left.context.cmp(&right.context))
+                .then(left.symbol.cmp(&right.symbol))
+        });
+        self.examples.dedup_by(|left, right| {
+            left.symbol == right.symbol
+                && left.file == right.file
+                && left.line == right.line
+                && left.column == right.column
+                && left.context == right.context
+        });
+        self.examples.truncate(5);
+
+        RuleSuggestion {
+            name: format!(
+                "Suggested {}: {}",
+                evidence_type_label(self.evidence_type),
+                self.symbol
+            ),
+            evidence_type: self.evidence_type,
+            mechanism: suggested_mechanism(self.evidence_type).to_string(),
+            confidence: self.confidence,
+            matcher: RuleSuggestionMatch {
+                exact: vec![self.symbol],
+                contains: Vec::new(),
+            },
+            rationale: self.rationale.into_iter().collect(),
+            examples: self.examples,
+        }
+    }
+}
+
+fn collect_rule_candidates(
+    parsed: &ParsedFile,
+    route_handlers: &BTreeSet<&str>,
+    rules: &EvidenceRules,
+    candidates: &mut BTreeMap<String, RuleCandidate>,
+) {
+    let Some(root) = parsed.root_node() else {
+        return;
+    };
+
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        match node.kind() {
+            "function_definition" | "function_declaration" => {
+                if let Some(name) = function_name(parsed, node) {
+                    add_rule_candidate(
+                        candidates,
+                        parsed,
+                        &name,
+                        node,
+                        "function declaration",
+                        route_handlers,
+                        rules,
+                    );
+                }
+            }
+            "variable_declarator" => {
+                if let Some(name) = variable_function_name(parsed, node) {
+                    add_rule_candidate(
+                        candidates,
+                        parsed,
+                        &name,
+                        node,
+                        "function binding",
+                        route_handlers,
+                        rules,
+                    );
+                }
+            }
+            "decorator" => {
+                collect_decorator_candidate(parsed, node, route_handlers, rules, candidates)
+            }
+            "call" | "call_expression" => {
+                collect_call_candidate(parsed, node, route_handlers, rules, candidates)
+            }
+            _ => {}
+        }
+
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+}
+
+fn collect_decorator_candidate(
+    parsed: &ParsedFile,
+    decorator: Node<'_>,
+    route_handlers: &BTreeSet<&str>,
+    rules: &EvidenceRules,
+    candidates: &mut BTreeMap<String, RuleCandidate>,
+) {
+    let Some(text) = parsed.text_for(decorator) else {
+        return;
+    };
+    let stripped = text.trim_start_matches('@').trim();
+    let symbol = stripped.split('(').next().unwrap_or(stripped);
+    add_rule_candidate(
+        candidates,
+        parsed,
+        &terminal_symbol_name(symbol),
+        decorator,
+        "decorator",
+        route_handlers,
+        rules,
+    );
+}
+
+fn collect_call_candidate(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    route_handlers: &BTreeSet<&str>,
+    rules: &EvidenceRules,
+    candidates: &mut BTreeMap<String, RuleCandidate>,
+) {
+    let Some(function) = call.child_by_field_name("function") else {
+        return;
+    };
+    let function_text = parsed.text_for(function).unwrap_or_default();
+    if is_framework_route_call(function_text) {
+        collect_route_argument_candidates(parsed, call, route_handlers, rules, candidates);
+        return;
+    }
+
+    if is_fastapi_depends(function_text) {
+        if let Some(symbol) = first_symbol_argument(parsed, call) {
+            add_rule_candidate(
+                candidates,
+                parsed,
+                &symbol.name,
+                call,
+                "FastAPI dependency",
+                route_handlers,
+                rules,
+            );
+        }
+        return;
+    }
+
+    add_rule_candidate(
+        candidates,
+        parsed,
+        &terminal_symbol_name(function_text),
+        function,
+        "call expression",
+        route_handlers,
+        rules,
+    );
+}
+
+fn collect_route_argument_candidates(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    route_handlers: &BTreeSet<&str>,
+    rules: &EvidenceRules,
+    candidates: &mut BTreeMap<String, RuleCandidate>,
+) {
+    let args = call_argument_nodes(call);
+    if args.len() < 3 {
+        return;
+    }
+
+    for arg in &args[1..args.len() - 1] {
+        collect_symbol_argument(
+            parsed,
+            *arg,
+            "Express middleware",
+            route_handlers,
+            rules,
+            candidates,
+        );
+    }
+}
+
+fn collect_symbol_argument(
+    parsed: &ParsedFile,
+    node: Node<'_>,
+    context: &str,
+    route_handlers: &BTreeSet<&str>,
+    rules: &EvidenceRules,
+    candidates: &mut BTreeMap<String, RuleCandidate>,
+) {
+    if node.kind() == "array" {
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor).filter(|child| child.is_named()) {
+            collect_symbol_argument(parsed, child, context, route_handlers, rules, candidates);
+        }
+        return;
+    }
+
+    let name = match node.kind() {
+        "identifier" | "member_expression" | "attribute" => parsed.text_for(node),
+        "call" | "call_expression" => node
+            .child_by_field_name("function")
+            .and_then(|function| parsed.text_for(function)),
+        _ => None,
+    };
+    if let Some(name) = name {
+        add_rule_candidate(
+            candidates,
+            parsed,
+            &terminal_symbol_name(name),
+            node,
+            context,
+            route_handlers,
+            rules,
+        );
+    }
+}
+
+fn add_rule_candidate(
+    candidates: &mut BTreeMap<String, RuleCandidate>,
+    parsed: &ParsedFile,
+    symbol: &str,
+    node: Node<'_>,
+    context: &str,
+    route_handlers: &BTreeSet<&str>,
+    rules: &EvidenceRules,
+) {
+    let symbol = symbol.trim();
+    if should_skip_rule_candidate(symbol, route_handlers, rules) {
+        return;
+    }
+    let Some((evidence_type, confidence, rationale)) = classify_rule_candidate(symbol, context)
+    else {
+        return;
+    };
+    let span = parsed.span_for(node);
+    let entry = candidates
+        .entry(symbol.to_string())
+        .or_insert_with(|| RuleCandidate {
+            symbol: symbol.to_string(),
+            evidence_type,
+            confidence,
+            rationale: BTreeSet::new(),
+            examples: Vec::new(),
+        });
+    if evidence_type < entry.evidence_type {
+        entry.evidence_type = evidence_type;
+    }
+    if confidence > entry.confidence {
+        entry.confidence = confidence;
+    }
+    entry.rationale.insert(rationale);
+    entry.examples.push(RuleSuggestionExample {
+        symbol: symbol.to_string(),
+        file: span.file,
+        line: span.line,
+        column: span.column,
+        context: context.to_string(),
+    });
+}
+
+fn should_skip_rule_candidate(
+    symbol: &str,
+    route_handlers: &BTreeSet<&str>,
+    rules: &EvidenceRules,
+) -> bool {
+    let lower = symbol.to_ascii_lowercase();
+    if symbol.is_empty()
+        || symbol.starts_with('<')
+        || route_handlers.contains(symbol)
+        || rules.match_symbol(symbol).is_some()
+    {
+        return true;
+    }
+    matches!(
+        lower.as_str(),
+        "app"
+            | "router"
+            | "route"
+            | "get"
+            | "post"
+            | "put"
+            | "patch"
+            | "delete"
+            | "use"
+            | "next"
+            | "req"
+            | "res"
+            | "request"
+            | "response"
+            | "json"
+            | "send"
+            | "sendstatus"
+            | "status"
+            | "list"
+            | "create"
+            | "read"
+            | "update"
+            | "remove"
+            | "index"
+            | "handler"
+            | "depends"
+    )
+}
+
+fn classify_rule_candidate(
+    symbol: &str,
+    context: &str,
+) -> Option<(EvidenceType, Confidence, String)> {
+    let lower = symbol.to_ascii_lowercase();
+    let context_lower = context.to_ascii_lowercase();
+    let guard_like = looks_guard_like(&lower)
+        || context_lower.contains("middleware")
+        || context_lower.contains("dependency");
+
+    if contains_any(
+        &lower,
+        &["allowanonymous", "allow_anonymous", "anonymous", "public"],
+    ) {
+        return Some((
+            EvidenceType::ExplicitPublic,
+            Confidence::Medium,
+            "name suggests an explicit public or anonymous access marker".to_string(),
+        ));
+    }
+    if contains_any(
+        &lower,
+        &["audit", "securitylog", "logsecurity", "log_security"],
+    ) {
+        return Some((
+            EvidenceType::AuditLog,
+            Confidence::Medium,
+            "name suggests audit or security logging behavior".to_string(),
+        ));
+    }
+    if contains_any(&lower, &["admin", "superuser", "staff"]) {
+        return Some((
+            EvidenceType::AdminCheck,
+            Confidence::Medium,
+            "name suggests an admin or privileged-user guard".to_string(),
+        ));
+    }
+    if contains_any(
+        &lower,
+        &["tenant", "workspace", "organization", "organisation"],
+    ) {
+        return Some((
+            EvidenceType::TenantCheck,
+            Confidence::Medium,
+            "name suggests tenant or organization isolation".to_string(),
+        ));
+    }
+    if contains_any(&lower, &["owner", "ownership", "owning"]) {
+        return Some((
+            EvidenceType::OwnershipCheck,
+            Confidence::Medium,
+            "name suggests owner or resource ownership checks".to_string(),
+        ));
+    }
+    if lower.starts_with("can")
+        || contains_any(
+            &lower,
+            &[
+                "permission",
+                "permissions",
+                "permit",
+                "allowed",
+                "access",
+                "scope",
+                "entitlement",
+                "billing",
+                "paid",
+                "plan",
+            ],
+        )
+    {
+        return Some((
+            EvidenceType::PermissionCheck,
+            Confidence::Medium,
+            "name suggests a permission, entitlement, or access guard".to_string(),
+        ));
+    }
+    if contains_any(&lower, &["role", "group"]) {
+        return Some((
+            EvidenceType::RoleCheck,
+            Confidence::Medium,
+            "name suggests a role or group guard".to_string(),
+        ));
+    }
+    if contains_any(&lower, &["policy", "authorize", "authorise", "enforce"]) {
+        return Some((
+            EvidenceType::UnknownDynamicCheck,
+            Confidence::Low,
+            "name suggests dynamic policy or authorization dispatch".to_string(),
+        ));
+    }
+    if guard_like
+        && contains_any(
+            &lower,
+            &[
+                "auth",
+                "session",
+                "login",
+                "jwt",
+                "token",
+                "authenticated",
+                "user",
+            ],
+        )
+    {
+        return Some((
+            EvidenceType::Authn,
+            Confidence::Medium,
+            "name suggests authentication or session enforcement".to_string(),
+        ));
+    }
+    None
+}
+
+fn looks_guard_like(lower: &str) -> bool {
+    lower.starts_with("require")
+        || lower.starts_with("ensure")
+        || lower.starts_with("check")
+        || lower.starts_with("verify")
+        || lower.starts_with("validate")
+        || lower.starts_with("guard")
+        || lower.starts_with("authorize")
+        || lower.starts_with("authorise")
+        || lower.contains("guard")
+}
+
+fn contains_any(value: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| value.contains(needle))
+}
+
+fn call_argument_nodes(call: Node<'_>) -> Vec<Node<'_>> {
+    let Some(arguments) = call.child_by_field_name("arguments") else {
+        return Vec::new();
+    };
+    let mut cursor = arguments.walk();
+    arguments
+        .children(&mut cursor)
+        .filter(|child| child.is_named())
+        .collect()
+}
+
+fn rule_suggestion_sort_key(
+    suggestion: &RuleSuggestion,
+) -> (EvidenceType, String, String, u32, u32) {
+    let first = suggestion.examples.first();
+    (
+        suggestion.evidence_type,
+        suggestion
+            .matcher
+            .exact
+            .first()
+            .cloned()
+            .unwrap_or_default(),
+        first.map_or_else(String::new, |example| example.file.clone()),
+        first.map_or(0, |example| example.line),
+        first.map_or(0, |example| example.column),
+    )
+}
+
+fn evidence_type_label(evidence_type: EvidenceType) -> &'static str {
+    match evidence_type {
+        EvidenceType::Authn => "authn",
+        EvidenceType::RoleCheck => "role_check",
+        EvidenceType::PermissionCheck => "permission_check",
+        EvidenceType::OwnershipCheck => "ownership_check",
+        EvidenceType::TenantCheck => "tenant_check",
+        EvidenceType::AdminCheck => "admin_check",
+        EvidenceType::ExplicitPublic => "explicit_public",
+        EvidenceType::AuditLog => "audit_log",
+        EvidenceType::UnknownDynamicCheck => "unknown_dynamic_check",
+    }
+}
+
+fn suggested_mechanism(evidence_type: EvidenceType) -> &'static str {
+    match evidence_type {
+        EvidenceType::Authn => "suggested_authn_guard",
+        EvidenceType::RoleCheck => "suggested_role_guard",
+        EvidenceType::PermissionCheck => "suggested_permission_guard",
+        EvidenceType::OwnershipCheck => "suggested_ownership_guard",
+        EvidenceType::TenantCheck => "suggested_tenant_guard",
+        EvidenceType::AdminCheck => "suggested_admin_guard",
+        EvidenceType::ExplicitPublic => "suggested_public_marker",
+        EvidenceType::AuditLog => "suggested_audit_log",
+        EvidenceType::UnknownDynamicCheck => "suggested_dynamic_policy",
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1314,7 +1904,7 @@ mod tests {
     };
     use authmap_testkit::fixture_path;
 
-    use super::{classify_coverage, run_scan};
+    use super::{classify_coverage, run_scan, suggest_rules};
 
     #[test]
     fn classifier_covers_all_coverage_classes() {
@@ -1914,6 +2504,170 @@ authorization:
         assert!(document.coverage.iter().any(|coverage| {
             coverage.class == CoverageClass::PermissionGuarded && coverage.risk == RiskLevel::Low
         }));
+    }
+
+    #[test]
+    fn suggest_rules_finds_fastapi_custom_dependency() {
+        let temp = TestDir::new("suggest-fastapi");
+        write_file(
+            &temp.path().join("app.py"),
+            r#"
+from fastapi import Depends, FastAPI
+
+app = FastAPI()
+
+def ensure_paid_plan():
+    return True
+
+@app.get("/billing")
+def get_billing(user=Depends(ensure_paid_plan)):
+    return {}
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let report = suggest_rules(&plan).expect("suggestions should run");
+
+        let suggestion = report
+            .suggestions
+            .iter()
+            .find(|suggestion| suggestion.matcher.exact == vec!["ensure_paid_plan"])
+            .expect("custom FastAPI dependency should be suggested");
+        assert_eq!(suggestion.evidence_type, EvidenceType::PermissionCheck);
+        assert_eq!(suggestion.confidence, Confidence::Medium);
+        assert!(
+            suggestion
+                .rationale
+                .iter()
+                .any(|item| item.contains("permission"))
+        );
+        assert!(
+            suggestion
+                .examples
+                .iter()
+                .any(|example| example.context == "FastAPI dependency")
+        );
+    }
+
+    #[test]
+    fn suggest_rules_finds_express_custom_middleware() {
+        let temp = TestDir::new("suggest-express");
+        write_file(
+            &temp.path().join("app.js"),
+            r#"
+const express = require("express");
+const app = express();
+
+function ensurePaidPlan(req, res, next) {
+  next();
+}
+
+function updateBilling(req, res) {
+  res.sendStatus(204);
+}
+
+app.patch("/billing/:id", ensurePaidPlan, updateBilling);
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let report = suggest_rules(&plan).expect("suggestions should run");
+
+        let suggestion = report
+            .suggestions
+            .iter()
+            .find(|suggestion| suggestion.matcher.exact == vec!["ensurePaidPlan"])
+            .expect("custom Express middleware should be suggested");
+        assert_eq!(suggestion.evidence_type, EvidenceType::PermissionCheck);
+        assert!(
+            suggestion
+                .examples
+                .iter()
+                .any(|example| example.context == "Express middleware")
+        );
+    }
+
+    #[test]
+    fn suggest_rules_handles_empty_projects_and_filters_false_positives() {
+        let empty = TestDir::new("suggest-empty");
+        let empty_plan = ScanPlan::new(
+            vec![empty.path().to_path_buf()],
+            None,
+            ScanConfig::default(),
+        );
+        let empty_report = suggest_rules(&empty_plan).expect("empty advisory project should run");
+        assert!(empty_report.suggestions.is_empty());
+        assert_eq!(empty_report.source_files_scanned, 0);
+
+        let temp = TestDir::new("suggest-filter");
+        write_file(
+            &temp.path().join("app.js"),
+            r#"
+const express = require("express");
+const app = express();
+
+function listUsers(req, res) {
+  res.json([]);
+}
+
+app.get("/users", listUsers);
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+        let report = suggest_rules(&plan).expect("suggestions should run");
+
+        assert!(
+            report
+                .suggestions
+                .iter()
+                .all(|suggestion| suggestion.matcher.exact != vec!["listUsers"])
+        );
+    }
+
+    #[test]
+    fn suggest_rules_suppresses_existing_config_rules_and_is_stable() {
+        let temp = TestDir::new("suggest-config");
+        write_file(
+            &temp.path().join("app.js"),
+            r#"
+const express = require("express");
+const app = express();
+
+function ensurePaidPlan(req, res, next) {
+  next();
+}
+
+function updateBilling(req, res) {
+  res.sendStatus(204);
+}
+
+app.patch("/billing/:id", ensurePaidPlan, updateBilling);
+"#,
+        );
+        let config: ScanConfig = serde_yaml::from_str(
+            r#"
+authorization:
+  rules:
+    - name: paid plan permission
+      evidence_type: permission_check
+      mechanism: billing_plan_guard
+      match:
+        exact: [ensurePaidPlan]
+"#,
+        )
+        .expect("config should parse");
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, config);
+
+        let first = suggest_rules(&plan).expect("suggestions should run");
+        let second = suggest_rules(&plan).expect("suggestions should run");
+
+        assert_eq!(first, second);
+        assert!(
+            first
+                .suggestions
+                .iter()
+                .all(|suggestion| suggestion.matcher.exact != vec!["ensurePaidPlan"])
+        );
     }
 
     struct TestDir {
