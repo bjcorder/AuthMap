@@ -1698,12 +1698,23 @@ impl Reporter for SarifReporter {
     }
 
     fn render(&self, document: &AuthMapDocument) -> Result<String, ReportError> {
-        let rules = diagnostic_rules(&document.diagnostics);
-        let results = document
-            .diagnostics
-            .iter()
-            .map(diagnostic_result)
-            .collect::<Vec<_>>();
+        let index = ReportIndex::new(document);
+        let mut results = Vec::new();
+        let mut coverage_rule_ids = BTreeSet::new();
+        for route in sorted_routes(document) {
+            let Some(coverage) = index.coverage_by_route.get(route.id.as_str()) else {
+                continue;
+            };
+            let Some(rule_id) = coverage_sarif_rule_id(coverage) else {
+                continue;
+            };
+            coverage_rule_ids.insert(rule_id);
+            results.push(coverage_result(route, coverage, &index, rule_id));
+        }
+        results.extend(document.diagnostics.iter().map(diagnostic_result));
+
+        let mut rules = coverage_rules(&coverage_rule_ids);
+        rules.extend(diagnostic_rules(&document.diagnostics));
         let sarif = json!({
             "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
             "version": "2.1.0",
@@ -1723,6 +1734,284 @@ impl Reporter for SarifReporter {
         });
         serde_json::to_string_pretty(&sarif).map_err(ReportError::Json)
     }
+}
+
+const SARIF_UNAUTHENTICATED_SENSITIVE: &str = "authmap.unauthenticated_sensitive";
+const SARIF_AUTHN_ONLY_SENSITIVE: &str = "authmap.authn_only_sensitive";
+const SARIF_UNKNOWN_DYNAMIC: &str = "authmap.unknown_dynamic";
+const SARIF_MISSING_EXPLICIT_EVIDENCE: &str = "authmap.missing_explicit_evidence";
+
+fn coverage_rules(rule_ids: &BTreeSet<&'static str>) -> Vec<Value> {
+    rule_ids
+        .iter()
+        .map(|rule_id| {
+            let (name, short, full, help) = coverage_rule_text(rule_id);
+            json!({
+                "id": rule_id,
+                "name": name,
+                "shortDescription": {
+                    "text": short
+                },
+                "fullDescription": {
+                    "text": full
+                },
+                "help": {
+                    "text": help,
+                    "markdown": help
+                },
+                "defaultConfiguration": {
+                    "level": "warning"
+                },
+                "properties": {
+                    "category": "authorization_coverage",
+                    "precision": "medium",
+                    "problem.severity": "warning"
+                }
+            })
+        })
+        .collect()
+}
+
+fn coverage_rule_text(rule_id: &str) -> (&'static str, &'static str, &'static str, &'static str) {
+    match rule_id {
+        SARIF_UNAUTHENTICATED_SENSITIVE => (
+            "Unauthenticated sensitive route",
+            "Sensitive route has no detected authorization evidence",
+            "AuthMap found a sensitive route without detected authentication or authorization evidence.",
+            "Review whether this route should have server-side authorization evidence. AuthMap reports this as an advisory coverage observation, not a confirmed vulnerability.",
+        ),
+        SARIF_AUTHN_ONLY_SENSITIVE => (
+            "Authentication-only sensitive route",
+            "Sensitive route appears guarded only by authentication",
+            "AuthMap found a sensitive or mutation-linked route where the strongest detected coverage is authentication-only.",
+            "Review whether this route needs resource-specific authorization such as role, permission, ownership, or tenant checks. AuthMap reports this as an advisory coverage observation.",
+        ),
+        SARIF_UNKNOWN_DYNAMIC => (
+            "Unknown or dynamic authorization coverage",
+            "Authorization evidence is weak, dynamic, or incomplete",
+            "AuthMap found authorization evidence that could not be statically resolved with high confidence.",
+            "Review the dynamic authorization path and confirm the intended guard behavior. AuthMap reports this as an advisory coverage observation.",
+        ),
+        SARIF_MISSING_EXPLICIT_EVIDENCE => (
+            "Missing explicit authorization evidence",
+            "Route needs explicit authorization review",
+            "AuthMap found a high or review-required route where explicit resource-specific authorization evidence is incomplete.",
+            "Review whether the detected evidence is sufficient for the route and any linked data mutations. AuthMap reports this as an advisory coverage observation.",
+        ),
+        _ => (
+            "Authorization coverage review",
+            "Route needs authorization review",
+            "AuthMap found an authorization coverage observation that needs review.",
+            "Review the route coverage details. AuthMap reports this as an advisory coverage observation.",
+        ),
+    }
+}
+
+fn coverage_sarif_rule_id(coverage: &Coverage) -> Option<&'static str> {
+    match coverage.class {
+        CoverageClass::Unauthenticated
+            if matches!(
+                coverage.risk,
+                RiskLevel::Medium | RiskLevel::High | RiskLevel::ReviewRequired
+            ) =>
+        {
+            Some(SARIF_UNAUTHENTICATED_SENSITIVE)
+        }
+        CoverageClass::UnknownOrDynamic => Some(SARIF_UNKNOWN_DYNAMIC),
+        CoverageClass::AuthnOnly if coverage.risk == RiskLevel::ReviewRequired => {
+            Some(SARIF_AUTHN_ONLY_SENSITIVE)
+        }
+        _ if matches!(coverage.risk, RiskLevel::High | RiskLevel::ReviewRequired) => {
+            Some(SARIF_MISSING_EXPLICIT_EVIDENCE)
+        }
+        _ => None,
+    }
+}
+
+fn coverage_result(
+    route: &authmap_core::Route,
+    coverage: &Coverage,
+    index: &ReportIndex<'_>,
+    rule_id: &str,
+) -> Value {
+    let evidence_ids = coverage_evidence_ids(route, coverage, index);
+    let weak_evidence_ids = coverage_weak_evidence_ids(route, coverage, index);
+    let mutation_ids = coverage_mutation_ids(route, coverage, index);
+    let link_ids = coverage_link_ids(route, coverage, index);
+    let sensitivity_reasons = coverage_support_strings(coverage, "sensitivity_reasons");
+
+    let mut result = json!({
+        "ruleId": rule_id,
+        "level": "warning",
+        "message": {
+            "text": format!(
+                "Review authorization coverage for {} {}: coverage is {}, risk is {}.",
+                route.method,
+                route.path,
+                coverage_class_label(coverage.class),
+                risk_label(coverage.risk)
+            )
+        },
+        "partialFingerprints": {
+            "authmapRouteId": route.id
+        },
+        "properties": {
+            "authmap.kind": "coverage",
+            "route_id": route.id,
+            "method": route.method,
+            "path": route.path,
+            "coverage_class": coverage_class_label(coverage.class),
+            "risk": risk_label(coverage.risk),
+            "rationale": coverage.rationale,
+            "reviewer_questions": coverage.reviewer_questions,
+            "uncertainty_reasons": coverage.uncertainty_reasons,
+            "evidence_ids": evidence_ids,
+            "weak_evidence_ids": weak_evidence_ids,
+            "mutation_ids": mutation_ids,
+            "link_ids": link_ids,
+            "sensitivity_reasons": sensitivity_reasons
+        }
+    });
+
+    if let Some(span) = coverage_location(route, coverage, index) {
+        result["locations"] = json!([sarif_location(span)]);
+    }
+
+    result
+}
+
+fn coverage_location<'a>(
+    route: &'a authmap_core::Route,
+    coverage: &Coverage,
+    index: &'a ReportIndex<'a>,
+) -> Option<&'a Span> {
+    if let Some(span) = route
+        .handler
+        .as_ref()
+        .and_then(|handler| handler.span.as_ref())
+    {
+        return Some(span);
+    }
+    if let Some(span) = route.span.as_ref() {
+        return Some(span);
+    }
+    for evidence_id in coverage_evidence_ids(route, coverage, index) {
+        if let Some(span) = index
+            .evidence_by_id
+            .get(evidence_id.as_str())
+            .and_then(|evidence| evidence.span.as_ref())
+        {
+            return Some(span);
+        }
+    }
+    for mutation_id in coverage_mutation_ids(route, coverage, index) {
+        if let Some(span) = index
+            .mutation_by_id
+            .get(mutation_id.as_str())
+            .and_then(|mutation| mutation.span.as_ref())
+        {
+            return Some(span);
+        }
+    }
+    None
+}
+
+fn coverage_evidence_ids(
+    route: &authmap_core::Route,
+    coverage: &Coverage,
+    index: &ReportIndex<'_>,
+) -> Vec<String> {
+    let mut ids = coverage_support_strings(coverage, "evidence_ids");
+    if ids.is_empty() {
+        ids = index
+            .evidence_by_route
+            .get(route.id.as_str())
+            .map(|items| items.iter().map(|item| item.id.clone()).collect())
+            .unwrap_or_default();
+    }
+    sort_and_dedup_strings(&mut ids);
+    ids
+}
+
+fn coverage_weak_evidence_ids(
+    route: &authmap_core::Route,
+    coverage: &Coverage,
+    index: &ReportIndex<'_>,
+) -> Vec<String> {
+    let mut ids = coverage_support_strings(coverage, "weak_evidence_ids");
+    if ids.is_empty() {
+        ids = index
+            .evidence_by_route
+            .get(route.id.as_str())
+            .map(|items| {
+                items
+                    .iter()
+                    .filter(|item| {
+                        item.confidence == Confidence::Low
+                            || item.evidence_type == EvidenceType::UnknownDynamicCheck
+                    })
+                    .map(|item| item.id.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
+    sort_and_dedup_strings(&mut ids);
+    ids
+}
+
+fn coverage_mutation_ids(
+    route: &authmap_core::Route,
+    coverage: &Coverage,
+    index: &ReportIndex<'_>,
+) -> Vec<String> {
+    let mut ids = coverage_support_strings(coverage, "mutation_ids");
+    if ids.is_empty() {
+        ids = index
+            .mutations_by_route
+            .get(route.id.as_str())
+            .map(|items| items.iter().map(|item| item.id.clone()).collect())
+            .unwrap_or_default();
+    }
+    sort_and_dedup_strings(&mut ids);
+    ids
+}
+
+fn coverage_link_ids(
+    route: &authmap_core::Route,
+    coverage: &Coverage,
+    index: &ReportIndex<'_>,
+) -> Vec<String> {
+    let mut ids = coverage_support_strings(coverage, "link_ids");
+    if ids.is_empty() {
+        ids = index
+            .links_by_route
+            .get(route.id.as_str())
+            .map(|items| items.iter().map(|item| item.id.clone()).collect())
+            .unwrap_or_default();
+    }
+    sort_and_dedup_strings(&mut ids);
+    ids
+}
+
+fn coverage_support_strings(coverage: &Coverage, key: &str) -> Vec<String> {
+    coverage
+        .extensions
+        .get("authmap.coverage")
+        .and_then(|value| value.get(key))
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+}
+
+fn sort_and_dedup_strings(items: &mut Vec<String>) {
+    items.sort();
+    items.dedup();
 }
 
 fn diagnostic_rules(diagnostics: &[Diagnostic]) -> Vec<Value> {
@@ -1764,16 +2053,20 @@ fn diagnostic_result(diagnostic: &Diagnostic) -> Value {
         }
     });
     if let Some(span) = &diagnostic.span {
-        result["locations"] = json!([{
-            "physicalLocation": {
-                "artifactLocation": {
-                    "uri": span.file
-                },
-                "region": sarif_region(span)
-            }
-        }]);
+        result["locations"] = json!([sarif_location(span)]);
     }
     result
+}
+
+fn sarif_location(span: &Span) -> Value {
+    json!({
+        "physicalLocation": {
+            "artifactLocation": {
+                "uri": span.file
+            },
+            "region": sarif_region(span)
+        }
+    })
 }
 
 fn sarif_region(span: &Span) -> Value {
@@ -2060,19 +2353,140 @@ mod tests {
         .expect("SARIF should be JSON");
 
         assert_eq!(sarif["version"], "2.1.0");
-        assert_eq!(
-            sarif["runs"][0]["tool"]["driver"]["rules"][0]["id"],
-            "parser.source_parse_recovered"
+        let rules = sarif["runs"][0]["tool"]["driver"]["rules"]
+            .as_array()
+            .expect("SARIF rules should be an array");
+        assert!(
+            rules
+                .iter()
+                .any(|rule| rule["id"] == diagnostic_codes::PARSER_SOURCE_PARSE_RECOVERED)
         );
+        let results = sarif["runs"][0]["results"]
+            .as_array()
+            .expect("SARIF results should be an array");
+        let diagnostic = results
+            .iter()
+            .find(|result| result["ruleId"] == diagnostic_codes::PARSER_SOURCE_PARSE_RECOVERED)
+            .expect("diagnostic result should be present");
         assert_eq!(
-            sarif["runs"][0]["results"][0]["ruleId"],
-            "parser.source_parse_recovered"
-        );
-        assert_eq!(
-            sarif["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"]
-                ["uri"],
+            diagnostic["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
             "src/app.py"
         );
+    }
+
+    #[test]
+    fn sarif_maps_coverage_alerts_to_advisory_rules_and_locations() {
+        let sarif: Value = serde_json::from_str(
+            &SarifReporter
+                .render(&document_with_sarif_coverage_data())
+                .expect("SARIF should render"),
+        )
+        .expect("SARIF should be JSON");
+
+        assert_valid_sarif(&sarif);
+
+        let rules = sarif["runs"][0]["tool"]["driver"]["rules"]
+            .as_array()
+            .expect("SARIF rules should be an array");
+        for rule_id in [
+            SARIF_UNAUTHENTICATED_SENSITIVE,
+            SARIF_AUTHN_ONLY_SENSITIVE,
+            SARIF_UNKNOWN_DYNAMIC,
+            SARIF_MISSING_EXPLICIT_EVIDENCE,
+        ] {
+            let rule = rules
+                .iter()
+                .find(|rule| rule["id"] == rule_id)
+                .unwrap_or_else(|| panic!("missing SARIF rule {rule_id}"));
+            assert_eq!(rule["defaultConfiguration"]["level"], "warning");
+            assert!(
+                rule["help"]["text"]
+                    .as_str()
+                    .expect("help text should be present")
+                    .contains("advisory")
+            );
+        }
+
+        let results = sarif["runs"][0]["results"]
+            .as_array()
+            .expect("SARIF results should be an array");
+        assert_eq!(results.len(), 5);
+        for rule_id in [
+            SARIF_UNAUTHENTICATED_SENSITIVE,
+            SARIF_AUTHN_ONLY_SENSITIVE,
+            SARIF_UNKNOWN_DYNAMIC,
+            SARIF_MISSING_EXPLICIT_EVIDENCE,
+        ] {
+            let result = results
+                .iter()
+                .find(|result| result["ruleId"] == rule_id)
+                .unwrap_or_else(|| panic!("missing SARIF result {rule_id}"));
+            assert_eq!(result["level"], "warning");
+            assert_eq!(result["properties"]["authmap.kind"], "coverage");
+        }
+
+        let authn_only = results
+            .iter()
+            .find(|result| result["ruleId"] == SARIF_AUTHN_ONLY_SENSITIVE)
+            .expect("authn-only result should exist");
+        assert_eq!(authn_only["properties"]["route_id"], "route.authn_only");
+        assert_eq!(authn_only["properties"]["coverage_class"], "authn_only");
+        assert_eq!(authn_only["properties"]["risk"], "review_required");
+        assert_eq!(
+            authn_only["properties"]["evidence_ids"],
+            json!(["evidence.authn"])
+        );
+        assert_eq!(
+            authn_only["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+            "src/authn.py"
+        );
+        assert_eq!(
+            authn_only["locations"][0]["physicalLocation"]["region"]["startLine"],
+            20
+        );
+
+        let unknown_dynamic = results
+            .iter()
+            .find(|result| result["ruleId"] == SARIF_UNKNOWN_DYNAMIC)
+            .expect("unknown dynamic result should exist");
+        assert_eq!(
+            unknown_dynamic["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+            "src/dynamic.py"
+        );
+        assert_eq!(
+            unknown_dynamic["properties"]["weak_evidence_ids"],
+            json!(["evidence.dynamic"])
+        );
+
+        let missing_explicit = results
+            .iter()
+            .find(|result| result["ruleId"] == SARIF_MISSING_EXPLICIT_EVIDENCE)
+            .expect("missing explicit evidence result should exist");
+        assert_eq!(
+            missing_explicit["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+            "src/service.py"
+        );
+        assert_eq!(
+            missing_explicit["properties"]["mutation_ids"],
+            json!(["mutation.account_delete"])
+        );
+
+        assert!(
+            results
+                .iter()
+                .any(|result| result["ruleId"] == diagnostic_codes::PARSER_SOURCE_PARSE_RECOVERED)
+        );
+    }
+
+    fn assert_valid_sarif(sarif: &Value) {
+        let schema: Value = serde_json::from_str(include_str!(
+            "../../../tests/schemas/sarif-2.1.0.schema.json"
+        ))
+        .expect("SARIF schema should parse");
+        let validator = jsonschema::validator_for(&schema).expect("SARIF schema should compile");
+        if let Err(error) = validator.validate(sarif) {
+            panic!("SARIF should validate against the vendored SARIF schema: {error}");
+        }
     }
 
     #[test]
@@ -2202,6 +2616,205 @@ mod tests {
                 byte_range: None,
             }),
             message: "source parsed with syntax errors; partial tree is available".to_string(),
+        }
+    }
+
+    fn document_with_sarif_coverage_data() -> AuthMapDocument {
+        let mut document = AuthMapDocument::empty(ScanMetadata {
+            target_roots: vec!["src".to_string()],
+            ..ScanMetadata::default()
+        });
+        document.routes = vec![
+            route(
+                "route.unauthenticated",
+                "DELETE",
+                "/accounts/:id",
+                Some(symbol("delete_account", "src/unauthenticated.py", 10, 5)),
+                Some(span("src/unauthenticated.py", 9, 1)),
+            ),
+            route(
+                "route.authn_only",
+                "POST",
+                "/accounts",
+                Some(symbol("create_account", "src/authn.py", 20, 5)),
+                Some(span("src/authn.py", 19, 1)),
+            ),
+            route("route.dynamic", "PATCH", "/accounts/:id", None, None),
+            route(
+                "route.missing_explicit",
+                "POST",
+                "/admin/accounts/:id/delete",
+                None,
+                None,
+            ),
+        ];
+        document.evidence = vec![
+            evidence(
+                "evidence.authn",
+                "route.authn_only",
+                EvidenceType::Authn,
+                Confidence::High,
+                Some(span("src/authn.py", 18, 9)),
+            ),
+            evidence(
+                "evidence.dynamic",
+                "route.dynamic",
+                EvidenceType::UnknownDynamicCheck,
+                Confidence::Low,
+                Some(span("src/dynamic.py", 30, 12)),
+            ),
+            evidence(
+                "evidence.admin",
+                "route.missing_explicit",
+                EvidenceType::AdminCheck,
+                Confidence::High,
+                None,
+            ),
+        ];
+        document.mutations = vec![Mutation {
+            id: "mutation.account_delete".to_string(),
+            operation: MutationOperation::Delete,
+            library: Some("sqlalchemy".to_string()),
+            resource: Some("accounts".to_string()),
+            span: Some(span("src/service.py", 44, 7)),
+            confidence: Confidence::High,
+            notes: Vec::new(),
+            extensions: ExtensionMap::new(),
+        }];
+        document.links = vec![ReachabilityLink {
+            id: "link.account_delete".to_string(),
+            route_id: "route.missing_explicit".to_string(),
+            mutation_id: Some("mutation.account_delete".to_string()),
+            evidence_id: Some("evidence.admin".to_string()),
+            confidence: Confidence::Medium,
+            notes: Vec::new(),
+            extensions: ExtensionMap::new(),
+        }];
+        document.coverage = vec![
+            coverage(
+                "route.unauthenticated",
+                CoverageClass::Unauthenticated,
+                RiskLevel::High,
+                json!({
+                    "evidence_ids": [],
+                    "weak_evidence_ids": [],
+                    "mutation_ids": [],
+                    "link_ids": [],
+                    "sensitivity_reasons": ["unsafe_method"]
+                }),
+            ),
+            coverage(
+                "route.authn_only",
+                CoverageClass::AuthnOnly,
+                RiskLevel::ReviewRequired,
+                json!({
+                    "evidence_ids": ["evidence.authn"],
+                    "weak_evidence_ids": [],
+                    "mutation_ids": [],
+                    "link_ids": [],
+                    "sensitivity_reasons": ["account_path", "unsafe_method"]
+                }),
+            ),
+            coverage(
+                "route.dynamic",
+                CoverageClass::UnknownOrDynamic,
+                RiskLevel::ReviewRequired,
+                json!({
+                    "evidence_ids": ["evidence.dynamic"],
+                    "weak_evidence_ids": ["evidence.dynamic"],
+                    "mutation_ids": [],
+                    "link_ids": [],
+                    "sensitivity_reasons": ["account_path", "path_param", "unsafe_method"]
+                }),
+            ),
+            coverage(
+                "route.missing_explicit",
+                CoverageClass::AdminGuarded,
+                RiskLevel::ReviewRequired,
+                json!({
+                    "evidence_ids": ["evidence.admin"],
+                    "weak_evidence_ids": [],
+                    "mutation_ids": ["mutation.account_delete"],
+                    "link_ids": ["link.account_delete"],
+                    "sensitivity_reasons": ["admin_path", "linked_mutation", "unsafe_method"]
+                }),
+            ),
+        ];
+        document.diagnostics.push(diagnostic());
+        document
+    }
+
+    fn span(file: &str, line: u32, column: u32) -> Span {
+        Span {
+            file: file.to_string(),
+            line,
+            column,
+            byte_range: None,
+        }
+    }
+
+    fn symbol(name: &str, file: &str, line: u32, column: u32) -> SymbolRef {
+        SymbolRef {
+            name: name.to_string(),
+            span: Some(span(file, line, column)),
+        }
+    }
+
+    fn route(
+        id: &str,
+        method: &str,
+        path: &str,
+        handler: Option<SymbolRef>,
+        span: Option<Span>,
+    ) -> Route {
+        Route {
+            id: id.to_string(),
+            framework: Framework::FastApi,
+            method: method.to_string(),
+            path: path.to_string(),
+            name: None,
+            tags: Vec::new(),
+            middleware: Vec::new(),
+            handler,
+            span,
+            source_evidence: Vec::new(),
+            confidence: Confidence::High,
+            notes: Vec::new(),
+            extensions: ExtensionMap::new(),
+        }
+    }
+
+    fn evidence(
+        id: &str,
+        route_id: &str,
+        evidence_type: EvidenceType,
+        confidence: Confidence,
+        span: Option<Span>,
+    ) -> Evidence {
+        Evidence {
+            id: id.to_string(),
+            route_id: Some(route_id.to_string()),
+            evidence_type,
+            mechanism: evidence_type_label(evidence_type).to_string(),
+            symbol: None,
+            span,
+            confidence,
+            notes: Vec::new(),
+            extensions: ExtensionMap::new(),
+        }
+    }
+
+    fn coverage(route_id: &str, class: CoverageClass, risk: RiskLevel, support: Value) -> Coverage {
+        let mut extensions = ExtensionMap::new();
+        extensions.insert("authmap.coverage".to_string(), support);
+        Coverage {
+            route_id: route_id.to_string(),
+            class,
+            risk,
+            rationale: vec!["synthetic SARIF coverage rationale".to_string()],
+            reviewer_questions: vec!["Should this route have explicit authorization?".to_string()],
+            uncertainty_reasons: Vec::new(),
+            extensions,
         }
     }
 

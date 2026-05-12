@@ -189,6 +189,7 @@ dependencies = [
  "authmap-analysis",
  "authmap-config",
  "authmap-core",
+ "jsonschema",
  "serde",
  "serde_json",
  "thiserror",

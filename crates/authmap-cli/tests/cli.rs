@@ -107,6 +107,20 @@ fn assert_valid_authmap_document(document: &Value) {
     }
 }
 
+fn assert_valid_sarif(document: &Value) {
+    let schema_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("tests/schemas/sarif-2.1.0.schema.json");
+    let schema_text = fs::read_to_string(&schema_path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", schema_path.display()));
+    let schema: Value = serde_json::from_str(&schema_text)
+        .unwrap_or_else(|error| panic!("schema should parse: {error}"));
+    let validator = jsonschema::validator_for(&schema).expect("schema should compile");
+    if let Err(error) = validator.validate(document) {
+        panic!("CLI SARIF output should validate against SARIF schema: {error}");
+    }
+}
+
 fn explain_document_json() -> &'static str {
     r#"
 {
@@ -765,6 +779,51 @@ fn scan_writes_sarif_for_diagnostics() {
             .iter()
             .any(|result| result["ruleId"] == "parser.source_parse_recovered")
     );
+}
+
+#[test]
+fn scan_writes_sarif_for_coverage_alerts() {
+    let temp = TestDir::new("sarif-coverage-output");
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output_path = temp.path().join("authmap.sarif");
+
+    let output = authmap_in_dir(
+        &[
+            "scan",
+            "tests/fixtures/realistic/fastapi",
+            "--format",
+            "sarif",
+            "--output",
+            output_path.to_str().expect("path should be UTF-8"),
+        ],
+        &repo_root,
+    );
+
+    assert_exit(&output, 0);
+    let document: Value =
+        serde_json::from_str(&fs::read_to_string(output_path).expect("output should exist"))
+            .expect("output should be valid SARIF JSON");
+    assert_valid_sarif(&document);
+    let results = document["runs"][0]["results"]
+        .as_array()
+        .expect("SARIF results should be an array");
+    assert!(results.iter().any(|result| {
+        result["ruleId"] == "authmap.authn_only_sensitive" && result["level"] == "warning"
+    }));
+    assert!(results.iter().any(|result| {
+        result["ruleId"] == "authmap.missing_explicit_evidence" && result["level"] == "warning"
+    }));
+    let authn_only = results
+        .iter()
+        .find(|result| result["ruleId"] == "authmap.authn_only_sensitive")
+        .expect("authn-only result should exist");
+    assert_eq!(authn_only["properties"]["authmap.kind"], "coverage");
+    assert_eq!(authn_only["properties"]["coverage_class"], "authn_only");
+    assert_eq!(authn_only["properties"]["risk"], "review_required");
+    let uri = authn_only["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+        .as_str()
+        .expect("coverage result should have a source URI");
+    assert!(uri.ends_with("accounts.py"));
 }
 
 #[test]

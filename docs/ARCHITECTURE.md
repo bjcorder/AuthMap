@@ -72,6 +72,11 @@ Reporters should support:
 - SARIF
 - GitHub Actions summary
 
+SARIF is the GitHub code scanning integration format. AuthMap SARIF should
+surface advisory authorization coverage alerts and diagnostics, with route
+risk, evidence IDs, linked mutations, uncertainty, and reviewer questions in
+result properties.
+
 ## Trust boundary
 
 AuthMap should be honest about confidence. Dynamic language behavior, reflection, metaprogramming, and custom frameworks may produce incomplete maps. Reports should expose uncertainty.

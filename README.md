@@ -155,6 +155,12 @@ cargo test --workspace
 cargo install --path crates/authmap-cli
 ```
 
+SARIF output is intended for GitHub code scanning. It emits advisory
+authorization coverage alerts for routes that need review, plus scan
+diagnostics. Coverage alerts are warnings by default; AuthMap risk and
+classification details are included as SARIF result properties rather than
+asserted as confirmed vulnerabilities.
+
 `authmap scan` supports `--mode advisory|enforce`. In v0.1.0, enforce mode
 writes the requested report and exits `20` when the completed document contains
 any `error` or `fatal` diagnostic. Warnings remain non-blocking; incomplete
