@@ -1,0 +1,1071 @@
+{
+  "schema_version": "0.1.0",
+  "metadata": {
+    "tool_name": "authmap",
+    "tool_version": "0.1.0",
+    "mode": "advisory",
+    "target_roots": [
+      "tests/fixtures/realistic/fastapi"
+    ],
+    "config_path": null
+  },
+  "source_files": [
+    {
+      "path": "tests/fixtures/realistic/fastapi/app/models.py",
+      "language": "python",
+      "size_bytes": 169,
+      "sha256": null,
+      "project_hints": [
+        "fast_api",
+        "sql_alchemy"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+      "language": "python",
+      "size_bytes": 1352,
+      "sha256": null,
+      "project_hints": [
+        "fast_api",
+        "sql_alchemy"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/realistic/fastapi/app/services/accounts.py",
+      "language": "python",
+      "size_bytes": 517,
+      "sha256": null,
+      "project_hints": [
+        "fast_api",
+        "sql_alchemy"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/realistic/fastapi/main.py",
+      "language": "python",
+      "size_bytes": 1028,
+      "sha256": null,
+      "project_hints": [
+        "fast_api",
+        "sql_alchemy"
+      ],
+      "skipped": null
+    }
+  ],
+  "routes": [
+    {
+      "id": "route_0001",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "/api/accounts/{account_id}",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "read_account",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 12,
+          "column": 5,
+          "byte_range": {
+            "start": 347,
+            "end": 359
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 11,
+        "column": 2,
+        "byte_range": {
+          "start": 315,
+          "end": 342
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0002",
+      "framework": "fast_api",
+      "method": "POST",
+      "path": "/api/accounts",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "create_account_route",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 17,
+          "column": 5,
+          "byte_range": {
+            "start": 479,
+            "end": 499
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 16,
+        "column": 2,
+        "byte_range": {
+          "start": 459,
+          "end": 474
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0003",
+      "framework": "fast_api",
+      "method": "PATCH",
+      "path": "/api/accounts/{account_id}",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "update_account_route",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 25,
+          "column": 5,
+          "byte_range": {
+            "start": 717,
+            "end": 737
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 24,
+        "column": 2,
+        "byte_range": {
+          "start": 683,
+          "end": 712
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0004",
+      "framework": "fast_api",
+      "method": "DELETE",
+      "path": "/api/accounts/{account_id}",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "delete_account_route",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 32,
+          "column": 5,
+          "byte_range": {
+            "start": 984,
+            "end": 1004
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 31,
+        "column": 2,
+        "byte_range": {
+          "start": 949,
+          "end": 979
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0005",
+      "framework": "fast_api",
+      "method": "POST",
+      "path": "/api/accounts/service",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "service_create_account",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 37,
+          "column": 5,
+          "byte_range": {
+            "start": 1121,
+            "end": 1143
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 36,
+        "column": 2,
+        "byte_range": {
+          "start": 1093,
+          "end": 1116
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0006",
+      "framework": "fast_api",
+      "method": "POST",
+      "path": "/api/accounts/dynamic-service",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "dynamic_service_create",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 42,
+          "column": 5,
+          "byte_range": {
+            "start": 1250,
+            "end": 1272
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 41,
+        "column": 2,
+        "byte_range": {
+          "start": 1214,
+          "end": 1245
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0007",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "/health",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "health",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/main.py",
+          "line": 29,
+          "column": 5,
+          "byte_range": {
+            "start": 682,
+            "end": 688
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/main.py",
+        "line": 28,
+        "column": 2,
+        "byte_range": {
+          "start": 659,
+          "end": 677
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0008",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "/admin/audit",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "audit_log",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/main.py",
+          "line": 34,
+          "column": 5,
+          "byte_range": {
+            "start": 747,
+            "end": 756
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/main.py",
+        "line": 33,
+        "column": 2,
+        "byte_range": {
+          "start": 719,
+          "end": 742
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0009",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "/reports",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "dynamic_reports",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/main.py",
+          "line": 39,
+          "column": 5,
+          "byte_range": {
+            "start": 858,
+            "end": 873
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/main.py",
+        "line": 38,
+        "column": 2,
+        "byte_range": {
+          "start": 823,
+          "end": 853
+        }
+      },
+      "source_evidence": [],
+      "confidence": "medium",
+      "notes": [
+        "router prefix is dynamic and was not included in the route path",
+        "include_router prefix is dynamic and was not included in the route path"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "evidence_0001",
+      "route_id": "route_0001",
+      "evidence_type": "authn",
+      "mechanism": "authn_guard",
+      "symbol": {
+        "name": "require_user",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 12,
+          "column": 48,
+          "byte_range": {
+            "start": 390,
+            "end": 402
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 12,
+        "column": 40,
+        "byte_range": {
+          "start": 382,
+          "end": 403
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0002",
+      "route_id": "route_0002",
+      "evidence_type": "authn",
+      "mechanism": "authn_guard",
+      "symbol": {
+        "name": "require_user",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 17,
+          "column": 57,
+          "byte_range": {
+            "start": 531,
+            "end": 543
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 17,
+        "column": 49,
+        "byte_range": {
+          "start": 523,
+          "end": 544
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0003",
+      "route_id": "route_0003",
+      "evidence_type": "permission_check",
+      "mechanism": "permission_guard",
+      "symbol": {
+        "name": "can_edit_account",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 25,
+          "column": 56,
+          "byte_range": {
+            "start": 768,
+            "end": 784
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 25,
+        "column": 48,
+        "byte_range": {
+          "start": 760,
+          "end": 785
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0004",
+      "route_id": "route_0003",
+      "evidence_type": "unknown_dynamic_check",
+      "mechanism": "handler_call",
+      "symbol": {
+        "name": "dynamic_policy_check",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 26,
+          "column": 12,
+          "byte_range": {
+            "start": 799,
+            "end": 819
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 26,
+        "column": 12,
+        "byte_range": {
+          "start": 799,
+          "end": 838
+        }
+      },
+      "confidence": "low",
+      "notes": [
+        "Dynamic or indirect policy call requires review"
+      ]
+    },
+    {
+      "id": "evidence_0005",
+      "route_id": "route_0004",
+      "evidence_type": "admin_check",
+      "mechanism": "admin_guard",
+      "symbol": {
+        "name": "require_admin",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 32,
+          "column": 56,
+          "byte_range": {
+            "start": 1035,
+            "end": 1048
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 32,
+        "column": 48,
+        "byte_range": {
+          "start": 1027,
+          "end": 1049
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0006",
+      "route_id": "route_0005",
+      "evidence_type": "authn",
+      "mechanism": "authn_guard",
+      "symbol": {
+        "name": "require_user",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 37,
+          "column": 41,
+          "byte_range": {
+            "start": 1157,
+            "end": 1169
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 37,
+        "column": 33,
+        "byte_range": {
+          "start": 1149,
+          "end": 1170
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0007",
+      "route_id": "route_0006",
+      "evidence_type": "authn",
+      "mechanism": "authn_guard",
+      "symbol": {
+        "name": "require_user",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 42,
+          "column": 41,
+          "byte_range": {
+            "start": 1286,
+            "end": 1298
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 42,
+        "column": 33,
+        "byte_range": {
+          "start": 1278,
+          "end": 1299
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0008",
+      "route_id": "route_0008",
+      "evidence_type": "admin_check",
+      "mechanism": "admin_guard",
+      "symbol": {
+        "name": "require_admin",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/main.py",
+          "line": 34,
+          "column": 28,
+          "byte_range": {
+            "start": 770,
+            "end": 783
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/main.py",
+        "line": 34,
+        "column": 20,
+        "byte_range": {
+          "start": 762,
+          "end": 784
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0009",
+      "route_id": "route_0009",
+      "evidence_type": "authn",
+      "mechanism": "authn_guard",
+      "symbol": {
+        "name": "require_user",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/main.py",
+          "line": 39,
+          "column": 34,
+          "byte_range": {
+            "start": 887,
+            "end": 899
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/main.py",
+        "line": 39,
+        "column": 26,
+        "byte_range": {
+          "start": 879,
+          "end": 900
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    }
+  ],
+  "mutations": [
+    {
+      "id": "mutation_0001",
+      "operation": "create",
+      "library": "sqlalchemy",
+      "resource": "Account",
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 19,
+        "column": 5,
+        "byte_range": {
+          "start": 609,
+          "end": 629
+        }
+      },
+      "confidence": "medium",
+      "notes": []
+    },
+    {
+      "id": "mutation_0002",
+      "operation": "create",
+      "library": "sqlalchemy",
+      "resource": "Account",
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/services/accounts.py",
+        "line": 12,
+        "column": 5,
+        "byte_range": {
+          "start": 225,
+          "end": 245
+        }
+      },
+      "confidence": "medium",
+      "notes": []
+    },
+    {
+      "id": "mutation_0003",
+      "operation": "update",
+      "library": "sqlalchemy",
+      "resource": "Account",
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/services/accounts.py",
+        "line": 18,
+        "column": 5,
+        "byte_range": {
+          "start": 335,
+          "end": 367
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "mutation_0004",
+      "operation": "delete",
+      "library": "sqlalchemy",
+      "resource": "Account",
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/services/accounts.py",
+        "line": 23,
+        "column": 5,
+        "byte_range": {
+          "start": 449,
+          "end": 481
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    }
+  ],
+  "links": [
+    {
+      "id": "link_0001",
+      "route_id": "route_0002",
+      "mutation_id": "mutation_0001",
+      "evidence_id": null,
+      "confidence": "high",
+      "notes": [
+        "Mutation is directly inside route handler"
+      ]
+    },
+    {
+      "id": "link_0002",
+      "route_id": "route_0003",
+      "mutation_id": "mutation_0003",
+      "evidence_id": null,
+      "confidence": "medium",
+      "notes": [
+        "One-hop imported service call `update_account` reaches `update_account`"
+      ]
+    },
+    {
+      "id": "link_0003",
+      "route_id": "route_0004",
+      "mutation_id": "mutation_0004",
+      "evidence_id": null,
+      "confidence": "medium",
+      "notes": [
+        "One-hop imported service call `delete_account` reaches `delete_account`"
+      ]
+    },
+    {
+      "id": "link_0004",
+      "route_id": "route_0005",
+      "mutation_id": "mutation_0002",
+      "evidence_id": null,
+      "confidence": "medium",
+      "notes": [
+        "One-hop imported service call `create_account` reaches `create_account`"
+      ]
+    },
+    {
+      "id": "link_0005",
+      "route_id": "route_0006",
+      "mutation_id": null,
+      "evidence_id": null,
+      "confidence": "low",
+      "notes": [
+        "Service-like call `account_services[\"create\"]` could not be resolved statically"
+      ],
+      "extensions": {
+        "authmap.reachability": {
+          "call_span": {
+            "byte_range": {
+              "end": 1351,
+              "start": 1313
+            },
+            "column": 12,
+            "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+            "line": 43
+          },
+          "call_target": "account_services[\"create\"]",
+          "reason": "unresolved_service_call"
+        }
+      }
+    }
+  ],
+  "coverage": [
+    {
+      "route_id": "route_0001",
+      "class": "authn_only",
+      "risk": "review_required",
+      "rationale": [
+        "1 strong authorization evidence item(s) support authn_only coverage.",
+        "Sensitive route modifier(s): account_path, path_param."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0001"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "path_param"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0002",
+      "class": "authn_only",
+      "risk": "review_required",
+      "rationale": [
+        "1 strong authorization evidence item(s) support authn_only coverage.",
+        "Sensitive route modifier(s): account_path, linked_mutation, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0002"
+          ],
+          "link_ids": [
+            "link_0001"
+          ],
+          "mutation_ids": [
+            "mutation_0001"
+          ],
+          "sensitivity_reasons": [
+            "account_path",
+            "linked_mutation",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0003",
+      "class": "permission_guarded",
+      "risk": "review_required",
+      "rationale": [
+        "1 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [
+        "Dynamic authorization evidence requires review.",
+        "Low-confidence authorization evidence was detected."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0003",
+            "evidence_0004"
+          ],
+          "link_ids": [
+            "link_0002"
+          ],
+          "mutation_ids": [
+            "mutation_0003"
+          ],
+          "sensitivity_reasons": [
+            "account_path",
+            "linked_mutation",
+            "path_param",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": [
+            "evidence_0004"
+          ]
+        }
+      }
+    },
+    {
+      "route_id": "route_0004",
+      "class": "admin_guarded",
+      "risk": "review_required",
+      "rationale": [
+        "1 strong authorization evidence item(s) support admin_guarded coverage.",
+        "Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0005"
+          ],
+          "link_ids": [
+            "link_0003"
+          ],
+          "mutation_ids": [
+            "mutation_0004"
+          ],
+          "sensitivity_reasons": [
+            "account_path",
+            "linked_mutation",
+            "path_param",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0005",
+      "class": "authn_only",
+      "risk": "review_required",
+      "rationale": [
+        "1 strong authorization evidence item(s) support authn_only coverage.",
+        "Sensitive route modifier(s): account_path, linked_mutation, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0006"
+          ],
+          "link_ids": [
+            "link_0004"
+          ],
+          "mutation_ids": [
+            "mutation_0002"
+          ],
+          "sensitivity_reasons": [
+            "account_path",
+            "linked_mutation",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0006",
+      "class": "authn_only",
+      "risk": "review_required",
+      "rationale": [
+        "1 strong authorization evidence item(s) support authn_only coverage.",
+        "Sensitive route modifier(s): account_path, unsafe_method."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0007"
+          ],
+          "link_ids": [
+            "link_0005"
+          ],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0007",
+      "class": "unauthenticated",
+      "risk": "low",
+      "rationale": [
+        "No authorization evidence was detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0008",
+      "class": "admin_guarded",
+      "risk": "low",
+      "rationale": [
+        "1 strong authorization evidence item(s) support admin_guarded coverage.",
+        "Sensitive route modifier(s): admin_path."
+      ],
+      "reviewer_questions": [
+        "Should this route require an admin or role guard?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0008"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "admin_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0009",
+      "class": "authn_only",
+      "risk": "low",
+      "rationale": [
+        "1 strong authorization evidence item(s) support authn_only coverage."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0009"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "category": "adapter",
+      "code": "fastapi_dynamic_include_router_prefix",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/main.py",
+        "line": 44,
+        "column": 1,
+        "byte_range": {
+          "start": 970,
+          "end": 1027
+        }
+      },
+      "message": "FastAPI include_router prefix is dynamic and could not be resolved"
+    },
+    {
+      "category": "adapter",
+      "code": "fastapi_dynamic_router_prefix",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/main.py",
+        "line": 7,
+        "column": 18,
+        "byte_range": {
+          "start": 170,
+          "end": 202
+        }
+      },
+      "message": "FastAPI router prefix is dynamic and could not be resolved"
+    }
+  ]
+}

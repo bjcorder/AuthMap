@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::time::Instant;
 
 use authmap_adapters::{AdapterContext, AdapterRegistry};
 use authmap_config::{
@@ -8,8 +9,8 @@ use authmap_config::{
 };
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticCategory,
-    DiagnosticSeverity, Evidence, EvidenceType, Framework, Mutation, ReachabilityLink,
-    Recoverability, RiskLevel, ScanMetadata, Span, SymbolRef,
+    DiagnosticSeverity, Evidence, EvidenceType, Framework, Mutation, MutationOperation,
+    ReachabilityLink, Recoverability, RiskLevel, ScanMetadata, Span, SymbolRef,
 };
 use authmap_discovery::discover_sources;
 use authmap_parsers::{ParseError, ParsedFile, TreeSitterBackend, parse_files_in_parallel};
@@ -25,6 +26,10 @@ pub trait MutationExtractor: Send + Sync {
     fn extract_mutations(&self, input: &AnalysisInput<'_>) -> AnalysisFacts;
 }
 
+pub trait ReachabilityLinker: Send + Sync {
+    fn link_reachability(&self, input: &AnalysisInput<'_>) -> AnalysisFacts;
+}
+
 #[derive(Clone, Debug)]
 pub struct AnalysisInput<'a> {
     pub routes: &'a [authmap_core::Route],
@@ -38,6 +43,7 @@ pub struct AnalysisInput<'a> {
 pub struct AnalysisFacts {
     pub evidence: Vec<Evidence>,
     pub mutations: Vec<Mutation>,
+    pub links: Vec<ReachabilityLink>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -115,21 +121,199 @@ impl EvidenceExtractor for BuiltInEvidenceExtractor {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct BuiltInMutationExtractor;
+
+impl MutationExtractor for BuiltInMutationExtractor {
+    fn extract_mutations(&self, input: &AnalysisInput<'_>) -> AnalysisFacts {
+        let mut mutations = input.mutations.to_vec();
+        for parsed in input.parsed_files {
+            let Some(root) = parsed.root_node() else {
+                continue;
+            };
+            match parsed.language {
+                authmap_core::Language::JavaScript
+                | authmap_core::Language::JavaScriptReact
+                | authmap_core::Language::TypeScript
+                | authmap_core::Language::TypeScriptReact => {
+                    mutations.extend(extract_prisma_mutations(parsed, root));
+                }
+                authmap_core::Language::Python => {
+                    mutations.extend(extract_python_mutations(parsed, root));
+                }
+                authmap_core::Language::Unknown => {}
+            }
+        }
+
+        dedup_mutations(&mut mutations);
+        mutations.sort_by_key(mutation_sort_key);
+        for (index, mutation) in mutations.iter_mut().enumerate() {
+            mutation.id = format!("mutation_{:04}", index + 1);
+        }
+
+        AnalysisFacts {
+            mutations,
+            ..AnalysisFacts::default()
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct BuiltInReachabilityLinker;
+
+impl ReachabilityLinker for BuiltInReachabilityLinker {
+    fn link_reachability(&self, input: &AnalysisInput<'_>) -> AnalysisFacts {
+        let index = ReachabilityIndex::new(input.parsed_files);
+        let parsed_by_path = input
+            .parsed_files
+            .iter()
+            .map(|parsed| (parsed.source.path.as_str(), parsed))
+            .collect::<BTreeMap<_, _>>();
+
+        let mut links = Vec::new();
+        for route in input.routes {
+            let Some(handler) = &route.handler else {
+                continue;
+            };
+            let Some(parsed) =
+                route_file(route).and_then(|file| parsed_by_path.get(file.as_str()).copied())
+            else {
+                continue;
+            };
+            let handler_node = match route.framework {
+                Framework::Express => express_handler_node(parsed, handler),
+                Framework::FastApi => fastapi_handler_function_node(parsed, &handler.name),
+                _ => None,
+            };
+            let Some(handler_node) = handler_node else {
+                continue;
+            };
+            links.extend(link_route_handler_mutations(
+                route,
+                parsed,
+                handler_node,
+                input.mutations,
+                &index,
+            ));
+        }
+
+        dedup_links(&mut links);
+        links.sort_by_key(link_sort_key);
+        for (index, link) in links.iter_mut().enumerate() {
+            link.id = format!("link_{:04}", index + 1);
+        }
+
+        AnalysisFacts {
+            links,
+            ..AnalysisFacts::default()
+        }
+    }
+}
+
 pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
+    run_scan_with_started_at(plan, Instant::now())
+}
+
+fn run_scan_with_started_at(
+    plan: &ScanPlan,
+    started_at: Instant,
+) -> Result<AuthMapDocument, ScanError> {
+    let budget = RuntimeBudget::new(started_at, plan.config.limits.max_runtime_ms);
     let discovery = discover_sources(plan)?;
     let backend = TreeSitterBackend;
-    let parse_output = parse_files_in_parallel(&backend, &discovery.files, |file| {
+    let mut document = empty_document(plan);
+    document.source_files = discovery.files.clone();
+    document.diagnostics = discovery.diagnostics;
+    if budget.is_exceeded() {
+        push_runtime_limit_diagnostic(&mut document, plan);
+        finalize_diagnostics(&mut document);
+        return Ok(document);
+    }
+
+    let parse_output = parse_files_in_parallel(&backend, &document.source_files, |file| {
         fs::read_to_string(&file.path).map_err(|source| ParseError::Read {
             path: file.path.clone(),
             message: source.to_string(),
         })
     });
+    document.diagnostics.extend(parse_output.diagnostics);
+    if budget.is_exceeded() {
+        push_runtime_limit_diagnostic(&mut document, plan);
+        finalize_diagnostics(&mut document);
+        return Ok(document);
+    }
 
     let adapter_registry = AdapterRegistry::built_in();
-    let mut adapter_output =
+    let adapter_output =
         adapter_registry.discover_routes(&parse_output.parsed_files, &AdapterContext::default());
 
-    let mut document = AuthMapDocument::empty(ScanMetadata {
+    document.routes = adapter_output.routes;
+    document.diagnostics.extend(adapter_output.diagnostics);
+    document.routes.sort_by_key(route_sort_key);
+    let route_id_remaps = route_id_remaps(&mut document.routes);
+    let adapter_evidence = normalize_adapter_evidence(
+        adapter_output.evidence,
+        &document.routes,
+        &route_id_remaps,
+        &mut document.diagnostics,
+    );
+    if budget.is_exceeded() {
+        push_runtime_limit_diagnostic(&mut document, plan);
+        finalize_diagnostics(&mut document);
+        return Ok(document);
+    }
+
+    let input = AnalysisInput {
+        routes: &document.routes,
+        parsed_files: &parse_output.parsed_files,
+        config: &plan.config,
+        adapter_evidence: &adapter_evidence,
+        mutations: &adapter_output.mutations,
+    };
+    let facts = BuiltInEvidenceExtractor.extract_evidence(&input);
+    let mutation_facts = BuiltInMutationExtractor.extract_mutations(&input);
+    document.evidence = facts.evidence;
+    document.mutations = mutation_facts.mutations;
+    document.diagnostics.extend(facts.diagnostics);
+    document.diagnostics.extend(mutation_facts.diagnostics);
+    if budget.is_exceeded() {
+        push_runtime_limit_diagnostic(&mut document, plan);
+        finalize_diagnostics(&mut document);
+        return Ok(document);
+    }
+
+    let link_input = AnalysisInput {
+        routes: &document.routes,
+        parsed_files: &parse_output.parsed_files,
+        config: &plan.config,
+        adapter_evidence: &adapter_evidence,
+        mutations: &document.mutations,
+    };
+    let link_facts = BuiltInReachabilityLinker.link_reachability(&link_input);
+    document.links = link_facts.links;
+    document.diagnostics.extend(link_facts.diagnostics);
+    if budget.is_exceeded() {
+        push_runtime_limit_diagnostic(&mut document, plan);
+        finalize_diagnostics(&mut document);
+        return Ok(document);
+    }
+
+    document.coverage = classify_coverage(
+        &document.routes,
+        &document.evidence,
+        &document.mutations,
+        &document.links,
+        &plan.config,
+    );
+    if budget.is_exceeded() {
+        push_runtime_limit_diagnostic(&mut document, plan);
+    }
+    finalize_diagnostics(&mut document);
+    Ok(document)
+}
+
+fn empty_document(plan: &ScanPlan) -> AuthMapDocument {
+    AuthMapDocument::empty(ScanMetadata {
         mode: plan.config.mode,
         target_roots: plan
             .targets
@@ -141,45 +325,69 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
             .as_ref()
             .map(|path| path.to_string_lossy().replace('\\', "/")),
         ..ScanMetadata::default()
-    });
-    document.source_files = discovery.files;
-    document.diagnostics = discovery.diagnostics;
-    document.diagnostics.extend(parse_output.diagnostics);
-    document.routes = adapter_output.routes;
-    document.diagnostics.extend(adapter_output.diagnostics);
-    document.routes.sort_by_key(route_sort_key);
-    let route_id_remaps = route_id_remaps(&mut document.routes);
-    let adapter_evidence = normalize_adapter_evidence(
-        adapter_output.evidence,
-        &document.routes,
-        &route_id_remaps,
-        &mut document.diagnostics,
-    );
-    let input = AnalysisInput {
-        routes: &document.routes,
-        parsed_files: &parse_output.parsed_files,
-        config: &plan.config,
-        adapter_evidence: &adapter_evidence,
-        mutations: &adapter_output.mutations,
-    };
-    let facts = BuiltInEvidenceExtractor.extract_evidence(&input);
-    document.evidence = facts.evidence;
-    document.mutations.append(&mut adapter_output.mutations);
-    document.diagnostics.extend(facts.diagnostics);
-    document.coverage = classify_coverage(
-        &document.routes,
-        &document.evidence,
-        &document.mutations,
-        &document.links,
-        &plan.config,
-    );
-    document.diagnostics.sort_by(|left, right| {
+    })
+}
+
+#[derive(Clone, Copy, Debug)]
+struct RuntimeBudget {
+    started_at: Instant,
+    max_runtime_ms: u64,
+}
+
+impl RuntimeBudget {
+    fn new(started_at: Instant, max_runtime_ms: u64) -> Self {
+        Self {
+            started_at,
+            max_runtime_ms,
+        }
+    }
+
+    fn is_exceeded(self) -> bool {
+        self.started_at.elapsed().as_millis() >= u128::from(self.max_runtime_ms)
+    }
+}
+
+fn push_runtime_limit_diagnostic(document: &mut AuthMapDocument, plan: &ScanPlan) {
+    if document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == authmap_core::diagnostic_codes::INTERNAL_RUNTIME_LIMIT_REACHED
+    }) {
+        return;
+    }
+    document.diagnostics.push(runtime_limit_diagnostic(plan));
+}
+
+fn runtime_limit_diagnostic(plan: &ScanPlan) -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Internal,
+        code: authmap_core::diagnostic_codes::INTERNAL_RUNTIME_LIMIT_REACHED.to_string(),
+        severity: incomplete_scan_severity(plan.config.mode),
+        recoverability: Recoverability::Recoverable,
+        span: None,
+        message: format!(
+            "scan exceeded configured max_runtime_ms of {}; returning deterministic partial results",
+            plan.config.limits.max_runtime_ms
+        ),
+    }
+}
+
+fn incomplete_scan_severity(mode: authmap_core::ScanMode) -> DiagnosticSeverity {
+    match mode {
+        authmap_core::ScanMode::Advisory => DiagnosticSeverity::Warning,
+        authmap_core::ScanMode::Enforce => DiagnosticSeverity::Error,
+    }
+}
+
+fn finalize_diagnostics(document: &mut AuthMapDocument) {
+    sort_diagnostics(&mut document.diagnostics);
+}
+
+fn sort_diagnostics(diagnostics: &mut [Diagnostic]) {
+    diagnostics.sort_by(|left, right| {
         left.category
             .cmp(&right.category)
             .then(left.code.cmp(&right.code))
             .then(left.message.cmp(&right.message))
     });
-    Ok(document)
 }
 
 fn route_id_remaps(routes: &mut [authmap_core::Route]) -> BTreeMap<String, BTreeSet<String>> {
@@ -249,7 +457,32 @@ fn internal_diagnostic(span: Option<Span>, message: String) -> Diagnostic {
 }
 
 pub fn suggest_rules(plan: &ScanPlan) -> Result<RuleSuggestionReport, ScanError> {
+    suggest_rules_with_started_at(plan, Instant::now())
+}
+
+fn suggest_rules_with_started_at(
+    plan: &ScanPlan,
+    started_at: Instant,
+) -> Result<RuleSuggestionReport, ScanError> {
+    let budget = RuntimeBudget::new(started_at, plan.config.limits.max_runtime_ms);
     let discovery = discover_sources(plan)?;
+    let target_roots = plan
+        .targets
+        .iter()
+        .map(|path| path.to_string_lossy().replace('\\', "/"))
+        .collect::<Vec<_>>();
+    let mut diagnostics = discovery.diagnostics.clone();
+    if budget.is_exceeded() {
+        diagnostics.push(runtime_limit_diagnostic(plan));
+        sort_diagnostics(&mut diagnostics);
+        return Ok(RuleSuggestionReport {
+            target_roots,
+            source_files_scanned: 0,
+            suggestions: Vec::new(),
+            diagnostics,
+        });
+    }
+
     let backend = TreeSitterBackend;
     let parse_output = parse_files_in_parallel(&backend, &discovery.files, |file| {
         fs::read_to_string(&file.path).map_err(|source| ParseError::Read {
@@ -257,10 +490,33 @@ pub fn suggest_rules(plan: &ScanPlan) -> Result<RuleSuggestionReport, ScanError>
             message: source.to_string(),
         })
     });
+    diagnostics.extend(parse_output.diagnostics.clone());
+    if budget.is_exceeded() {
+        diagnostics.push(runtime_limit_diagnostic(plan));
+        sort_diagnostics(&mut diagnostics);
+        return Ok(RuleSuggestionReport {
+            target_roots,
+            source_files_scanned: parse_output.parsed_files.len(),
+            suggestions: Vec::new(),
+            diagnostics,
+        });
+    }
 
     let adapter_registry = AdapterRegistry::built_in();
     let adapter_output =
         adapter_registry.discover_routes(&parse_output.parsed_files, &AdapterContext::default());
+    diagnostics.extend(adapter_output.diagnostics.clone());
+    if budget.is_exceeded() {
+        diagnostics.push(runtime_limit_diagnostic(plan));
+        sort_diagnostics(&mut diagnostics);
+        return Ok(RuleSuggestionReport {
+            target_roots,
+            source_files_scanned: parse_output.parsed_files.len(),
+            suggestions: Vec::new(),
+            diagnostics,
+        });
+    }
+
     let route_handlers = adapter_output
         .routes
         .iter()
@@ -280,23 +536,14 @@ pub fn suggest_rules(plan: &ScanPlan) -> Result<RuleSuggestionReport, ScanError>
         .map(RuleCandidate::into_suggestion)
         .collect::<Vec<_>>();
     suggestions.sort_by_key(rule_suggestion_sort_key);
-
-    let mut diagnostics = discovery.diagnostics;
-    diagnostics.extend(parse_output.diagnostics);
-    diagnostics.extend(adapter_output.diagnostics);
-    diagnostics.sort_by(|left, right| {
-        left.category
-            .cmp(&right.category)
-            .then(left.code.cmp(&right.code))
-            .then(left.message.cmp(&right.message))
-    });
+    if budget.is_exceeded() {
+        suggestions.clear();
+        diagnostics.push(runtime_limit_diagnostic(plan));
+    }
+    sort_diagnostics(&mut diagnostics);
 
     Ok(RuleSuggestionReport {
-        target_roots: plan
-            .targets
-            .iter()
-            .map(|path| path.to_string_lossy().replace('\\', "/"))
-            .collect(),
+        target_roots,
         source_files_scanned: parse_output.parsed_files.len(),
         suggestions,
         diagnostics,
@@ -754,6 +1001,1406 @@ fn call_argument_nodes(call: Node<'_>) -> Vec<Node<'_>> {
         .children(&mut cursor)
         .filter(|child| child.is_named())
         .collect()
+}
+
+fn extract_prisma_mutations(parsed: &ParsedFile, root: Node<'_>) -> Vec<Mutation> {
+    let mut mutations = Vec::new();
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if matches!(node.kind(), "call_expression" | "call")
+            && let Some(function) = node.child_by_field_name("function")
+        {
+            let function_text = parsed.text_for(function).unwrap_or_default();
+            if let Some(mutation) = prisma_mutation_from_call(parsed, node, function_text) {
+                mutations.push(mutation);
+            }
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    mutations
+}
+
+fn prisma_mutation_from_call(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    function_text: &str,
+) -> Option<Mutation> {
+    let parts = function_text.split('.').collect::<Vec<_>>();
+    if parts.len() < 2 || parts.first().copied() != Some("prisma") {
+        return None;
+    }
+    let method = parts.last().copied().unwrap_or_default();
+    if matches!(method, "$executeRaw" | "$executeRawUnsafe" | "$queryRaw") {
+        if method == "$queryRaw" && !call_has_mutating_sql(parsed, call) {
+            return None;
+        }
+        return Some(raw_or_unknown_mutation(
+            MutationOperation::RawSqlMutation,
+            "prisma",
+            raw_sql_resource(parsed, call),
+            parsed.span_for(call),
+            "raw_sql",
+            "Prisma raw SQL mutation requires review",
+        ));
+    }
+
+    if parts.len() < 3 {
+        return None;
+    }
+    let resource = parts
+        .get(parts.len() - 2)
+        .copied()
+        .filter(|item| !item.is_empty());
+    let operation = match method {
+        "create" | "createMany" => MutationOperation::Create,
+        "update" => MutationOperation::Update,
+        "updateMany" => MutationOperation::BulkUpdate,
+        "delete" | "deleteMany" => MutationOperation::Delete,
+        "upsert" => MutationOperation::UnknownMutation,
+        _ => return None,
+    };
+    let confidence = if operation == MutationOperation::UnknownMutation {
+        Confidence::Low
+    } else {
+        Confidence::High
+    };
+    let extensions = if operation == MutationOperation::UnknownMutation {
+        review_required_extension(
+            "unknown_operation",
+            "Prisma upsert may create or update data and requires review",
+        )
+    } else {
+        authmap_core::ExtensionMap::new()
+    };
+    Some(Mutation {
+        id: String::new(),
+        operation,
+        library: Some("prisma".to_string()),
+        resource: resource.map(str::to_string),
+        span: Some(parsed.span_for(call)),
+        confidence,
+        notes: if operation == MutationOperation::UnknownMutation {
+            vec!["Prisma upsert has create-or-update semantics; review required".to_string()]
+        } else {
+            Vec::new()
+        },
+        extensions,
+    })
+}
+
+fn extract_python_mutations(parsed: &ParsedFile, root: Node<'_>) -> Vec<Mutation> {
+    let mut mutations = Vec::new();
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "function_definition" {
+            mutations.extend(extract_python_function_mutations(parsed, node));
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    mutations
+}
+
+fn extract_python_function_mutations(parsed: &ParsedFile, function: Node<'_>) -> Vec<Mutation> {
+    let mut mutations = Vec::new();
+    let mut model_by_var = BTreeMap::<String, String>::new();
+    let session_symbols = collect_python_session_symbols(parsed, function);
+    collect_python_model_bindings(parsed, function, &session_symbols, &mut model_by_var);
+
+    let mut stack = vec![function];
+    while let Some(node) = stack.pop() {
+        match node.kind() {
+            "call" => {
+                if let Some(mutation) =
+                    python_call_mutation(parsed, node, &model_by_var, &session_symbols)
+                {
+                    mutations.push(mutation);
+                }
+            }
+            "assignment" => {
+                if let Some(mutation) = sqlalchemy_assignment_mutation(parsed, node, &model_by_var)
+                {
+                    mutations.push(mutation);
+                }
+            }
+            _ => {}
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    mutations
+}
+
+fn collect_python_model_bindings(
+    parsed: &ParsedFile,
+    function: Node<'_>,
+    session_symbols: &BTreeSet<String>,
+    model_by_var: &mut BTreeMap<String, String>,
+) {
+    let mut stack = vec![function];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "assignment"
+            && let Some((left, right)) = assignment_sides(parsed, node)
+            && let Some(model) = python_model_binding_from_expression(&right, session_symbols)
+        {
+            model_by_var.insert(left, model);
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+}
+
+fn collect_python_session_symbols(parsed: &ParsedFile, function: Node<'_>) -> BTreeSet<String> {
+    let mut symbols = BTreeSet::new();
+    let Some(parameters) = function.child_by_field_name("parameters") else {
+        return symbols;
+    };
+    let Some(parameters_text) = parsed.text_for(parameters) else {
+        return symbols;
+    };
+
+    for parameter in parameters_text
+        .trim()
+        .trim_start_matches('(')
+        .trim_end_matches(')')
+        .split(',')
+    {
+        let parameter = parameter.trim();
+        let before_default = parameter
+            .split_once('=')
+            .map_or(parameter, |(left, _)| left);
+        let Some((name, annotation)) = before_default.split_once(':') else {
+            continue;
+        };
+        if annotation
+            .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
+            .any(|part| part == "Session")
+        {
+            let symbol = clean_symbol(name.trim_start_matches('*'));
+            if !symbol.is_empty() {
+                symbols.insert(symbol);
+            }
+        }
+    }
+    symbols
+}
+
+fn python_model_binding_from_expression(
+    text: &str,
+    session_symbols: &BTreeSet<String>,
+) -> Option<String> {
+    let trimmed = text.trim();
+    if let Some((receiver, rest)) = trimmed.split_once(".get(")
+        && is_sqlalchemy_session_receiver(&terminal_symbol_name(receiver), session_symbols)
+        && let Some(args) = rest.split_once(')').map(|(args, _)| args)
+    {
+        return args
+            .split(',')
+            .next()
+            .map(clean_symbol)
+            .filter(|item| !item.is_empty())
+            .map(|model| format!("sqlalchemy:{model}"));
+    }
+    if let Some((model, _)) = trimmed.split_once(".objects.get(") {
+        return Some(format!("django_orm:{}", clean_symbol(model)));
+    }
+    if let Some((model, _)) = trimmed.split_once(".objects.filter(") {
+        return Some(format!("django_orm:{}", clean_symbol(model)));
+    }
+    trimmed
+        .split_once('(')
+        .map(|(name, _)| clean_symbol(name))
+        .filter(|name| looks_like_model_name(name))
+        .map(|model| format!("model:{model}"))
+}
+
+fn binding_model(binding: &str) -> String {
+    binding
+        .split_once(':')
+        .map_or(binding, |(_, model)| model)
+        .to_string()
+}
+
+fn binding_library(binding: &str) -> Option<&str> {
+    binding.split_once(':').map(|(library, _)| library)
+}
+
+fn python_call_mutation(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    model_by_var: &BTreeMap<String, String>,
+    session_symbols: &BTreeSet<String>,
+) -> Option<Mutation> {
+    let function = call.child_by_field_name("function")?;
+    let function_text = parsed.text_for(function).unwrap_or_default();
+
+    if let Some(mutation) = django_call_mutation(parsed, call, function_text, model_by_var) {
+        return Some(mutation);
+    }
+    sqlalchemy_call_mutation(parsed, call, function_text, model_by_var, session_symbols)
+}
+
+fn sqlalchemy_call_mutation(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    function_text: &str,
+    model_by_var: &BTreeMap<String, String>,
+    session_symbols: &BTreeSet<String>,
+) -> Option<Mutation> {
+    let receiver = receiver_symbol(function_text)?;
+    match function_text {
+        text if text.ends_with(".add")
+            && is_sqlalchemy_session_receiver(&receiver, session_symbols) =>
+        {
+            let resource = call_argument_nodes(call)
+                .first()
+                .and_then(|arg| parsed.text_for(*arg))
+                .and_then(|text| {
+                    model_by_var
+                        .get(text.trim())
+                        .map(|binding| binding_model(binding))
+                        .or_else(|| {
+                            python_model_binding_from_expression(text, session_symbols)
+                                .map(|binding| binding_model(&binding))
+                        })
+                });
+            let confidence = if resource.is_some() {
+                Confidence::Medium
+            } else {
+                Confidence::Low
+            };
+            Some(orm_mutation(
+                MutationOperation::Create,
+                "sqlalchemy",
+                resource,
+                parsed.span_for(call),
+                confidence,
+            ))
+        }
+        text if text.ends_with(".add_all")
+            && is_sqlalchemy_session_receiver(&receiver, session_symbols) =>
+        {
+            Some(orm_mutation(
+                MutationOperation::Create,
+                "sqlalchemy",
+                None,
+                parsed.span_for(call),
+                Confidence::Low,
+            ))
+        }
+        text if text.ends_with(".delete")
+            && is_sqlalchemy_session_receiver(&receiver, session_symbols) =>
+        {
+            let resource = call_argument_nodes(call)
+                .first()
+                .and_then(|arg| parsed.text_for(*arg))
+                .and_then(|text| {
+                    model_by_var
+                        .get(text.trim())
+                        .map(|binding| binding_model(binding))
+                });
+            Some(orm_mutation(
+                MutationOperation::Delete,
+                "sqlalchemy",
+                resource,
+                parsed.span_for(call),
+                Confidence::Medium,
+            ))
+        }
+        text if text.ends_with(".execute")
+            && is_sqlalchemy_session_receiver(&receiver, session_symbols) =>
+        {
+            sqlalchemy_execute_mutation(parsed, call)
+        }
+        _ => None,
+    }
+}
+
+fn receiver_symbol(function_text: &str) -> Option<String> {
+    function_text
+        .rsplit_once('.')
+        .map(|(receiver, _)| terminal_symbol_name(receiver))
+        .filter(|receiver| !receiver.is_empty())
+}
+
+fn is_sqlalchemy_session_receiver(receiver: &str, session_symbols: &BTreeSet<String>) -> bool {
+    if session_symbols.contains(receiver) {
+        return true;
+    }
+    let lower = receiver.to_ascii_lowercase();
+    matches!(lower.as_str(), "session" | "db" | "db_session")
+        || lower.ends_with("session")
+        || lower.contains("_session")
+}
+
+fn sqlalchemy_execute_mutation(parsed: &ParsedFile, call: Node<'_>) -> Option<Mutation> {
+    let first_arg = call_argument_nodes(call).into_iter().next()?;
+    let arg_text = parsed.text_for(first_arg).unwrap_or_default().trim();
+    if let Some(resource) = call_resource(arg_text, "update") {
+        return Some(orm_mutation(
+            MutationOperation::Update,
+            "sqlalchemy",
+            Some(resource),
+            parsed.span_for(call),
+            Confidence::High,
+        ));
+    }
+    if let Some(resource) = call_resource(arg_text, "delete") {
+        return Some(orm_mutation(
+            MutationOperation::Delete,
+            "sqlalchemy",
+            Some(resource),
+            parsed.span_for(call),
+            Confidence::High,
+        ));
+    }
+    if arg_text.starts_with("text(") && raw_sql_is_mutating(arg_text) {
+        return Some(raw_or_unknown_mutation(
+            MutationOperation::RawSqlMutation,
+            "sqlalchemy",
+            raw_sql_resource_from_text(arg_text),
+            parsed.span_for(call),
+            "raw_sql",
+            "SQLAlchemy raw SQL mutation requires review",
+        ));
+    }
+    None
+}
+
+fn sqlalchemy_assignment_mutation(
+    parsed: &ParsedFile,
+    assignment: Node<'_>,
+    model_by_var: &BTreeMap<String, String>,
+) -> Option<Mutation> {
+    let (left, _right) = assignment_sides(parsed, assignment)?;
+    let (var, field) = left.split_once('.')?;
+    let binding = model_by_var.get(var.trim())?;
+    if binding_library(binding) != Some("sqlalchemy") {
+        return None;
+    }
+    let model = binding_model(binding);
+    Some(orm_mutation(
+        MutationOperation::Update,
+        "sqlalchemy",
+        Some(format!("{}.{}", model, field.trim())),
+        parsed.span_for(assignment),
+        Confidence::Medium,
+    ))
+}
+
+fn django_call_mutation(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    function_text: &str,
+    model_by_var: &BTreeMap<String, String>,
+) -> Option<Mutation> {
+    if let Some((model, method)) = django_objects_call(function_text) {
+        let operation = match method {
+            "create" => MutationOperation::Create,
+            "update" => MutationOperation::BulkUpdate,
+            "bulk_update" => MutationOperation::BulkUpdate,
+            "delete" => MutationOperation::Delete,
+            _ => return None,
+        };
+        return Some(orm_mutation(
+            operation,
+            "django_orm",
+            Some(model),
+            parsed.span_for(call),
+            Confidence::High,
+        ));
+    }
+    if function_text.ends_with(".save") || function_text.ends_with(".delete") {
+        let Some((var, method)) = function_text.rsplit_once('.') else {
+            return None;
+        };
+        let binding = model_by_var.get(var.trim())?;
+        if binding_library(binding) != Some("django_orm") {
+            return None;
+        }
+        let model = binding_model(binding);
+        let operation = if method == "save" {
+            MutationOperation::Save
+        } else {
+            MutationOperation::Delete
+        };
+        return Some(orm_mutation(
+            operation,
+            "django_orm",
+            Some(model),
+            parsed.span_for(call),
+            Confidence::Medium,
+        ));
+    }
+    None
+}
+
+fn django_objects_call(function_text: &str) -> Option<(String, &str)> {
+    let (model, rest) = function_text.split_once(".objects.")?;
+    let method = function_text.rsplit('.').next()?;
+    if matches!(method, "create" | "update" | "bulk_update" | "delete")
+        && (rest.starts_with(method) || rest.contains(&format!(".{method}")))
+    {
+        return Some((clean_symbol(model), method));
+    }
+    None
+}
+
+fn assignment_sides(parsed: &ParsedFile, assignment: Node<'_>) -> Option<(String, String)> {
+    let left = assignment
+        .child_by_field_name("left")
+        .or_else(|| assignment.child_by_field_name("target"))
+        .and_then(|node| parsed.text_for(node))
+        .map(str::trim)
+        .map(str::to_string);
+    let right = assignment
+        .child_by_field_name("right")
+        .and_then(|node| parsed.text_for(node))
+        .map(str::trim)
+        .map(str::to_string);
+    left.zip(right).or_else(|| {
+        let text = parsed.text_for(assignment)?;
+        let (left, right) = text.split_once('=')?;
+        Some((left.trim().to_string(), right.trim().to_string()))
+    })
+}
+
+fn call_resource(text: &str, function_name: &str) -> Option<String> {
+    let prefix = format!("{function_name}(");
+    text.strip_prefix(&prefix)
+        .and_then(|value| value.split_once(')').map(|(args, _)| args))
+        .map(|args| args.split(',').next().unwrap_or(args))
+        .map(clean_symbol)
+        .filter(|item| !item.is_empty())
+}
+
+fn call_has_mutating_sql(parsed: &ParsedFile, call: Node<'_>) -> bool {
+    let call_text = parsed.text_for(call).unwrap_or_default();
+    raw_sql_is_mutating(call_text)
+}
+
+fn raw_sql_resource(parsed: &ParsedFile, call: Node<'_>) -> Option<String> {
+    parsed.text_for(call).and_then(raw_sql_resource_from_text)
+}
+
+fn raw_sql_is_mutating(text: &str) -> bool {
+    static MUTATING_SQL: &[&str] = &[
+        "insert", "update", "delete", "merge", "truncate", "drop", "alter",
+    ];
+    let Some(sql) = first_static_string_like(text) else {
+        return false;
+    };
+    let trimmed = sql.trim_start().to_ascii_lowercase();
+    MUTATING_SQL
+        .iter()
+        .any(|keyword| trimmed.starts_with(keyword))
+}
+
+fn raw_sql_resource_from_text(text: &str) -> Option<String> {
+    let sql = first_static_string_like(text)?;
+    let words = sql
+        .split(|ch: char| ch.is_whitespace() || matches!(ch, '"' | '\'' | '`' | ';' | '(' | ')'))
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>();
+    let first = words.first()?.to_ascii_lowercase();
+    match first.as_str() {
+        "insert" => words
+            .windows(2)
+            .find(|pair| pair[0].eq_ignore_ascii_case("into"))
+            .map(|pair| pair[1].to_string()),
+        "update" | "delete" | "truncate" | "drop" | "alter" => words.get(1).map(|item| {
+            if item.eq_ignore_ascii_case("from") || item.eq_ignore_ascii_case("table") {
+                words.get(2).copied().unwrap_or(*item).to_string()
+            } else {
+                (*item).to_string()
+            }
+        }),
+        "merge" => words
+            .windows(2)
+            .find(|pair| pair[0].eq_ignore_ascii_case("into"))
+            .map(|pair| pair[1].to_string()),
+        _ => None,
+    }
+}
+
+fn first_static_string_like(text: &str) -> Option<String> {
+    let bytes = text.as_bytes();
+    for (index, ch) in text.char_indices() {
+        if matches!(ch, '"' | '\'' | '`') {
+            let previous = text[..index]
+                .chars()
+                .rev()
+                .take_while(|item| item.is_ascii_alphabetic())
+                .collect::<String>();
+            if matches!(
+                previous.chars().rev().collect::<String>().as_str(),
+                "f" | "format"
+            ) {
+                continue;
+            }
+            let mut end = index + ch.len_utf8();
+            while end < text.len() {
+                let current = bytes[end] as char;
+                if current == ch && bytes.get(end.wrapping_sub(1)).copied() != Some(b'\\') {
+                    return Some(text[index + ch.len_utf8()..end].to_string());
+                }
+                end += current.len_utf8();
+            }
+        }
+    }
+    None
+}
+
+fn orm_mutation(
+    operation: MutationOperation,
+    library: &str,
+    resource: Option<String>,
+    span: Span,
+    confidence: Confidence,
+) -> Mutation {
+    Mutation {
+        id: String::new(),
+        operation,
+        library: Some(library.to_string()),
+        resource,
+        span: Some(span),
+        confidence,
+        notes: Vec::new(),
+        extensions: authmap_core::ExtensionMap::new(),
+    }
+}
+
+fn raw_or_unknown_mutation(
+    operation: MutationOperation,
+    library: &str,
+    resource: Option<String>,
+    span: Span,
+    detection: &str,
+    note: &str,
+) -> Mutation {
+    Mutation {
+        id: String::new(),
+        operation,
+        library: Some(library.to_string()),
+        resource,
+        span: Some(span),
+        confidence: Confidence::Low,
+        notes: vec![note.to_string()],
+        extensions: review_required_extension(detection, note),
+    }
+}
+
+fn review_required_extension(detection: &str, reason: &str) -> authmap_core::ExtensionMap {
+    let mut extensions = authmap_core::ExtensionMap::new();
+    extensions.insert(
+        "authmap.mutation".to_string(),
+        serde_json::json!({
+            "review_required": true,
+            "uncertainty_reasons": [reason],
+            "detection": detection,
+        }),
+    );
+    extensions
+}
+
+fn dedup_mutations(mutations: &mut Vec<Mutation>) {
+    let mut seen = BTreeSet::new();
+    mutations.retain(|item| {
+        seen.insert((
+            item.operation,
+            item.library.clone(),
+            item.resource.clone(),
+            item.span
+                .as_ref()
+                .map(|span| (span.file.clone(), span.line, span.column)),
+        ))
+    });
+}
+
+fn mutation_sort_key(mutation: &Mutation) -> (String, u32, u32, MutationOperation, String, String) {
+    (
+        mutation
+            .span
+            .as_ref()
+            .map_or_else(String::new, |span| span.file.clone()),
+        mutation.span.as_ref().map_or(0, |span| span.line),
+        mutation.span.as_ref().map_or(0, |span| span.column),
+        mutation.operation,
+        mutation.library.clone().unwrap_or_default(),
+        mutation.resource.clone().unwrap_or_default(),
+    )
+}
+
+fn clean_symbol(value: &str) -> String {
+    value
+        .trim()
+        .trim_matches(|ch: char| matches!(ch, '"' | '\'' | '`' | ' ' | '\n' | '\r' | '\t'))
+        .rsplit('.')
+        .next()
+        .unwrap_or(value)
+        .trim()
+        .to_string()
+}
+
+fn looks_like_model_name(value: &str) -> bool {
+    value
+        .chars()
+        .next()
+        .is_some_and(|ch| ch.is_ascii_uppercase())
+}
+
+#[derive(Clone, Debug)]
+struct ReachabilityIndex<'a> {
+    functions: BTreeMap<(String, String), FunctionDef<'a>>,
+    imports: BTreeMap<(String, String), ImportTarget>,
+    default_exports: BTreeMap<String, String>,
+    parsed_by_file: BTreeMap<String, &'a ParsedFile>,
+}
+
+#[derive(Clone, Debug)]
+struct FunctionDef<'a> {
+    file: String,
+    name: String,
+    node: Node<'a>,
+}
+
+#[derive(Clone, Debug)]
+struct ImportTarget {
+    file: String,
+    name: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+struct ResolvedFunction<'a> {
+    def: FunctionDef<'a>,
+    confidence: Confidence,
+}
+
+impl<'a> ReachabilityIndex<'a> {
+    fn new(parsed_files: &'a [ParsedFile]) -> Self {
+        let python_modules = build_python_module_index(parsed_files);
+        let js_modules = build_js_module_index(parsed_files);
+        let mut index = Self {
+            functions: BTreeMap::new(),
+            imports: BTreeMap::new(),
+            default_exports: BTreeMap::new(),
+            parsed_by_file: parsed_files
+                .iter()
+                .map(|parsed| (parsed.source.path.clone(), parsed))
+                .collect(),
+        };
+
+        for parsed in parsed_files {
+            if let Some(root) = parsed.root_node() {
+                collect_function_defs(parsed, root, &mut index.functions);
+            }
+            match parsed.language {
+                authmap_core::Language::Python => {
+                    collect_python_imports(parsed, &python_modules, &mut index.imports);
+                }
+                authmap_core::Language::JavaScript
+                | authmap_core::Language::JavaScriptReact
+                | authmap_core::Language::TypeScript
+                | authmap_core::Language::TypeScriptReact => {
+                    collect_js_imports(parsed, &js_modules, &mut index.imports);
+                    collect_js_default_exports(parsed, &mut index.default_exports);
+                }
+                authmap_core::Language::Unknown => {}
+            }
+        }
+
+        index
+    }
+
+    fn resolve_call(&self, source_file: &str, function_text: &str) -> Option<ResolvedFunction<'a>> {
+        let trimmed = function_text.trim();
+        if let Some((object, member)) = trimmed.rsplit_once('.') {
+            let object = clean_symbol(object);
+            if let Some(target) = self.imports.get(&(source_file.to_string(), object)) {
+                let name = target.name.clone().unwrap_or_else(|| clean_symbol(member));
+                return self
+                    .functions
+                    .get(&(target.file.clone(), name))
+                    .cloned()
+                    .map(|def| ResolvedFunction {
+                        def,
+                        confidence: Confidence::Medium,
+                    });
+            }
+        }
+
+        let name = terminal_symbol_name(trimmed);
+        if let Some(def) = self
+            .functions
+            .get(&(source_file.to_string(), name.clone()))
+            .cloned()
+        {
+            return Some(ResolvedFunction {
+                def,
+                confidence: Confidence::High,
+            });
+        }
+        if let Some(target) = self.imports.get(&(source_file.to_string(), name)) {
+            let target_name = target
+                .name
+                .clone()
+                .or_else(|| self.default_exports.get(&target.file).cloned())?;
+            return self
+                .functions
+                .get(&(target.file.clone(), target_name))
+                .cloned()
+                .map(|def| ResolvedFunction {
+                    def,
+                    confidence: Confidence::Medium,
+                });
+        }
+        None
+    }
+}
+
+fn link_route_handler_mutations(
+    route: &authmap_core::Route,
+    parsed: &ParsedFile,
+    handler_node: Node<'_>,
+    mutations: &[Mutation],
+    index: &ReachabilityIndex<'_>,
+) -> Vec<ReachabilityLink> {
+    let mut links = Vec::new();
+    for mutation in mutations.iter().filter(|mutation| {
+        mutation_inside_node_excluding_nested_scopes(
+            parsed,
+            &parsed.source.path,
+            handler_node,
+            mutation,
+        )
+    }) {
+        links.push(reachability_link(
+            route,
+            Some(mutation),
+            Confidence::High,
+            vec!["Mutation is directly inside route handler".to_string()],
+            authmap_core::ExtensionMap::new(),
+        ));
+    }
+
+    for call in service_call_candidates(parsed, handler_node) {
+        let Some(function) = call.child_by_field_name("function") else {
+            continue;
+        };
+        let function_text = parsed.text_for(function).unwrap_or_default();
+        if should_skip_reachability_call(function_text) {
+            continue;
+        }
+        if let Some(resolved) = index.resolve_call(&parsed.source.path, function_text) {
+            let resolved_parsed = index
+                .parsed_by_file
+                .get(&resolved.def.file)
+                .copied()
+                .unwrap_or(parsed);
+            for mutation in mutations.iter().filter(|mutation| {
+                mutation_inside_node_excluding_nested_scopes(
+                    resolved_parsed,
+                    &resolved.def.file,
+                    resolved.def.node,
+                    mutation,
+                )
+            }) {
+                let note = if resolved.confidence == Confidence::High {
+                    format!(
+                        "One-hop same-file service call `{}` reaches mutation",
+                        terminal_symbol_name(function_text)
+                    )
+                } else {
+                    format!(
+                        "One-hop imported service call `{}` reaches `{}`",
+                        terminal_symbol_name(function_text),
+                        resolved.def.name
+                    )
+                };
+                links.push(reachability_link(
+                    route,
+                    Some(mutation),
+                    resolved.confidence,
+                    vec![note],
+                    authmap_core::ExtensionMap::new(),
+                ));
+            }
+        } else if service_like_call(function_text) {
+            let call_span = parsed.span_for(call);
+            links.push(reachability_link(
+                route,
+                None,
+                Confidence::Low,
+                vec![format!(
+                    "Service-like call `{}` could not be resolved statically",
+                    function_text.trim()
+                )],
+                reachability_uncertainty_extension(
+                    function_text.trim(),
+                    &call_span,
+                    "unresolved_service_call",
+                ),
+            ));
+        }
+    }
+    links
+}
+
+fn reachability_link(
+    route: &authmap_core::Route,
+    mutation: Option<&Mutation>,
+    confidence: Confidence,
+    notes: Vec<String>,
+    extensions: authmap_core::ExtensionMap,
+) -> ReachabilityLink {
+    ReachabilityLink {
+        id: String::new(),
+        route_id: route.id.clone(),
+        mutation_id: mutation.map(|mutation| mutation.id.clone()),
+        evidence_id: None,
+        confidence,
+        notes,
+        extensions,
+    }
+}
+
+fn reachability_uncertainty_extension(
+    call_target: &str,
+    call_span: &Span,
+    reason: &str,
+) -> authmap_core::ExtensionMap {
+    let mut extensions = authmap_core::ExtensionMap::new();
+    extensions.insert(
+        "authmap.reachability".to_string(),
+        serde_json::json!({
+            "call_target": call_target,
+            "call_span": call_span,
+            "reason": reason,
+        }),
+    );
+    extensions
+}
+
+fn service_call_candidates<'tree>(parsed: &ParsedFile, node: Node<'tree>) -> Vec<Node<'tree>> {
+    let mut calls = Vec::new();
+    let mut stack = vec![node];
+    while let Some(current) = stack.pop() {
+        if matches!(current.kind(), "call" | "call_expression") {
+            calls.push(current);
+        }
+        let mut cursor = current.walk();
+        stack.extend(
+            current
+                .children(&mut cursor)
+                .filter(|child| !is_nested_scope_node(*child)),
+        );
+    }
+    calls
+        .into_iter()
+        .filter(|call| {
+            call.child_by_field_name("function")
+                .and_then(|function| parsed.text_for(function))
+                .is_some_and(|function_text| !should_skip_reachability_call(function_text))
+        })
+        .collect()
+}
+
+fn should_skip_reachability_call(function_text: &str) -> bool {
+    let trimmed = function_text.trim();
+    let terminal = terminal_symbol_name(trimmed);
+    let lower = terminal.to_ascii_lowercase();
+    if is_framework_route_call(trimmed) || is_fastapi_depends(trimmed) {
+        return true;
+    }
+    if looks_orm_call(trimmed) || looks_response_or_builtin_call(trimmed, &lower) {
+        return true;
+    }
+    if looks_guard_like(&lower) || looks_dynamic_policy(trimmed) {
+        return true;
+    }
+    false
+}
+
+fn looks_orm_call(function_text: &str) -> bool {
+    let lower = function_text.to_ascii_lowercase();
+    lower.starts_with("prisma.")
+        || lower.contains(".objects.")
+        || lower.starts_with("session.")
+        || matches!(
+            terminal_symbol_name(function_text).as_str(),
+            "update" | "delete" | "text"
+        )
+}
+
+fn looks_response_or_builtin_call(function_text: &str, terminal_lower: &str) -> bool {
+    let lower = function_text.to_ascii_lowercase();
+    lower.starts_with("res.")
+        || lower.starts_with("req.")
+        || lower.starts_with("request.")
+        || lower.starts_with("response.")
+        || matches!(
+            terminal_lower,
+            "json"
+                | "send"
+                | "sendstatus"
+                | "status"
+                | "commit"
+                | "rollback"
+                | "map"
+                | "filter"
+                | "includes"
+                | "get"
+                | "set"
+                | "str"
+                | "len"
+                | "dict"
+                | "list"
+                | "print"
+                | "date"
+        )
+}
+
+fn service_like_call(function_text: &str) -> bool {
+    let terminal = terminal_symbol_name(function_text);
+    let lower = terminal.to_ascii_lowercase();
+    let full_lower = function_text.to_ascii_lowercase();
+    lower.starts_with("create")
+        || lower.starts_with("update")
+        || lower.starts_with("delete")
+        || lower.starts_with("disable")
+        || lower.starts_with("enable")
+        || lower.starts_with("save")
+        || lower.starts_with("remove")
+        || lower.starts_with("archive")
+        || lower.starts_with("grant")
+        || lower.starts_with("revoke")
+        || lower.starts_with("sync")
+        || lower.starts_with("upsert")
+        || full_lower.contains("service")
+        || full_lower.contains("repository")
+        || full_lower.contains("repo.")
+        || full_lower.contains("client.")
+}
+
+fn mutation_inside_node(file: &str, node: Node<'_>, mutation: &Mutation) -> bool {
+    let Some(span) = mutation.span.as_ref() else {
+        return false;
+    };
+    if span.file != file {
+        return false;
+    }
+    span.byte_range.as_ref().is_some_and(|range| {
+        range.start >= node.start_byte() as u64 && range.end <= node.end_byte() as u64
+    })
+}
+
+fn mutation_inside_node_excluding_nested_scopes(
+    parsed: &ParsedFile,
+    file: &str,
+    node: Node<'_>,
+    mutation: &Mutation,
+) -> bool {
+    if !mutation_inside_node(file, node, mutation) {
+        return false;
+    }
+    mutation
+        .span
+        .as_ref()
+        .is_none_or(|span| !span_is_inside_nested_scope(parsed, node, span))
+}
+
+fn span_is_inside_nested_scope(parsed: &ParsedFile, root: Node<'_>, span: &Span) -> bool {
+    let Some(range) = span.byte_range.as_ref() else {
+        return false;
+    };
+    let mut stack = Vec::new();
+    let mut cursor = root.walk();
+    stack.extend(root.children(&mut cursor));
+    while let Some(current) = stack.pop() {
+        if is_nested_scope_node(current)
+            && range.start >= current.start_byte() as u64
+            && range.end <= current.end_byte() as u64
+        {
+            return true;
+        }
+        let mut cursor = current.walk();
+        stack.extend(current.children(&mut cursor));
+    }
+    let _ = parsed;
+    false
+}
+
+fn is_nested_scope_node(node: Node<'_>) -> bool {
+    matches!(
+        node.kind(),
+        "function_definition"
+            | "class_definition"
+            | "lambda"
+            | "function_declaration"
+            | "method_definition"
+            | "arrow_function"
+            | "function"
+            | "function_expression"
+            | "class"
+            | "class_declaration"
+    )
+}
+
+fn collect_function_defs<'tree>(
+    parsed: &'tree ParsedFile,
+    root: Node<'tree>,
+    functions: &mut BTreeMap<(String, String), FunctionDef<'tree>>,
+) {
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        let name = match node.kind() {
+            "function_definition" | "function_declaration" => function_name(parsed, node),
+            "variable_declarator" => variable_function_name(parsed, node),
+            _ => None,
+        };
+        if let Some(name) = name {
+            functions.insert(
+                (parsed.source.path.clone(), name.clone()),
+                FunctionDef {
+                    file: parsed.source.path.clone(),
+                    name,
+                    node,
+                },
+            );
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+}
+
+fn build_python_module_index(parsed_files: &[ParsedFile]) -> BTreeMap<String, String> {
+    let mut index = BTreeMap::new();
+    for parsed in parsed_files
+        .iter()
+        .filter(|parsed| parsed.language == authmap_core::Language::Python)
+    {
+        let normalized = parsed.source.path.replace('\\', "/");
+        if let Some(stem) = normalized.strip_suffix(".py") {
+            index.insert(stem.to_string(), parsed.source.path.clone());
+            index.insert(stem.replace('/', "."), parsed.source.path.clone());
+            if let Some((_, file_stem)) = stem.rsplit_once('/') {
+                index.insert(file_stem.to_string(), parsed.source.path.clone());
+            }
+        }
+    }
+    index
+}
+
+fn collect_python_imports(
+    parsed: &ParsedFile,
+    module_index: &BTreeMap<String, String>,
+    imports: &mut BTreeMap<(String, String), ImportTarget>,
+) {
+    for line in parsed.text.lines() {
+        let trimmed = line.trim();
+        let Some(rest) = trimmed.strip_prefix("from ") else {
+            continue;
+        };
+        let Some((module, imported)) = rest.split_once(" import ") else {
+            continue;
+        };
+        let Some(module_file) = resolve_python_module(parsed, module_index, module.trim()) else {
+            continue;
+        };
+        for part in imported.split(',') {
+            let part = part.trim();
+            if part.is_empty() || part == "*" {
+                continue;
+            }
+            let (export_name, local_name) = part
+                .split_once(" as ")
+                .map_or((part, part), |(export_name, local_name)| {
+                    (export_name.trim(), local_name.trim())
+                });
+            imports.insert(
+                (parsed.source.path.clone(), local_name.to_string()),
+                ImportTarget {
+                    file: module_file.clone(),
+                    name: Some(export_name.to_string()),
+                },
+            );
+        }
+    }
+}
+
+fn resolve_python_module(
+    parsed: &ParsedFile,
+    module_index: &BTreeMap<String, String>,
+    module: &str,
+) -> Option<String> {
+    let normalized = parsed.source.path.replace('\\', "/");
+    let current_dir = normalized.rsplit_once('/').map_or("", |(dir, _)| dir);
+    if module.starts_with('.') {
+        let dots = module.chars().take_while(|ch| *ch == '.').count();
+        let remainder = module.trim_start_matches('.');
+        let mut parts = current_dir
+            .split('/')
+            .filter(|part| !part.is_empty())
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        for _ in 1..dots {
+            parts.pop();
+        }
+        if !remainder.is_empty() {
+            parts.extend(remainder.split('.').map(str::to_string));
+        }
+        return module_index.get(&parts.join("/")).cloned();
+    }
+
+    let candidate = module.replace('.', "/");
+    module_index.get(&candidate).cloned().or_else(|| {
+        module_index
+            .iter()
+            .find(|(key, _)| key.ends_with(&format!("/{candidate}")) || *key == &candidate)
+            .map(|(_, path)| path.clone())
+    })
+}
+
+fn build_js_module_index(parsed_files: &[ParsedFile]) -> BTreeMap<String, String> {
+    let mut index = BTreeMap::new();
+    for parsed in parsed_files.iter().filter(|file| {
+        matches!(
+            file.language,
+            authmap_core::Language::JavaScript
+                | authmap_core::Language::JavaScriptReact
+                | authmap_core::Language::TypeScript
+                | authmap_core::Language::TypeScriptReact
+        )
+    }) {
+        let normalized = parsed.source.path.replace('\\', "/");
+        if let Some(stem) = strip_js_extension(&normalized) {
+            index.insert(stem.to_string(), parsed.source.path.clone());
+            if let Some(index_stem) = stem.strip_suffix("/index") {
+                index.insert(index_stem.to_string(), parsed.source.path.clone());
+            }
+        }
+    }
+    index
+}
+
+fn collect_js_imports(
+    parsed: &ParsedFile,
+    module_index: &BTreeMap<String, String>,
+    imports: &mut BTreeMap<(String, String), ImportTarget>,
+) {
+    for line in parsed.text.lines() {
+        let trimmed = line.trim().trim_end_matches(';');
+        collect_js_es_import(parsed, module_index, imports, trimmed);
+        collect_js_require_import(parsed, module_index, imports, trimmed);
+    }
+}
+
+fn collect_js_default_exports(parsed: &ParsedFile, default_exports: &mut BTreeMap<String, String>) {
+    for line in parsed.text.lines() {
+        let trimmed = line.trim().trim_end_matches(';');
+        if let Some(rest) = trimmed.strip_prefix("export default ") {
+            let rest = rest.trim_start_matches("async ").trim();
+            if let Some(name) = rest
+                .strip_prefix("function ")
+                .and_then(|value| value.split_once('(').map(|(name, _)| name.trim()))
+                .filter(|name| !name.is_empty())
+            {
+                default_exports.insert(parsed.source.path.clone(), name.to_string());
+                return;
+            }
+            let name = clean_symbol(rest);
+            if !name.is_empty() {
+                default_exports.insert(parsed.source.path.clone(), name);
+                return;
+            }
+        }
+        if let Some(name) = trimmed
+            .strip_prefix("module.exports = ")
+            .map(clean_symbol)
+            .filter(|name| !name.is_empty())
+        {
+            default_exports.insert(parsed.source.path.clone(), name);
+            return;
+        }
+    }
+}
+
+fn collect_js_es_import(
+    parsed: &ParsedFile,
+    module_index: &BTreeMap<String, String>,
+    imports: &mut BTreeMap<(String, String), ImportTarget>,
+    line: &str,
+) {
+    let Some(rest) = line.strip_prefix("import ") else {
+        return;
+    };
+    let Some((specifiers, module_part)) = rest.split_once(" from ") else {
+        return;
+    };
+    let Some(module_file) = resolve_js_module(parsed, module_index, module_part.trim()) else {
+        return;
+    };
+    let specifiers = specifiers.trim();
+    if specifiers.starts_with('{') && specifiers.ends_with('}') {
+        for part in specifiers[1..specifiers.len() - 1].split(',') {
+            let part = part.trim();
+            if part.is_empty() {
+                continue;
+            }
+            let (export_name, local_name) = part
+                .split_once(" as ")
+                .map_or((part, part), |(export_name, local_name)| {
+                    (export_name.trim(), local_name.trim())
+                });
+            imports.insert(
+                (parsed.source.path.clone(), local_name.to_string()),
+                ImportTarget {
+                    file: module_file.clone(),
+                    name: Some(export_name.to_string()),
+                },
+            );
+        }
+    } else if let Some(local_name) = specifiers.strip_prefix("* as ") {
+        imports.insert(
+            (parsed.source.path.clone(), local_name.trim().to_string()),
+            ImportTarget {
+                file: module_file,
+                name: None,
+            },
+        );
+    } else if !specifiers.is_empty() {
+        imports.insert(
+            (parsed.source.path.clone(), specifiers.to_string()),
+            ImportTarget {
+                file: module_file,
+                name: None,
+            },
+        );
+    }
+}
+
+fn collect_js_require_import(
+    parsed: &ParsedFile,
+    module_index: &BTreeMap<String, String>,
+    imports: &mut BTreeMap<(String, String), ImportTarget>,
+    line: &str,
+) {
+    let Some((left, right)) = line.split_once("require(") else {
+        return;
+    };
+    let Some(module_literal) = right.split(')').next() else {
+        return;
+    };
+    let Some(module_file) = resolve_js_module(parsed, module_index, module_literal.trim()) else {
+        return;
+    };
+    let required_property = right
+        .split_once(").")
+        .map(|(_, property)| property.trim().to_string());
+    let left = left
+        .trim()
+        .strip_prefix("const ")
+        .or_else(|| left.trim().strip_prefix("let "))
+        .or_else(|| left.trim().strip_prefix("var "));
+    let Some(local) = left.and_then(|left| left.trim().strip_suffix('=')) else {
+        return;
+    };
+    let local = local.trim();
+    if local.starts_with('{') && local.ends_with('}') {
+        for part in local[1..local.len() - 1].split(',') {
+            let part = part.trim();
+            if part.is_empty() {
+                continue;
+            }
+            let (export_name, local_name) = part
+                .split_once(':')
+                .map_or((part, part), |(export_name, local_name)| {
+                    (export_name.trim(), local_name.trim())
+                });
+            imports.insert(
+                (parsed.source.path.clone(), local_name.to_string()),
+                ImportTarget {
+                    file: module_file.clone(),
+                    name: Some(export_name.to_string()),
+                },
+            );
+        }
+    } else {
+        imports.insert(
+            (parsed.source.path.clone(), local.to_string()),
+            ImportTarget {
+                file: module_file,
+                name: required_property,
+            },
+        );
+    }
+}
+
+fn resolve_js_module(
+    parsed: &ParsedFile,
+    module_index: &BTreeMap<String, String>,
+    module_literal: &str,
+) -> Option<String> {
+    let module = module_literal.trim().trim_matches('"').trim_matches('\'');
+    if !module.starts_with('.') {
+        return None;
+    }
+    let current = parsed.source.path.replace('\\', "/");
+    let current_dir = current.rsplit_once('/').map_or("", |(dir, _)| dir);
+    let candidate = normalize_module_path(current_dir, module, "/");
+    module_index.get(&candidate).cloned()
+}
+
+fn normalize_module_path(current_dir: &str, module: &str, separator: &str) -> String {
+    let is_absolute = current_dir.starts_with(separator);
+    let mut parts = current_dir
+        .split(separator)
+        .filter(|part| !part.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    for part in module.split(separator) {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            _ => parts.push(part.to_string()),
+        }
+    }
+    let joined = parts.join(separator);
+    if is_absolute {
+        format!("{separator}{joined}")
+    } else {
+        joined
+    }
+}
+
+fn strip_js_extension(path: &str) -> Option<&str> {
+    [".js", ".jsx", ".ts", ".tsx"]
+        .iter()
+        .find_map(|extension| path.strip_suffix(extension))
+}
+
+fn dedup_links(links: &mut Vec<ReachabilityLink>) {
+    let mut seen = BTreeSet::new();
+    links.retain(|item| {
+        seen.insert((
+            item.route_id.clone(),
+            item.mutation_id.clone(),
+            item.confidence,
+            item.notes.clone(),
+        ))
+    });
+}
+
+fn link_sort_key(link: &ReachabilityLink) -> (String, String, Confidence, String) {
+    (
+        link.route_id.clone(),
+        link.mutation_id.clone().unwrap_or_default(),
+        link.confidence,
+        link.notes.join("; "),
+    )
 }
 
 fn rule_suggestion_sort_key(
@@ -1283,6 +2930,24 @@ fn fastapi_decorated_function_node<'tree>(
                 }
             }
         }
+        if node.kind() == "function_definition"
+            && function_name(parsed, node).as_deref() == Some(handler_name)
+        {
+            return Some(node);
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    None
+}
+
+fn fastapi_handler_function_node<'tree>(
+    parsed: &'tree ParsedFile,
+    handler_name: &str,
+) -> Option<Node<'tree>> {
+    let root = parsed.root_node()?;
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
         if node.kind() == "function_definition"
             && function_name(parsed, node).as_deref() == Some(handler_name)
         {
@@ -1990,17 +3655,18 @@ impl ScanError {
 mod tests {
     use std::collections::BTreeSet;
     use std::path::{Path, PathBuf};
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
     use authmap_config::{ScanConfig, ScanPlan};
     use authmap_core::{
         Confidence, CoverageClass, Evidence, EvidenceType, Framework, Mutation, MutationOperation,
-        ReachabilityLink, RiskLevel, Route,
+        ReachabilityLink, RiskLevel, Route, ScanMode, diagnostic_codes,
     };
     use authmap_testkit::fixture_path;
 
     use super::{
-        classify_coverage, normalize_adapter_evidence, route_id_remaps, run_scan, suggest_rules,
+        classify_coverage, normalize_adapter_evidence, normalize_module_path, route_id_remaps,
+        run_scan, run_scan_with_started_at, suggest_rules, suggest_rules_with_started_at,
     };
 
     #[test]
@@ -2550,6 +4216,393 @@ sensitivity:
     }
 
     #[test]
+    fn scan_pipeline_detects_orm_data_mutations() {
+        let target = fixture_path("mutations");
+        let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        assert_eq!(document.routes.len(), 0);
+        assert_eq!(document.links.len(), 0);
+        assert_eq!(document.mutations.len(), 21);
+
+        assert_mutation(
+            &document.mutations,
+            "prisma",
+            MutationOperation::Create,
+            Some("user"),
+            Confidence::High,
+        );
+        assert_mutation(
+            &document.mutations,
+            "prisma",
+            MutationOperation::BulkUpdate,
+            Some("user"),
+            Confidence::High,
+        );
+        assert_mutation(
+            &document.mutations,
+            "prisma",
+            MutationOperation::Delete,
+            Some("session"),
+            Confidence::High,
+        );
+        assert_review_required_mutation(
+            &document.mutations,
+            "prisma",
+            MutationOperation::UnknownMutation,
+            "unknown_operation",
+        );
+        assert_review_required_mutation(
+            &document.mutations,
+            "prisma",
+            MutationOperation::RawSqlMutation,
+            "raw_sql",
+        );
+
+        assert_mutation(
+            &document.mutations,
+            "sqlalchemy",
+            MutationOperation::Create,
+            Some("User"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "sqlalchemy",
+            MutationOperation::Update,
+            Some("User.disabled"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "sqlalchemy",
+            MutationOperation::Update,
+            Some("User"),
+            Confidence::High,
+        );
+        assert_mutation(
+            &document.mutations,
+            "sqlalchemy",
+            MutationOperation::Delete,
+            Some("SessionToken"),
+            Confidence::High,
+        );
+        assert_review_required_mutation(
+            &document.mutations,
+            "sqlalchemy",
+            MutationOperation::RawSqlMutation,
+            "raw_sql",
+        );
+
+        assert_mutation(
+            &document.mutations,
+            "django_orm",
+            MutationOperation::Create,
+            Some("Account"),
+            Confidence::High,
+        );
+        assert_mutation(
+            &document.mutations,
+            "django_orm",
+            MutationOperation::BulkUpdate,
+            Some("Account"),
+            Confidence::High,
+        );
+        assert_mutation(
+            &document.mutations,
+            "django_orm",
+            MutationOperation::Save,
+            Some("Account"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "django_orm",
+            MutationOperation::Delete,
+            Some("Account"),
+            Confidence::High,
+        );
+
+        assert!(document.mutations.iter().all(|mutation| {
+            !mutation
+                .span
+                .as_ref()
+                .is_some_and(|span| span.file.contains("negative"))
+        }));
+    }
+
+    #[test]
+    fn scan_pipeline_links_routes_to_direct_and_service_mutations() {
+        let target = fixture_path("linking");
+        let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        assert_eq!(document.routes.len(), 8);
+        assert_eq!(document.mutations.len(), 4);
+        assert_eq!(document.links.len(), 6);
+        assert_eq!(
+            document.links.first().map(|link| link.id.as_str()),
+            Some("link_0001")
+        );
+
+        assert_mutation_link(
+            &document,
+            "/express/direct",
+            "prisma",
+            Some("user"),
+            Confidence::High,
+        );
+        assert_mutation_link(
+            &document,
+            "/express/service",
+            "prisma",
+            Some("session"),
+            Confidence::Medium,
+        );
+        assert_mutation_link(
+            &document,
+            "/fastapi/direct",
+            "sqlalchemy",
+            Some("User"),
+            Confidence::High,
+        );
+        assert_mutation_link(
+            &document,
+            "/fastapi/service",
+            "sqlalchemy",
+            Some("User"),
+            Confidence::Medium,
+        );
+        assert_uncertainty_link(&document, "/express/dynamic", "serviceClient.deleteUser");
+        assert_uncertainty_link(
+            &document,
+            "/fastapi/dynamic",
+            "service_registry[\"create_user\"]",
+        );
+
+        for path in ["/express/read", "/fastapi/read"] {
+            let route = route_by_path(&document, path);
+            assert!(
+                !document.links.iter().any(|link| link.route_id == route.id),
+                "{path} should not have reachability links"
+            );
+        }
+
+        for path in [
+            "/express/direct",
+            "/express/service",
+            "/fastapi/direct",
+            "/fastapi/service",
+        ] {
+            let route = route_by_path(&document, path);
+            let coverage = coverage_for_route(&document, &route.id);
+            assert_eq!(coverage.class, CoverageClass::AuthnOnly);
+            assert_eq!(coverage.risk, RiskLevel::ReviewRequired);
+            let support = coverage
+                .extensions
+                .get("authmap.coverage")
+                .expect("coverage support should exist");
+            assert!(
+                support["mutation_ids"]
+                    .as_array()
+                    .is_some_and(|items| !items.is_empty()),
+                "{path} should include linked mutation support"
+            );
+            assert!(
+                support["sensitivity_reasons"]
+                    .as_array()
+                    .is_some_and(|items| items.iter().any(|item| item == "linked_mutation")),
+                "{path} should include linked mutation sensitivity"
+            );
+        }
+
+        for path in ["/express/dynamic", "/fastapi/dynamic"] {
+            let route = route_by_path(&document, path);
+            let coverage = coverage_for_route(&document, &route.id);
+            let support = coverage
+                .extensions
+                .get("authmap.coverage")
+                .expect("coverage support should exist");
+            assert_eq!(support["mutation_ids"], serde_json::json!([]));
+            assert!(
+                support["link_ids"]
+                    .as_array()
+                    .is_some_and(|items| !items.is_empty()),
+                "{path} should retain uncertainty link support"
+            );
+        }
+    }
+
+    #[test]
+    fn reachability_ignores_uncalled_nested_handler_mutations() {
+        let temp = TestDir::new("nested-handler-mutation");
+        write_file(
+            &temp.path().join("app.py"),
+            r#"
+from fastapi import Depends, FastAPI
+from sqlalchemy.orm import Session
+
+app = FastAPI()
+
+class User:
+    pass
+
+def require_user():
+    return {"id": "user_1"}
+
+@app.post("/noop")
+def noop(session: Session, user=Depends(require_user)):
+    def unused_delete():
+        session.delete(User())
+    return {"ok": True}
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+        let document = run_scan(&plan).expect("scan should succeed");
+        let route = route_by_path(&document, "/noop");
+        let coverage = coverage_for_route(&document, &route.id);
+        let support = coverage
+            .extensions
+            .get("authmap.coverage")
+            .expect("coverage support should exist");
+
+        assert!(document.mutations.iter().any(|mutation| {
+            mutation.library.as_deref() == Some("sqlalchemy")
+                && mutation.operation == MutationOperation::Delete
+        }));
+        assert!(
+            !document.links.iter().any(|link| link.route_id == route.id),
+            "unused nested function mutation should not be linked to route"
+        );
+        assert_eq!(support["mutation_ids"], serde_json::json!([]));
+        assert!(
+            support["sensitivity_reasons"]
+                .as_array()
+                .is_some_and(|items| !items.iter().any(|item| item == "linked_mutation"))
+        );
+    }
+
+    #[test]
+    fn reachability_resolves_typescript_default_imported_service_mutations() {
+        let temp = TestDir::new("default-import-service");
+        write_file(
+            &temp.path().join("app.ts"),
+            r#"
+import express from "express";
+import createSession from "./service";
+
+const app = express();
+
+function requireAuth(req, res, next) {
+  next();
+}
+
+app.post("/sessions", requireAuth, async (req, res) => {
+  await createSession(req.body.userId);
+  res.json({ ok: true });
+});
+"#,
+        );
+        write_file(
+            &temp.path().join("service.ts"),
+            r#"
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
+
+export default async function createSession(userId: string) {
+  return prisma.session.create({
+    data: { userId },
+  });
+}
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        assert_eq!(document.mutations.len(), 1);
+        assert_mutation_link(
+            &document,
+            "/sessions",
+            "prisma",
+            Some("session"),
+            Confidence::Medium,
+        );
+    }
+
+    #[test]
+    fn js_module_normalization_preserves_posix_absolute_roots() {
+        assert_eq!(
+            normalize_module_path("/tmp/authmap/project/routes", "./service", "/"),
+            "/tmp/authmap/project/routes/service"
+        );
+        assert_eq!(
+            normalize_module_path("/tmp/authmap/project/routes", "../service", "/"),
+            "/tmp/authmap/project/service"
+        );
+    }
+
+    #[test]
+    fn scan_pipeline_emits_runtime_limit_partial_document() {
+        let temp = TestDir::new("runtime-limit");
+        write_file(&temp.path().join("app.py"), "print('hello')\n");
+        let mut config = ScanConfig::default();
+        config.limits.max_runtime_ms = 1;
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, config);
+        let started_at = Instant::now() - Duration::from_millis(2);
+
+        let document =
+            run_scan_with_started_at(&plan, started_at).expect("partial scan should succeed");
+
+        assert_eq!(document.metadata.mode, ScanMode::Advisory);
+        assert_eq!(document.source_files.len(), 1);
+        assert!(document.routes.is_empty());
+        assert!(document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == diagnostic_codes::INTERNAL_RUNTIME_LIMIT_REACHED
+                && diagnostic.severity == authmap_core::DiagnosticSeverity::Warning
+        }));
+    }
+
+    #[test]
+    fn enforce_runtime_limit_is_enforce_blocking() {
+        let temp = TestDir::new("runtime-limit-enforce");
+        write_file(&temp.path().join("app.py"), "print('hello')\n");
+        let mut config = ScanConfig::default();
+        config.mode = ScanMode::Enforce;
+        config.limits.max_runtime_ms = 1;
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, config);
+        let started_at = Instant::now() - Duration::from_millis(2);
+
+        let document =
+            run_scan_with_started_at(&plan, started_at).expect("partial scan should succeed");
+
+        assert!(document.has_enforce_blocking_diagnostics());
+        assert!(document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == diagnostic_codes::INTERNAL_RUNTIME_LIMIT_REACHED
+                && diagnostic.severity == authmap_core::DiagnosticSeverity::Error
+        }));
+    }
+
+    #[test]
+    fn rules_suggest_emits_runtime_limit_partial_report() {
+        let temp = TestDir::new("rules-runtime-limit");
+        write_file(&temp.path().join("app.js"), "function requireUser() {}\n");
+        let mut config = ScanConfig::default();
+        config.limits.max_runtime_ms = 1;
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, config);
+        let started_at = Instant::now() - Duration::from_millis(2);
+
+        let report = suggest_rules_with_started_at(&plan, started_at)
+            .expect("partial suggestions should succeed");
+
+        assert_eq!(report.source_files_scanned, 0);
+        assert!(report.suggestions.is_empty());
+        assert!(report.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == diagnostic_codes::INTERNAL_RUNTIME_LIMIT_REACHED
+        }));
+    }
+
+    #[test]
     fn project_specific_authorization_rules_add_permission_evidence() {
         let temp = TestDir::new("custom-authorization-rules");
         write_file(
@@ -3035,6 +5088,130 @@ function authorizeRecord(req, res, next) { next(); }
             notes: Vec::new(),
             extensions: authmap_core::ExtensionMap::new(),
         }
+    }
+
+    fn assert_mutation(
+        mutations: &[Mutation],
+        library: &str,
+        operation: MutationOperation,
+        resource: Option<&str>,
+        confidence: Confidence,
+    ) {
+        assert!(
+            mutations.iter().any(|mutation| {
+                mutation.library.as_deref() == Some(library)
+                    && mutation.operation == operation
+                    && mutation.resource.as_deref() == resource
+                    && mutation.confidence == confidence
+                    && mutation.span.is_some()
+            }),
+            "missing {library} {operation:?} {resource:?} {confidence:?}"
+        );
+    }
+
+    fn assert_review_required_mutation(
+        mutations: &[Mutation],
+        library: &str,
+        operation: MutationOperation,
+        detection: &str,
+    ) {
+        let mutation = mutations
+            .iter()
+            .find(|mutation| {
+                mutation.library.as_deref() == Some(library) && mutation.operation == operation
+            })
+            .unwrap_or_else(|| panic!("missing {library} {operation:?}"));
+        assert_eq!(mutation.confidence, Confidence::Low);
+        let extension = mutation
+            .extensions
+            .get("authmap.mutation")
+            .expect("review-required mutation should have metadata");
+        assert_eq!(extension["review_required"], serde_json::json!(true));
+        assert_eq!(extension["detection"], serde_json::json!(detection));
+        assert!(
+            extension["uncertainty_reasons"]
+                .as_array()
+                .is_some_and(|items| !items.is_empty())
+        );
+    }
+
+    fn route_by_path<'a>(
+        document: &'a authmap_core::AuthMapDocument,
+        path: &str,
+    ) -> &'a authmap_core::Route {
+        document
+            .routes
+            .iter()
+            .find(|route| route.path == path)
+            .unwrap_or_else(|| panic!("missing route {path}"))
+    }
+
+    fn coverage_for_route<'a>(
+        document: &'a authmap_core::AuthMapDocument,
+        route_id: &str,
+    ) -> &'a authmap_core::Coverage {
+        document
+            .coverage
+            .iter()
+            .find(|coverage| coverage.route_id == route_id)
+            .unwrap_or_else(|| panic!("missing coverage for {route_id}"))
+    }
+
+    fn assert_mutation_link(
+        document: &authmap_core::AuthMapDocument,
+        route_path: &str,
+        library: &str,
+        resource: Option<&str>,
+        confidence: Confidence,
+    ) {
+        let route = route_by_path(document, route_path);
+        let link = document
+            .links
+            .iter()
+            .find(|link| {
+                link.route_id == route.id
+                    && link.confidence == confidence
+                    && link.mutation_id.as_ref().is_some_and(|mutation_id| {
+                        document.mutations.iter().any(|mutation| {
+                            &mutation.id == mutation_id
+                                && mutation.library.as_deref() == Some(library)
+                                && mutation.resource.as_deref() == resource
+                        })
+                    })
+            })
+            .unwrap_or_else(|| panic!("missing mutation link for {route_path}"));
+        assert!(link.evidence_id.is_none());
+        assert!(link.notes.iter().any(|note| {
+            let lower = note.to_ascii_lowercase();
+            lower.contains("mutation") || lower.contains("service call")
+        }));
+    }
+
+    fn assert_uncertainty_link(
+        document: &authmap_core::AuthMapDocument,
+        route_path: &str,
+        call_target: &str,
+    ) {
+        let route = route_by_path(document, route_path);
+        let link = document
+            .links
+            .iter()
+            .find(|link| {
+                link.route_id == route.id
+                    && link.mutation_id.is_none()
+                    && link.confidence == Confidence::Low
+            })
+            .unwrap_or_else(|| panic!("missing uncertainty link for {route_path}"));
+        let extension = link
+            .extensions
+            .get("authmap.reachability")
+            .expect("uncertainty link should include reachability metadata");
+        assert_eq!(
+            extension["reason"],
+            serde_json::json!("unresolved_service_call")
+        );
+        assert_eq!(extension["call_target"], serde_json::json!(call_target));
+        assert!(extension.get("call_span").is_some());
     }
 
     fn assert_coverage(

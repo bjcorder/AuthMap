@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use authmap_analysis::{run_scan, suggest_rules};
-use authmap_config::{ScanPlan, load_config};
+use authmap_config::{ScanConfig, ScanPlan, load_config};
 use authmap_core::{AuthMapDocument, ScanMode, diagnostic_codes};
 use authmap_report::{
     JsonReporter, MarkdownReporter, Reporter, SarifReporter, render_explain,
@@ -45,6 +45,14 @@ enum Command {
         config: Option<PathBuf>,
         #[arg(long, value_enum)]
         mode: Option<ScanModeArg>,
+        #[arg(long)]
+        max_files: Option<usize>,
+        #[arg(long)]
+        max_file_size_bytes: Option<u64>,
+        #[arg(long)]
+        max_total_bytes: Option<u64>,
+        #[arg(long)]
+        max_runtime_ms: Option<u64>,
     },
     Diff {
         range: String,
@@ -102,6 +110,14 @@ enum RulesCommand {
         output: Option<PathBuf>,
         #[arg(long)]
         config: Option<PathBuf>,
+        #[arg(long)]
+        max_files: Option<usize>,
+        #[arg(long)]
+        max_file_size_bytes: Option<u64>,
+        #[arg(long)]
+        max_total_bytes: Option<u64>,
+        #[arg(long)]
+        max_runtime_ms: Option<u64>,
     },
 }
 
@@ -131,11 +147,24 @@ fn run() -> Result<ExitCode, CliError> {
             output,
             config,
             mode,
+            max_files,
+            max_file_size_bytes,
+            max_total_bytes,
+            max_runtime_ms,
         } => {
             let (config_path, mut config) = load_config(config).map_err(CliError::Config)?;
             if let Some(mode) = mode {
                 config.mode = mode.into();
             }
+            apply_limit_overrides(
+                &mut config,
+                LimitOverrides {
+                    max_files,
+                    max_file_size_bytes,
+                    max_total_bytes,
+                    max_runtime_ms,
+                },
+            )?;
             let plan = ScanPlan::new(vec![target], config_path, config);
             let document = run_scan(&plan).map_err(CliError::Scan)?;
             let rendered = match format {
@@ -169,9 +198,75 @@ fn run() -> Result<ExitCode, CliError> {
                     format,
                     output,
                     config,
+                    max_files,
+                    max_file_size_bytes,
+                    max_total_bytes,
+                    max_runtime_ms,
                 },
-        } => run_rules_suggest(target, format, output, config),
+        } => run_rules_suggest(
+            target,
+            format,
+            output,
+            config,
+            LimitOverrides {
+                max_files,
+                max_file_size_bytes,
+                max_total_bytes,
+                max_runtime_ms,
+            },
+        ),
     }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct LimitOverrides {
+    max_files: Option<usize>,
+    max_file_size_bytes: Option<u64>,
+    max_total_bytes: Option<u64>,
+    max_runtime_ms: Option<u64>,
+}
+
+fn apply_limit_overrides(
+    config: &mut ScanConfig,
+    overrides: LimitOverrides,
+) -> Result<(), CliError> {
+    if let Some(value) = overrides.max_files {
+        if value == 0 {
+            return Err(CliError::InvalidCliLimit(
+                "max-files",
+                "must be greater than zero",
+            ));
+        }
+        config.limits.max_files = value;
+    }
+    if let Some(value) = overrides.max_file_size_bytes {
+        if value == 0 {
+            return Err(CliError::InvalidCliLimit(
+                "max-file-size-bytes",
+                "must be greater than zero",
+            ));
+        }
+        config.limits.max_file_size_bytes = value;
+    }
+    if let Some(value) = overrides.max_total_bytes {
+        if value == 0 {
+            return Err(CliError::InvalidCliLimit(
+                "max-total-bytes",
+                "must be greater than zero",
+            ));
+        }
+        config.limits.max_total_bytes = value;
+    }
+    if let Some(value) = overrides.max_runtime_ms {
+        if value == 0 {
+            return Err(CliError::InvalidCliLimit(
+                "max-runtime-ms",
+                "must be greater than zero",
+            ));
+        }
+        config.limits.max_runtime_ms = value;
+    }
+    Ok(())
 }
 
 fn run_rules_suggest(
@@ -179,8 +274,10 @@ fn run_rules_suggest(
     format: RuleSuggestOutputFormat,
     output: Option<PathBuf>,
     config: Option<PathBuf>,
+    limit_overrides: LimitOverrides,
 ) -> Result<ExitCode, CliError> {
-    let (config_path, config) = load_config(config).map_err(CliError::Config)?;
+    let (config_path, mut config) = load_config(config).map_err(CliError::Config)?;
+    apply_limit_overrides(&mut config, limit_overrides)?;
     let plan = ScanPlan::new(vec![target], config_path, config);
     let suggestions = suggest_rules(&plan).map_err(CliError::Scan)?;
     let rendered = match format {
@@ -232,6 +329,7 @@ fn run_init(output: &Path, yes: bool, force: bool) -> Result<ExitCode, CliError>
             return Ok(ExitCode::SUCCESS);
         }
     }
+    let overwrite = output.exists();
 
     let include_examples = if yes {
         true
@@ -246,12 +344,50 @@ fn run_init(output: &Path, yes: bool, force: bool) -> Result<ExitCode, CliError>
             source,
         })?;
     }
-    fs::write(output, starter_config(include_examples)).map_err(|source| CliError::InitWrite {
-        path: output.to_path_buf(),
-        source,
-    })?;
+    write_init_config(output, &starter_config(include_examples), overwrite)?;
     println!("Created {}.", output.display());
     Ok(ExitCode::SUCCESS)
+}
+
+fn write_init_config(output: &Path, contents: &str, overwrite: bool) -> Result<(), CliError> {
+    if overwrite {
+        let metadata = output
+            .symlink_metadata()
+            .map_err(|source| CliError::InitWrite {
+                path: output.to_path_buf(),
+                source,
+            })?;
+        if metadata.file_type().is_symlink() {
+            return Err(CliError::InitSymlink(output.to_path_buf()));
+        }
+        if !metadata.is_file() {
+            return Err(CliError::InitWrite {
+                path: output.to_path_buf(),
+                source: io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    "refusing to overwrite non-regular file",
+                ),
+            });
+        }
+        fs::remove_file(output).map_err(|source| CliError::InitWrite {
+            path: output.to_path_buf(),
+            source,
+        })?;
+    }
+
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(output)
+        .map_err(|source| CliError::InitWrite {
+            path: output.to_path_buf(),
+            source,
+        })?;
+    file.write_all(contents.as_bytes())
+        .map_err(|source| CliError::InitWrite {
+            path: output.to_path_buf(),
+            source,
+        })
 }
 
 fn prompt_yes_no(prompt: &str, default: bool) -> Result<bool, CliError> {
@@ -282,6 +418,8 @@ exclude: []
 limits:
   max_files: 50000
   max_file_size_bytes: 2097152
+  max_total_bytes: 268435456
+  max_runtime_ms: 120000
 
 authorization:
   rules: []
@@ -375,6 +513,8 @@ enum CliError {
         path: PathBuf,
         source: std::io::Error,
     },
+    #[error("invalid CLI limit --{0}: {1}")]
+    InvalidCliLimit(&'static str, &'static str),
     #[error("{0} is scaffolded but not implemented yet")]
     NotImplemented(&'static str),
     #[error("{0} is scaffolded but not implemented yet: {1}")]
@@ -395,6 +535,7 @@ impl CliError {
             CliError::Explain(_) => 13,
             CliError::InitExists(_) | CliError::InitSymlink(_) => 15,
             CliError::InitIo(_) | CliError::InitWrite { .. } => 14,
+            CliError::InvalidCliLimit(_, _) => 2,
             CliError::NotImplemented(_) | CliError::NotImplementedWithArg(_, _) => 13,
         }
     }
@@ -438,6 +579,7 @@ impl CliError {
             CliError::InitIo(_) | CliError::InitWrite { .. } => {
                 diagnostic_codes::REPORT_WRITE_FAILED
             }
+            CliError::InvalidCliLimit(_, _) => diagnostic_codes::CONFIG_VALIDATION_FAILED,
             CliError::NotImplemented(_) | CliError::NotImplementedWithArg(_, _) => {
                 diagnostic_codes::INTERNAL_SCAN_FAILED
             }

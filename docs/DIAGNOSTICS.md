@@ -33,7 +33,8 @@ First-party codes are namespaced by category. New codes should be added to
 | `config.invalid_pattern` | Include or exclude pattern is invalid |
 | `discovery.no_candidate_sources` | No supported source files were discovered |
 | `discovery.file_too_large` | Supported source file exceeded size limits |
-| `discovery.file_limit_reached` | Candidate count exceeded `limits.max_files` |
+| `discovery.file_limit_reached` | Supported source discovery or candidate count exceeded `limits.max_files` |
+| `discovery.total_bytes_limit_reached` | Source byte budget exceeded `limits.max_total_bytes` |
 | `discovery.target_unavailable` | Scan target is missing or unreadable |
 | `discovery.empty_target` | Enforce-mode target has no supported sources |
 | `discovery.metadata_failed` | File metadata could not be read |
@@ -46,6 +47,7 @@ First-party codes are namespaced by category. New codes should be added to
 | `report.render_failed` | Report rendering failed |
 | `report.write_failed` | Report writing failed |
 | `internal.scan_failed` | Unexpected internal scan failure |
+| `internal.runtime_limit_reached` | Scan exceeded cooperative runtime budget |
 
 ## Severity And Exit Behavior
 
@@ -57,9 +59,16 @@ Enforce mode also writes the requested artifact first. If the completed
 document contains any diagnostic with `severity: "error"` or
 `recoverability: "fatal"`, the CLI exits `20` after writing the report.
 Warnings remain non-blocking. Discovery diagnostics that mean the scan is
-incomplete, such as `discovery.file_limit_reached` and
-`discovery.file_too_large`, are warnings in advisory mode and errors in enforce
-mode.
+incomplete, such as `discovery.file_limit_reached`,
+`discovery.file_too_large`, `discovery.total_bytes_limit_reached`, and
+`internal.runtime_limit_reached`, are warnings in advisory mode and errors in
+enforce mode.
+
+`discovery.file_limit_reached` can appear both as a scan diagnostic and as a
+`source_files[].skipped.code` value for a deterministic bounded sample of
+omitted files. AuthMap intentionally does not list every omitted file when
+discovery itself has been capped, because doing so would defeat the memory
+budget.
 
 Hard process failures do not produce a report and use their dedicated exit
 codes: CLI usage `2`, target unavailable `10`, empty enforce target `11`,

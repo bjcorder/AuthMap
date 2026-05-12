@@ -123,8 +123,19 @@ fn rust_document_serialization_validates_against_schema() {
         resource: Some("Account".to_string()),
         span: Some(span("src/routes/accounts.ts", 20, 5)),
         confidence: Confidence::Medium,
-        notes: Vec::new(),
-        extensions: ExtensionMap::new(),
+        notes: vec!["raw mutation requires review".to_string()],
+        extensions: {
+            let mut extensions = ExtensionMap::new();
+            extensions.insert(
+                "authmap.mutation".to_string(),
+                json!({
+                    "review_required": true,
+                    "uncertainty_reasons": ["raw SQL mutation requires review"],
+                    "detection": "raw_sql"
+                }),
+            );
+            extensions
+        },
     });
     document.links.push(ReachabilityLink {
         id: "link.accounts.delete".to_string(),
@@ -134,6 +145,31 @@ fn rust_document_serialization_validates_against_schema() {
         confidence: Confidence::Medium,
         notes: Vec::new(),
         extensions: ExtensionMap::new(),
+    });
+    document.links.push(ReachabilityLink {
+        id: "link.accounts.dynamic_service".to_string(),
+        route_id: "route.accounts.delete".to_string(),
+        mutation_id: None,
+        evidence_id: None,
+        confidence: Confidence::Low,
+        notes: vec!["service-like call could not be resolved statically".to_string()],
+        extensions: {
+            let mut extensions = ExtensionMap::new();
+            extensions.insert(
+                "authmap.reachability".to_string(),
+                json!({
+                    "call_target": "accountService.delete",
+                    "call_span": {
+                        "file": "src/routes/accounts.ts",
+                        "line": 18,
+                        "column": 7,
+                        "byte_range": null
+                    },
+                    "reason": "unresolved_service_call"
+                }),
+            );
+            extensions
+        },
     });
     document.coverage.push(Coverage {
         route_id: "route.accounts.delete".to_string(),
