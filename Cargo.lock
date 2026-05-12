@@ -117,7 +117,11 @@ dependencies = [
  "authmap-parsers",
  "authmap-testkit",
  "rayon",
+ "serde",
+ "serde_json",
+ "serde_yaml",
  "thiserror",
+ "tree-sitter",
 ]
 
 [[package]]

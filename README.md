@@ -51,6 +51,8 @@ The canonical JSON contract is documented in [docs/SCHEMA.md](docs/SCHEMA.md)
 and defined by [schemas/authmap.schema.json](schemas/authmap.schema.json).
 Diagnostic categories, stable codes, and CI exit behavior are documented in
 [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md).
+Project configuration, custom authorization rules, and sensitivity labels are
+documented in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 ## Example report shape
 
@@ -130,6 +132,16 @@ authmap explain ROUTE_OR_FINDING_ID
 authmap baseline create
 authmap rules suggest
 ```
+
+`authmap explain <id>` reads `authmap.json` by default, or another AuthMap JSON
+document via `--input <path>`, and explains route, evidence, mutation, or link
+IDs. It validates the schema version and treats risk as review priority rather
+than a confirmed vulnerability.
+
+`authmap rules suggest [target]` is a local read-only helper for discovering
+project-specific guard names. It prints Markdown by default, supports
+`--format json`, `--output <path>`, and `--config <path>`, and never modifies
+`authmap.yml`.
 
 ## Local development
 

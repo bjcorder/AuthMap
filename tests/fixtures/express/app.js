@@ -13,8 +13,30 @@ function requireAuth(req, res, next) {
   next();
 }
 
+function requireRole(role) {
+  return function roleGuard(req, res, next) {
+    if (req.user?.role !== role) {
+      return res.sendStatus(403);
+    }
+    next();
+  };
+}
+
+function requirePermission(permission) {
+  return function permissionGuard(req, res, next) {
+    if (!req.user?.permissions?.includes(permission)) {
+      return res.sendStatus(403);
+    }
+    next();
+  };
+}
+
 function audit(req, res, next) {
   next();
+}
+
+function dynamicPolicyCheck(name) {
+  return name === "accounts.update";
 }
 
 function listAccounts(req, res) {
@@ -26,11 +48,18 @@ app.get("/health", requireAuth, (req, res) => {
 });
 
 app.post("/accounts", [requireAuth, audit], listAccounts);
+app.post("/admin/jobs", requireAuth, requireRole("admin"), listAccounts);
+app.patch("/accounts/:id/permissions", requirePermission("accounts.write"), (req, res) => {
+  if (!dynamicPolicyCheck("accounts.update")) {
+    return res.sendStatus(403);
+  }
+  res.sendStatus(204);
+});
 app.delete(dynamicPath, requireAuth, listAccounts);
 
 localRouter.put("/:id", requireAuth, listAccounts);
 childRouter.get("/child", audit, listAccounts);
-localRouter.use("/nested", childRouter);
+localRouter.use("/nested", requireAuth, childRouter);
 localRouter.use("/loop", localRouter);
 
 app.use("/api", localRouter);

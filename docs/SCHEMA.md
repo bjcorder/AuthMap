@@ -22,6 +22,8 @@ The JSON schema is strict: misspelled core fields are rejected.
 
 Diagnostic categories, severity semantics, and exit-code behavior are documented
 in [`docs/DIAGNOSTICS.md`](DIAGNOSTICS.md).
+Project configuration is documented in
+[`docs/CONFIGURATION.md`](CONFIGURATION.md).
 
 ## Locations And Relationships
 
@@ -49,6 +51,82 @@ reflection, or approximate reachability.
 Coverage and risk fields should avoid overstating findings. When a check is
 dynamic or incomplete, prefer `unknown_or_dynamic` or `review_required` with a
 clear reviewer question.
+
+Coverage classification is deterministic and rule-based. AuthMap chooses the
+most specific strong evidence class in this order: `public_declared`,
+`admin_guarded`, `permission_guarded`, `ownership_guarded`, `tenant_guarded`,
+`role_guarded`, `authn_only`, `unknown_or_dynamic`, then `unauthenticated`.
+Low-confidence evidence and `unknown_dynamic_check` evidence require review
+rather than proving a route safe.
+
+Risk scoring uses route sensitivity modifiers and linked facts:
+
+- `high`: no authorization evidence on unsafe methods, `ANY`, or routes with
+  linked mutations.
+- `medium`: no authorization evidence on sensitive read paths such as admin,
+  account, user, tenant, or path-parameter routes.
+- `review_required`: weak/dynamic-only evidence, sensitive public routes,
+  sensitive authn-only routes, or linked mutations guarded only by non-resource
+  evidence.
+- `low`: non-sensitive public/unauthenticated routes and routes with strong
+  resource-oriented authorization evidence.
+
+Coverage entries include machine-readable support metadata in the namespaced
+extension key `authmap.coverage`. The extension can contain `evidence_ids`,
+`weak_evidence_ids`, `mutation_ids`, `link_ids`, and `sensitivity_reasons`.
+
+## Project Authorization Rules
+
+Projects can extend built-in guard detection through `authmap.yml`:
+
+```yaml
+authorization:
+  rules:
+    - name: billing permission guard
+      evidence_type: permission_check
+      mechanism: billing_plan_guard
+      confidence: medium
+      match:
+        exact: [ensurePaidPlan]
+        contains: [permission]
+      notes:
+        - configured by project
+```
+
+Rule matching supports exact symbol names and case-insensitive substring
+matches. Rules emit canonical evidence entries and keep the core output schema
+unchanged. The complete config format and CLI helpers are documented in
+[`docs/CONFIGURATION.md`](CONFIGURATION.md), including `authmap explain` and
+the read-only `authmap rules suggest` workflow.
+
+## Project Sensitivity Rules
+
+Projects can label sensitive route families and linked mutation resources in
+`authmap.yml` without changing the JSON schema:
+
+```yaml
+sensitivity:
+  routes:
+    - name: account routes
+      labels: [account_data]
+      match:
+        contains: [/accounts]
+      methods: [GET, PATCH, DELETE]
+      reviewer_questions:
+        - Should account routes require ownership or permission checks?
+  resources:
+    - name: invoice mutations
+      labels: [financial]
+      match:
+        exact: [Invoice]
+      reviewer_questions:
+        - Should invoice writes require finance approval?
+```
+
+Route labels are emitted as `config_route:<label>` and resource labels as
+`config_resource:<label>` in
+`coverage.extensions["authmap.coverage"].sensitivity_reasons`. These labels
+prioritize review and reviewer questions; they do not assert vulnerabilities.
 
 ## Extensions
 

@@ -989,6 +989,7 @@ struct ExpressMount {
     child_name: String,
     imported: Option<ExpressImport>,
     prefix: Option<String>,
+    middleware: Vec<SymbolRef>,
     dynamic_prefix: bool,
     span: Span,
 }
@@ -997,6 +998,7 @@ struct ExpressMount {
 struct MountedRouter {
     binding: ExpressBinding,
     prefixes: Vec<String>,
+    middleware: Vec<SymbolRef>,
     dynamic_prefix: bool,
     lineage: Vec<(String, String)>,
 }
@@ -1041,7 +1043,11 @@ impl ExpressIndex {
                 continue;
             };
             if binding.kind == BindingKind::App {
-                push_unique(&mut routes, &mut seen, express_route(fact, None, false));
+                push_unique(
+                    &mut routes,
+                    &mut seen,
+                    express_route(fact, None, &[], false),
+                );
             }
         }
 
@@ -1077,6 +1083,7 @@ impl ExpressIndex {
             mounted.push(MountedRouter {
                 binding: child,
                 prefixes,
+                middleware: mount.middleware.clone(),
                 dynamic_prefix: mount.dynamic_prefix,
                 lineage,
             });
@@ -1122,6 +1129,8 @@ impl ExpressIndex {
                 if let Some(prefix) = &mount.prefix {
                     prefixes.push(prefix.clone());
                 }
+                let mut middleware = parent_mount.middleware;
+                middleware.extend(mount.middleware.clone());
                 let dynamic = parent_mount.dynamic_prefix || mount.dynamic_prefix;
                 let mut lineage = parent_mount.lineage;
                 lineage.push(child_key);
@@ -1129,6 +1138,7 @@ impl ExpressIndex {
                     mounted.binding.file == child.file
                         && mounted.binding.name == child.name
                         && mounted.prefixes == prefixes
+                        && mounted.middleware == middleware
                         && mounted.dynamic_prefix == dynamic
                 }) {
                     continue;
@@ -1136,6 +1146,7 @@ impl ExpressIndex {
                 mounted.push(MountedRouter {
                     binding: child,
                     prefixes,
+                    middleware,
                     dynamic_prefix: dynamic,
                     lineage,
                 });
@@ -1158,7 +1169,12 @@ impl ExpressIndex {
                 push_unique(
                     &mut routes,
                     &mut seen,
-                    express_route(fact, prefix.as_deref(), mounted.dynamic_prefix),
+                    express_route(
+                        fact,
+                        prefix.as_deref(),
+                        &mounted.middleware,
+                        mounted.dynamic_prefix,
+                    ),
                 );
             }
         }
@@ -1177,7 +1193,12 @@ impl ExpressIndex {
     }
 }
 
-fn express_route(fact: &ExpressRouteFact, prefix: Option<&str>, dynamic_prefix: bool) -> Route {
+fn express_route(
+    fact: &ExpressRouteFact,
+    prefix: Option<&str>,
+    mount_middleware: &[SymbolRef],
+    dynamic_prefix: bool,
+) -> Route {
     let mut path = fact.path.clone();
     let mut confidence = if fact.dynamic_path {
         Confidence::Low
@@ -1205,7 +1226,7 @@ fn express_route(fact: &ExpressRouteFact, prefix: Option<&str>, dynamic_prefix: 
         path,
         name: None,
         tags: Vec::new(),
-        middleware: fact.middleware.clone(),
+        middleware: merged_middleware(mount_middleware, &fact.middleware),
         handler: Some(fact.handler.clone()),
         span: Some(fact.span.clone()),
         source_evidence: Vec::new(),
@@ -1213,6 +1234,16 @@ fn express_route(fact: &ExpressRouteFact, prefix: Option<&str>, dynamic_prefix: 
         notes,
         extensions: authmap_core::ExtensionMap::new(),
     }
+}
+
+fn merged_middleware(
+    mount_middleware: &[SymbolRef],
+    route_middleware: &[SymbolRef],
+) -> Vec<SymbolRef> {
+    let mut middleware = Vec::with_capacity(mount_middleware.len() + route_middleware.len());
+    middleware.extend(mount_middleware.iter().cloned());
+    middleware.extend(route_middleware.iter().cloned());
+    middleware
 }
 
 fn binding_key(binding: &ExpressBinding) -> (String, String) {
@@ -1415,10 +1446,12 @@ impl<'a> ExpressCollector<'a> {
             (None, &args[1..])
         };
 
-        let child_node = select_mount_child(self.parsed, child_candidates, self.index);
-        let Some(child_node) = child_node else {
+        let selected = select_mount_child(self.parsed, child_candidates, self.index);
+        let Some((child_index, child_node)) = selected else {
             return;
         };
+        let middleware =
+            symbols_from_route_args(self.parsed, &child_candidates[..child_index], None);
         let Some(child_name) = symbol_name(self.parsed, child_node, "<inline_middleware>") else {
             return;
         };
@@ -1435,6 +1468,7 @@ impl<'a> ExpressCollector<'a> {
             child_name,
             imported,
             prefix,
+            middleware,
             dynamic_prefix,
             span: self.parsed.span_for(call),
         });
@@ -1636,18 +1670,19 @@ fn select_mount_child<'tree>(
     parsed: &ParsedFile,
     candidates: &[Node<'tree>],
     index: &ExpressIndex,
-) -> Option<Node<'tree>> {
+) -> Option<(usize, Node<'tree>)> {
     let symbol_candidates = candidates
         .iter()
         .copied()
-        .filter(|candidate| is_symbol_reference(*candidate))
+        .enumerate()
+        .filter(|(_, candidate)| is_symbol_reference(*candidate))
         .collect::<Vec<_>>();
 
     symbol_candidates
         .iter()
         .rev()
         .copied()
-        .find(|candidate| {
+        .find(|(_, candidate)| {
             let Some(name) = symbol_name(parsed, *candidate, "<inline_middleware>") else {
                 return false;
             };
@@ -2011,7 +2046,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        assert_eq!(output.routes.len(), 12);
+        assert_eq!(output.routes.len(), 15);
         assert!(summaries.contains(&(
             "GET",
             "/health",
@@ -2153,7 +2188,7 @@ mod tests {
         ]);
         let output = ExpressAdapter.discover_routes(&parsed, &AdapterContext::default());
 
-        assert_eq!(output.routes.len(), 12);
+        assert_eq!(output.routes.len(), 16);
         assert!(
             output
                 .routes
@@ -2192,8 +2227,17 @@ mod tests {
                 .as_ref()
                 .and_then(|handler| handler.span.as_ref())
                 .map(|span| span.line),
-            Some(20)
+            Some(42)
         );
+
+        let admin_jobs = route(&output, "POST", "/admin/jobs");
+        assert_eq!(
+            middleware_names(admin_jobs),
+            vec!["requireAuth", "requireRole"]
+        );
+
+        let permissions = route(&output, "PATCH", "/accounts/:id/permissions");
+        assert_eq!(middleware_names(permissions), vec!["requirePermission"]);
 
         let dynamic = route(&output, "DELETE", "<dynamic>");
         assert_eq!(dynamic.confidence, Confidence::Low);
@@ -2212,6 +2256,7 @@ mod tests {
             nested.handler.as_ref().map(|handler| handler.name.as_str()),
             Some("listAccounts")
         );
+        assert_eq!(middleware_names(nested), vec!["requireAuth", "audit"]);
 
         let dynamic_mount = route(&output, "GET", "/child");
         assert_eq!(dynamic_mount.confidence, Confidence::Medium);
@@ -2240,7 +2285,10 @@ mod tests {
         assert_eq!(middleware_names(users_get), vec!["requireUser"]);
 
         let secure_users_get = route(&output, "GET", "/secure/:userId");
-        assert_eq!(middleware_names(secure_users_get), vec!["requireUser"]);
+        assert_eq!(
+            middleware_names(secure_users_get),
+            vec!["requireAuth", "requireUser"]
+        );
 
         let users_post = route(&output, "POST", "/v1/:userId");
         assert_eq!(
@@ -2256,8 +2304,11 @@ mod tests {
                 .as_ref()
                 .and_then(|handler| handler.span.as_ref())
                 .map(|span| span.line),
-            Some(9)
+            Some(16)
         );
+
+        let tenant_settings = route(&output, "GET", "/v1/:tenantId/settings");
+        assert_eq!(middleware_names(tenant_settings), vec!["requireTenant"]);
 
         let exported = route(&output, "PATCH", "/exported/audit");
         assert_eq!(
