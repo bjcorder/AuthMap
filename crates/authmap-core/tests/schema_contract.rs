@@ -146,6 +146,31 @@ fn rust_document_serialization_validates_against_schema() {
         notes: Vec::new(),
         extensions: ExtensionMap::new(),
     });
+    document.links.push(ReachabilityLink {
+        id: "link.accounts.dynamic_service".to_string(),
+        route_id: "route.accounts.delete".to_string(),
+        mutation_id: None,
+        evidence_id: None,
+        confidence: Confidence::Low,
+        notes: vec!["service-like call could not be resolved statically".to_string()],
+        extensions: {
+            let mut extensions = ExtensionMap::new();
+            extensions.insert(
+                "authmap.reachability".to_string(),
+                json!({
+                    "call_target": "accountService.delete",
+                    "call_span": {
+                        "file": "src/routes/accounts.ts",
+                        "line": 18,
+                        "column": 7,
+                        "byte_range": null
+                    },
+                    "reason": "unresolved_service_call"
+                }),
+            );
+            extensions
+        },
+    });
     document.coverage.push(Coverage {
         route_id: "route.accounts.delete".to_string(),
         class: CoverageClass::AuthnOnly,

@@ -25,6 +25,10 @@ pub trait MutationExtractor: Send + Sync {
     fn extract_mutations(&self, input: &AnalysisInput<'_>) -> AnalysisFacts;
 }
 
+pub trait ReachabilityLinker: Send + Sync {
+    fn link_reachability(&self, input: &AnalysisInput<'_>) -> AnalysisFacts;
+}
+
 #[derive(Clone, Debug)]
 pub struct AnalysisInput<'a> {
     pub routes: &'a [authmap_core::Route],
@@ -38,6 +42,7 @@ pub struct AnalysisInput<'a> {
 pub struct AnalysisFacts {
     pub evidence: Vec<Evidence>,
     pub mutations: Vec<Mutation>,
+    pub links: Vec<ReachabilityLink>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -152,6 +157,58 @@ impl MutationExtractor for BuiltInMutationExtractor {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct BuiltInReachabilityLinker;
+
+impl ReachabilityLinker for BuiltInReachabilityLinker {
+    fn link_reachability(&self, input: &AnalysisInput<'_>) -> AnalysisFacts {
+        let index = ReachabilityIndex::new(input.parsed_files);
+        let parsed_by_path = input
+            .parsed_files
+            .iter()
+            .map(|parsed| (parsed.source.path.as_str(), parsed))
+            .collect::<BTreeMap<_, _>>();
+
+        let mut links = Vec::new();
+        for route in input.routes {
+            let Some(handler) = &route.handler else {
+                continue;
+            };
+            let Some(parsed) =
+                route_file(route).and_then(|file| parsed_by_path.get(file.as_str()).copied())
+            else {
+                continue;
+            };
+            let handler_node = match route.framework {
+                Framework::Express => express_handler_node(parsed, handler),
+                Framework::FastApi => fastapi_decorated_function_node(parsed, &handler.name),
+                _ => None,
+            };
+            let Some(handler_node) = handler_node else {
+                continue;
+            };
+            links.extend(link_route_handler_mutations(
+                route,
+                parsed,
+                handler_node,
+                input.mutations,
+                &index,
+            ));
+        }
+
+        dedup_links(&mut links);
+        links.sort_by_key(link_sort_key);
+        for (index, link) in links.iter_mut().enumerate() {
+            link.id = format!("link_{:04}", index + 1);
+        }
+
+        AnalysisFacts {
+            links,
+            ..AnalysisFacts::default()
+        }
+    }
+}
+
 pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
     let discovery = discover_sources(plan)?;
     let backend = TreeSitterBackend;
@@ -205,6 +262,16 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
     document.mutations = mutation_facts.mutations;
     document.diagnostics.extend(facts.diagnostics);
     document.diagnostics.extend(mutation_facts.diagnostics);
+    let link_input = AnalysisInput {
+        routes: &document.routes,
+        parsed_files: &parse_output.parsed_files,
+        config: &plan.config,
+        adapter_evidence: &adapter_evidence,
+        mutations: &document.mutations,
+    };
+    let link_facts = BuiltInReachabilityLinker.link_reachability(&link_input);
+    document.links = link_facts.links;
+    document.diagnostics.extend(link_facts.diagnostics);
     document.coverage = classify_coverage(
         &document.routes,
         &document.evidence,
@@ -1366,6 +1433,642 @@ fn looks_like_model_name(value: &str) -> bool {
         .chars()
         .next()
         .is_some_and(|ch| ch.is_ascii_uppercase())
+}
+
+#[derive(Clone, Debug)]
+struct ReachabilityIndex<'a> {
+    functions: BTreeMap<(String, String), FunctionDef<'a>>,
+    imports: BTreeMap<(String, String), ImportTarget>,
+}
+
+#[derive(Clone, Debug)]
+struct FunctionDef<'a> {
+    file: String,
+    name: String,
+    node: Node<'a>,
+}
+
+#[derive(Clone, Debug)]
+struct ImportTarget {
+    file: String,
+    name: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+struct ResolvedFunction<'a> {
+    def: FunctionDef<'a>,
+    confidence: Confidence,
+}
+
+impl<'a> ReachabilityIndex<'a> {
+    fn new(parsed_files: &'a [ParsedFile]) -> Self {
+        let python_modules = build_python_module_index(parsed_files);
+        let js_modules = build_js_module_index(parsed_files);
+        let mut index = Self {
+            functions: BTreeMap::new(),
+            imports: BTreeMap::new(),
+        };
+
+        for parsed in parsed_files {
+            if let Some(root) = parsed.root_node() {
+                collect_function_defs(parsed, root, &mut index.functions);
+            }
+            match parsed.language {
+                authmap_core::Language::Python => {
+                    collect_python_imports(parsed, &python_modules, &mut index.imports);
+                }
+                authmap_core::Language::JavaScript
+                | authmap_core::Language::JavaScriptReact
+                | authmap_core::Language::TypeScript
+                | authmap_core::Language::TypeScriptReact => {
+                    collect_js_imports(parsed, &js_modules, &mut index.imports);
+                }
+                authmap_core::Language::Unknown => {}
+            }
+        }
+
+        index
+    }
+
+    fn resolve_call(&self, source_file: &str, function_text: &str) -> Option<ResolvedFunction<'a>> {
+        let trimmed = function_text.trim();
+        if let Some((object, member)) = trimmed.rsplit_once('.') {
+            let object = clean_symbol(object);
+            if let Some(target) = self.imports.get(&(source_file.to_string(), object)) {
+                let name = target.name.clone().unwrap_or_else(|| clean_symbol(member));
+                return self
+                    .functions
+                    .get(&(target.file.clone(), name))
+                    .cloned()
+                    .map(|def| ResolvedFunction {
+                        def,
+                        confidence: Confidence::Medium,
+                    });
+            }
+        }
+
+        let name = terminal_symbol_name(trimmed);
+        if let Some(def) = self
+            .functions
+            .get(&(source_file.to_string(), name.clone()))
+            .cloned()
+        {
+            return Some(ResolvedFunction {
+                def,
+                confidence: Confidence::High,
+            });
+        }
+        if let Some(target) = self.imports.get(&(source_file.to_string(), name)) {
+            let target_name = target.name.clone()?;
+            return self
+                .functions
+                .get(&(target.file.clone(), target_name))
+                .cloned()
+                .map(|def| ResolvedFunction {
+                    def,
+                    confidence: Confidence::Medium,
+                });
+        }
+        None
+    }
+}
+
+fn link_route_handler_mutations(
+    route: &authmap_core::Route,
+    parsed: &ParsedFile,
+    handler_node: Node<'_>,
+    mutations: &[Mutation],
+    index: &ReachabilityIndex<'_>,
+) -> Vec<ReachabilityLink> {
+    let mut links = Vec::new();
+    for mutation in mutations
+        .iter()
+        .filter(|mutation| mutation_inside_node(&parsed.source.path, handler_node, mutation))
+    {
+        links.push(reachability_link(
+            route,
+            Some(mutation),
+            Confidence::High,
+            vec!["Mutation is directly inside route handler".to_string()],
+            authmap_core::ExtensionMap::new(),
+        ));
+    }
+
+    for call in service_call_candidates(parsed, handler_node) {
+        let Some(function) = call.child_by_field_name("function") else {
+            continue;
+        };
+        let function_text = parsed.text_for(function).unwrap_or_default();
+        if should_skip_reachability_call(function_text) {
+            continue;
+        }
+        if let Some(resolved) = index.resolve_call(&parsed.source.path, function_text) {
+            for mutation in mutations.iter().filter(|mutation| {
+                mutation_inside_node(&resolved.def.file, resolved.def.node, mutation)
+            }) {
+                let note = if resolved.confidence == Confidence::High {
+                    format!(
+                        "One-hop same-file service call `{}` reaches mutation",
+                        terminal_symbol_name(function_text)
+                    )
+                } else {
+                    format!(
+                        "One-hop imported service call `{}` reaches `{}`",
+                        terminal_symbol_name(function_text),
+                        resolved.def.name
+                    )
+                };
+                links.push(reachability_link(
+                    route,
+                    Some(mutation),
+                    resolved.confidence,
+                    vec![note],
+                    authmap_core::ExtensionMap::new(),
+                ));
+            }
+        } else if service_like_call(function_text) {
+            let call_span = parsed.span_for(call);
+            links.push(reachability_link(
+                route,
+                None,
+                Confidence::Low,
+                vec![format!(
+                    "Service-like call `{}` could not be resolved statically",
+                    function_text.trim()
+                )],
+                reachability_uncertainty_extension(
+                    function_text.trim(),
+                    &call_span,
+                    "unresolved_service_call",
+                ),
+            ));
+        }
+    }
+    links
+}
+
+fn reachability_link(
+    route: &authmap_core::Route,
+    mutation: Option<&Mutation>,
+    confidence: Confidence,
+    notes: Vec<String>,
+    extensions: authmap_core::ExtensionMap,
+) -> ReachabilityLink {
+    ReachabilityLink {
+        id: String::new(),
+        route_id: route.id.clone(),
+        mutation_id: mutation.map(|mutation| mutation.id.clone()),
+        evidence_id: None,
+        confidence,
+        notes,
+        extensions,
+    }
+}
+
+fn reachability_uncertainty_extension(
+    call_target: &str,
+    call_span: &Span,
+    reason: &str,
+) -> authmap_core::ExtensionMap {
+    let mut extensions = authmap_core::ExtensionMap::new();
+    extensions.insert(
+        "authmap.reachability".to_string(),
+        serde_json::json!({
+            "call_target": call_target,
+            "call_span": call_span,
+            "reason": reason,
+        }),
+    );
+    extensions
+}
+
+fn service_call_candidates<'tree>(parsed: &ParsedFile, node: Node<'tree>) -> Vec<Node<'tree>> {
+    let mut calls = Vec::new();
+    let mut stack = vec![node];
+    while let Some(current) = stack.pop() {
+        if matches!(current.kind(), "call" | "call_expression") {
+            calls.push(current);
+        }
+        let mut cursor = current.walk();
+        stack.extend(current.children(&mut cursor));
+    }
+    calls
+        .into_iter()
+        .filter(|call| {
+            call.child_by_field_name("function")
+                .and_then(|function| parsed.text_for(function))
+                .is_some_and(|function_text| !should_skip_reachability_call(function_text))
+        })
+        .collect()
+}
+
+fn should_skip_reachability_call(function_text: &str) -> bool {
+    let trimmed = function_text.trim();
+    let terminal = terminal_symbol_name(trimmed);
+    let lower = terminal.to_ascii_lowercase();
+    if is_framework_route_call(trimmed) || is_fastapi_depends(trimmed) {
+        return true;
+    }
+    if looks_orm_call(trimmed) || looks_response_or_builtin_call(trimmed, &lower) {
+        return true;
+    }
+    if looks_guard_like(&lower) || looks_dynamic_policy(trimmed) {
+        return true;
+    }
+    false
+}
+
+fn looks_orm_call(function_text: &str) -> bool {
+    let lower = function_text.to_ascii_lowercase();
+    lower.starts_with("prisma.")
+        || lower.contains(".objects.")
+        || lower.starts_with("session.")
+        || matches!(
+            terminal_symbol_name(function_text).as_str(),
+            "update" | "delete" | "text"
+        )
+}
+
+fn looks_response_or_builtin_call(function_text: &str, terminal_lower: &str) -> bool {
+    let lower = function_text.to_ascii_lowercase();
+    lower.starts_with("res.")
+        || lower.starts_with("req.")
+        || lower.starts_with("request.")
+        || lower.starts_with("response.")
+        || matches!(
+            terminal_lower,
+            "json"
+                | "send"
+                | "sendstatus"
+                | "status"
+                | "commit"
+                | "rollback"
+                | "map"
+                | "filter"
+                | "includes"
+                | "get"
+                | "set"
+                | "str"
+                | "len"
+                | "dict"
+                | "list"
+                | "print"
+                | "date"
+        )
+}
+
+fn service_like_call(function_text: &str) -> bool {
+    let terminal = terminal_symbol_name(function_text);
+    let lower = terminal.to_ascii_lowercase();
+    let full_lower = function_text.to_ascii_lowercase();
+    lower.starts_with("create")
+        || lower.starts_with("update")
+        || lower.starts_with("delete")
+        || lower.starts_with("disable")
+        || lower.starts_with("enable")
+        || lower.starts_with("save")
+        || lower.starts_with("remove")
+        || lower.starts_with("archive")
+        || lower.starts_with("grant")
+        || lower.starts_with("revoke")
+        || lower.starts_with("sync")
+        || lower.starts_with("upsert")
+        || full_lower.contains("service")
+        || full_lower.contains("repository")
+        || full_lower.contains("repo.")
+        || full_lower.contains("client.")
+}
+
+fn mutation_inside_node(file: &str, node: Node<'_>, mutation: &Mutation) -> bool {
+    let Some(span) = mutation.span.as_ref() else {
+        return false;
+    };
+    if span.file != file {
+        return false;
+    }
+    span.byte_range.as_ref().is_some_and(|range| {
+        range.start >= node.start_byte() as u64 && range.end <= node.end_byte() as u64
+    })
+}
+
+fn collect_function_defs<'tree>(
+    parsed: &'tree ParsedFile,
+    root: Node<'tree>,
+    functions: &mut BTreeMap<(String, String), FunctionDef<'tree>>,
+) {
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        let name = match node.kind() {
+            "function_definition" | "function_declaration" => function_name(parsed, node),
+            "variable_declarator" => variable_function_name(parsed, node),
+            _ => None,
+        };
+        if let Some(name) = name {
+            functions.insert(
+                (parsed.source.path.clone(), name.clone()),
+                FunctionDef {
+                    file: parsed.source.path.clone(),
+                    name,
+                    node,
+                },
+            );
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+}
+
+fn build_python_module_index(parsed_files: &[ParsedFile]) -> BTreeMap<String, String> {
+    let mut index = BTreeMap::new();
+    for parsed in parsed_files
+        .iter()
+        .filter(|parsed| parsed.language == authmap_core::Language::Python)
+    {
+        let normalized = parsed.source.path.replace('\\', "/");
+        if let Some(stem) = normalized.strip_suffix(".py") {
+            index.insert(stem.to_string(), parsed.source.path.clone());
+            index.insert(stem.replace('/', "."), parsed.source.path.clone());
+            if let Some((_, file_stem)) = stem.rsplit_once('/') {
+                index.insert(file_stem.to_string(), parsed.source.path.clone());
+            }
+        }
+    }
+    index
+}
+
+fn collect_python_imports(
+    parsed: &ParsedFile,
+    module_index: &BTreeMap<String, String>,
+    imports: &mut BTreeMap<(String, String), ImportTarget>,
+) {
+    for line in parsed.text.lines() {
+        let trimmed = line.trim();
+        let Some(rest) = trimmed.strip_prefix("from ") else {
+            continue;
+        };
+        let Some((module, imported)) = rest.split_once(" import ") else {
+            continue;
+        };
+        let Some(module_file) = resolve_python_module(parsed, module_index, module.trim()) else {
+            continue;
+        };
+        for part in imported.split(',') {
+            let part = part.trim();
+            if part.is_empty() || part == "*" {
+                continue;
+            }
+            let (export_name, local_name) = part
+                .split_once(" as ")
+                .map_or((part, part), |(export_name, local_name)| {
+                    (export_name.trim(), local_name.trim())
+                });
+            imports.insert(
+                (parsed.source.path.clone(), local_name.to_string()),
+                ImportTarget {
+                    file: module_file.clone(),
+                    name: Some(export_name.to_string()),
+                },
+            );
+        }
+    }
+}
+
+fn resolve_python_module(
+    parsed: &ParsedFile,
+    module_index: &BTreeMap<String, String>,
+    module: &str,
+) -> Option<String> {
+    let normalized = parsed.source.path.replace('\\', "/");
+    let current_dir = normalized.rsplit_once('/').map_or("", |(dir, _)| dir);
+    if module.starts_with('.') {
+        let dots = module.chars().take_while(|ch| *ch == '.').count();
+        let remainder = module.trim_start_matches('.');
+        let mut parts = current_dir
+            .split('/')
+            .filter(|part| !part.is_empty())
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        for _ in 1..dots {
+            parts.pop();
+        }
+        if !remainder.is_empty() {
+            parts.extend(remainder.split('.').map(str::to_string));
+        }
+        return module_index.get(&parts.join("/")).cloned();
+    }
+
+    let candidate = module.replace('.', "/");
+    module_index.get(&candidate).cloned().or_else(|| {
+        module_index
+            .iter()
+            .find(|(key, _)| key.ends_with(&format!("/{candidate}")) || *key == &candidate)
+            .map(|(_, path)| path.clone())
+    })
+}
+
+fn build_js_module_index(parsed_files: &[ParsedFile]) -> BTreeMap<String, String> {
+    let mut index = BTreeMap::new();
+    for parsed in parsed_files.iter().filter(|file| {
+        matches!(
+            file.language,
+            authmap_core::Language::JavaScript
+                | authmap_core::Language::JavaScriptReact
+                | authmap_core::Language::TypeScript
+                | authmap_core::Language::TypeScriptReact
+        )
+    }) {
+        let normalized = parsed.source.path.replace('\\', "/");
+        if let Some(stem) = strip_js_extension(&normalized) {
+            index.insert(stem.to_string(), parsed.source.path.clone());
+            if let Some(index_stem) = stem.strip_suffix("/index") {
+                index.insert(index_stem.to_string(), parsed.source.path.clone());
+            }
+        }
+    }
+    index
+}
+
+fn collect_js_imports(
+    parsed: &ParsedFile,
+    module_index: &BTreeMap<String, String>,
+    imports: &mut BTreeMap<(String, String), ImportTarget>,
+) {
+    for line in parsed.text.lines() {
+        let trimmed = line.trim().trim_end_matches(';');
+        collect_js_es_import(parsed, module_index, imports, trimmed);
+        collect_js_require_import(parsed, module_index, imports, trimmed);
+    }
+}
+
+fn collect_js_es_import(
+    parsed: &ParsedFile,
+    module_index: &BTreeMap<String, String>,
+    imports: &mut BTreeMap<(String, String), ImportTarget>,
+    line: &str,
+) {
+    let Some(rest) = line.strip_prefix("import ") else {
+        return;
+    };
+    let Some((specifiers, module_part)) = rest.split_once(" from ") else {
+        return;
+    };
+    let Some(module_file) = resolve_js_module(parsed, module_index, module_part.trim()) else {
+        return;
+    };
+    let specifiers = specifiers.trim();
+    if specifiers.starts_with('{') && specifiers.ends_with('}') {
+        for part in specifiers[1..specifiers.len() - 1].split(',') {
+            let part = part.trim();
+            if part.is_empty() {
+                continue;
+            }
+            let (export_name, local_name) = part
+                .split_once(" as ")
+                .map_or((part, part), |(export_name, local_name)| {
+                    (export_name.trim(), local_name.trim())
+                });
+            imports.insert(
+                (parsed.source.path.clone(), local_name.to_string()),
+                ImportTarget {
+                    file: module_file.clone(),
+                    name: Some(export_name.to_string()),
+                },
+            );
+        }
+    } else if let Some(local_name) = specifiers.strip_prefix("* as ") {
+        imports.insert(
+            (parsed.source.path.clone(), local_name.trim().to_string()),
+            ImportTarget {
+                file: module_file,
+                name: None,
+            },
+        );
+    } else if !specifiers.is_empty() {
+        imports.insert(
+            (parsed.source.path.clone(), specifiers.to_string()),
+            ImportTarget {
+                file: module_file,
+                name: None,
+            },
+        );
+    }
+}
+
+fn collect_js_require_import(
+    parsed: &ParsedFile,
+    module_index: &BTreeMap<String, String>,
+    imports: &mut BTreeMap<(String, String), ImportTarget>,
+    line: &str,
+) {
+    let Some((left, right)) = line.split_once("require(") else {
+        return;
+    };
+    let Some(module_literal) = right.split(')').next() else {
+        return;
+    };
+    let Some(module_file) = resolve_js_module(parsed, module_index, module_literal.trim()) else {
+        return;
+    };
+    let required_property = right
+        .split_once(").")
+        .map(|(_, property)| property.trim().to_string());
+    let left = left
+        .trim()
+        .strip_prefix("const ")
+        .or_else(|| left.trim().strip_prefix("let "))
+        .or_else(|| left.trim().strip_prefix("var "));
+    let Some(local) = left.and_then(|left| left.trim().strip_suffix('=')) else {
+        return;
+    };
+    let local = local.trim();
+    if local.starts_with('{') && local.ends_with('}') {
+        for part in local[1..local.len() - 1].split(',') {
+            let part = part.trim();
+            if part.is_empty() {
+                continue;
+            }
+            let (export_name, local_name) = part
+                .split_once(':')
+                .map_or((part, part), |(export_name, local_name)| {
+                    (export_name.trim(), local_name.trim())
+                });
+            imports.insert(
+                (parsed.source.path.clone(), local_name.to_string()),
+                ImportTarget {
+                    file: module_file.clone(),
+                    name: Some(export_name.to_string()),
+                },
+            );
+        }
+    } else {
+        imports.insert(
+            (parsed.source.path.clone(), local.to_string()),
+            ImportTarget {
+                file: module_file,
+                name: required_property,
+            },
+        );
+    }
+}
+
+fn resolve_js_module(
+    parsed: &ParsedFile,
+    module_index: &BTreeMap<String, String>,
+    module_literal: &str,
+) -> Option<String> {
+    let module = module_literal.trim().trim_matches('"').trim_matches('\'');
+    if !module.starts_with('.') {
+        return None;
+    }
+    let current = parsed.source.path.replace('\\', "/");
+    let current_dir = current.rsplit_once('/').map_or("", |(dir, _)| dir);
+    let candidate = normalize_module_path(current_dir, module, "/");
+    module_index.get(&candidate).cloned()
+}
+
+fn normalize_module_path(current_dir: &str, module: &str, separator: &str) -> String {
+    let mut parts = current_dir
+        .split(separator)
+        .filter(|part| !part.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    for part in module.split(separator) {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            _ => parts.push(part.to_string()),
+        }
+    }
+    parts.join(separator)
+}
+
+fn strip_js_extension(path: &str) -> Option<&str> {
+    [".js", ".jsx", ".ts", ".tsx"]
+        .iter()
+        .find_map(|extension| path.strip_suffix(extension))
+}
+
+fn dedup_links(links: &mut Vec<ReachabilityLink>) {
+    let mut seen = BTreeSet::new();
+    links.retain(|item| {
+        seen.insert((
+            item.route_id.clone(),
+            item.mutation_id.clone(),
+            item.confidence,
+            item.notes.clone(),
+        ))
+    });
+}
+
+fn link_sort_key(link: &ReachabilityLink) -> (String, String, Confidence, String) {
+    (
+        link.route_id.clone(),
+        link.mutation_id.clone().unwrap_or_default(),
+        link.confidence,
+        link.notes.join("; "),
+    )
 }
 
 fn rule_suggestion_sort_key(
@@ -3278,6 +3981,108 @@ sensitivity:
     }
 
     #[test]
+    fn scan_pipeline_links_routes_to_direct_and_service_mutations() {
+        let target = fixture_path("linking");
+        let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        assert_eq!(document.routes.len(), 8);
+        assert_eq!(document.mutations.len(), 4);
+        assert_eq!(document.links.len(), 6);
+        assert_eq!(
+            document.links.first().map(|link| link.id.as_str()),
+            Some("link_0001")
+        );
+
+        assert_mutation_link(
+            &document,
+            "/express/direct",
+            "prisma",
+            Some("user"),
+            Confidence::High,
+        );
+        assert_mutation_link(
+            &document,
+            "/express/service",
+            "prisma",
+            Some("session"),
+            Confidence::Medium,
+        );
+        assert_mutation_link(
+            &document,
+            "/fastapi/direct",
+            "sqlalchemy",
+            Some("User"),
+            Confidence::High,
+        );
+        assert_mutation_link(
+            &document,
+            "/fastapi/service",
+            "sqlalchemy",
+            Some("User"),
+            Confidence::Medium,
+        );
+        assert_uncertainty_link(&document, "/express/dynamic", "serviceClient.deleteUser");
+        assert_uncertainty_link(
+            &document,
+            "/fastapi/dynamic",
+            "service_registry[\"create_user\"]",
+        );
+
+        for path in ["/express/read", "/fastapi/read"] {
+            let route = route_by_path(&document, path);
+            assert!(
+                !document.links.iter().any(|link| link.route_id == route.id),
+                "{path} should not have reachability links"
+            );
+        }
+
+        for path in [
+            "/express/direct",
+            "/express/service",
+            "/fastapi/direct",
+            "/fastapi/service",
+        ] {
+            let route = route_by_path(&document, path);
+            let coverage = coverage_for_route(&document, &route.id);
+            assert_eq!(coverage.class, CoverageClass::AuthnOnly);
+            assert_eq!(coverage.risk, RiskLevel::ReviewRequired);
+            let support = coverage
+                .extensions
+                .get("authmap.coverage")
+                .expect("coverage support should exist");
+            assert!(
+                support["mutation_ids"]
+                    .as_array()
+                    .is_some_and(|items| !items.is_empty()),
+                "{path} should include linked mutation support"
+            );
+            assert!(
+                support["sensitivity_reasons"]
+                    .as_array()
+                    .is_some_and(|items| items.iter().any(|item| item == "linked_mutation")),
+                "{path} should include linked mutation sensitivity"
+            );
+        }
+
+        for path in ["/express/dynamic", "/fastapi/dynamic"] {
+            let route = route_by_path(&document, path);
+            let coverage = coverage_for_route(&document, &route.id);
+            let support = coverage
+                .extensions
+                .get("authmap.coverage")
+                .expect("coverage support should exist");
+            assert_eq!(support["mutation_ids"], serde_json::json!([]));
+            assert!(
+                support["link_ids"]
+                    .as_array()
+                    .is_some_and(|items| !items.is_empty()),
+                "{path} should retain uncertainty link support"
+            );
+        }
+    }
+
+    #[test]
     fn project_specific_authorization_rules_add_permission_evidence() {
         let temp = TestDir::new("custom-authorization-rules");
         write_file(
@@ -3808,6 +4613,85 @@ function authorizeRecord(req, res, next) { next(); }
                 .as_array()
                 .is_some_and(|items| !items.is_empty())
         );
+    }
+
+    fn route_by_path<'a>(
+        document: &'a authmap_core::AuthMapDocument,
+        path: &str,
+    ) -> &'a authmap_core::Route {
+        document
+            .routes
+            .iter()
+            .find(|route| route.path == path)
+            .unwrap_or_else(|| panic!("missing route {path}"))
+    }
+
+    fn coverage_for_route<'a>(
+        document: &'a authmap_core::AuthMapDocument,
+        route_id: &str,
+    ) -> &'a authmap_core::Coverage {
+        document
+            .coverage
+            .iter()
+            .find(|coverage| coverage.route_id == route_id)
+            .unwrap_or_else(|| panic!("missing coverage for {route_id}"))
+    }
+
+    fn assert_mutation_link(
+        document: &authmap_core::AuthMapDocument,
+        route_path: &str,
+        library: &str,
+        resource: Option<&str>,
+        confidence: Confidence,
+    ) {
+        let route = route_by_path(document, route_path);
+        let link = document
+            .links
+            .iter()
+            .find(|link| {
+                link.route_id == route.id
+                    && link.confidence == confidence
+                    && link.mutation_id.as_ref().is_some_and(|mutation_id| {
+                        document.mutations.iter().any(|mutation| {
+                            &mutation.id == mutation_id
+                                && mutation.library.as_deref() == Some(library)
+                                && mutation.resource.as_deref() == resource
+                        })
+                    })
+            })
+            .unwrap_or_else(|| panic!("missing mutation link for {route_path}"));
+        assert!(link.evidence_id.is_none());
+        assert!(link.notes.iter().any(|note| {
+            let lower = note.to_ascii_lowercase();
+            lower.contains("mutation") || lower.contains("service call")
+        }));
+    }
+
+    fn assert_uncertainty_link(
+        document: &authmap_core::AuthMapDocument,
+        route_path: &str,
+        call_target: &str,
+    ) {
+        let route = route_by_path(document, route_path);
+        let link = document
+            .links
+            .iter()
+            .find(|link| {
+                link.route_id == route.id
+                    && link.mutation_id.is_none()
+                    && link.confidence == Confidence::Low
+            })
+            .unwrap_or_else(|| panic!("missing uncertainty link for {route_path}"));
+        let extension = link
+            .extensions
+            .get("authmap.reachability")
+            .expect("uncertainty link should include reachability metadata");
+        assert_eq!(
+            extension["reason"],
+            serde_json::json!("unresolved_service_call")
+        );
+        assert_eq!(extension["call_target"], serde_json::json!(call_target));
+        assert!(extension.get("call_span").is_some());
     }
 
     fn assert_coverage(
