@@ -42,6 +42,14 @@ fn authmap(args: &[&str]) -> Output {
         .expect("authmap binary should run")
 }
 
+fn authmap_in_dir(args: &[&str], cwd: &Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_authmap"))
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .expect("authmap binary should run")
+}
+
 fn authmap_with_stdin(args: &[&str], stdin: &str) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_authmap"))
         .args(args)
@@ -99,6 +107,67 @@ fn assert_valid_authmap_document(document: &Value) {
     }
 }
 
+fn explain_document_json() -> &'static str {
+    r#"
+{
+  "schema_version": "0.1.0",
+  "metadata": {
+    "tool_name": "authmap",
+    "tool_version": "0.1.0",
+    "mode": "advisory",
+    "target_roots": ["src"],
+    "config_path": null
+  },
+  "source_files": [],
+  "routes": [
+    {
+      "id": "route_0001",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "/accounts",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": null,
+      "span": null,
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    }
+  ],
+  "evidence": [
+    {
+      "id": "evidence_0001",
+      "route_id": "route_0001",
+      "evidence_type": "authn",
+      "mechanism": "session_lookup",
+      "symbol": null,
+      "span": null,
+      "confidence": "high",
+      "notes": []
+    }
+  ],
+  "mutations": [],
+  "links": [],
+  "coverage": [
+    {
+      "route_id": "route_0001",
+      "class": "authn_only",
+      "risk": "low",
+      "rationale": ["authentication evidence was detected"],
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    }
+  ],
+  "diagnostics": []
+}
+"#
+}
+
+fn ambiguous_explain_document_json() -> String {
+    explain_document_json().replace("\"id\": \"evidence_0001\"", "\"id\": \"route_0001\"")
+}
+
 #[test]
 fn root_help_works() {
     let output = authmap(&["--help"]);
@@ -119,6 +188,127 @@ fn scan_help_works() {
     assert!(stdout.contains("--output"));
     assert!(stdout.contains("--config"));
     assert!(stdout.contains("--mode"));
+}
+
+#[test]
+fn explain_route_and_evidence_ids_from_explicit_input() {
+    let temp = TestDir::new("explain-explicit");
+    let input = temp.path().join("authmap.json");
+    write_file(&input, explain_document_json());
+
+    let route = authmap(&[
+        "explain",
+        "route_0001",
+        "--input",
+        input.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&route, 0);
+    let stdout = String::from_utf8_lossy(&route.stdout);
+    assert!(stdout.contains("# AuthMap Explain"));
+    assert!(stdout.contains("- Kind: route"));
+    assert!(stdout.contains("- Coverage: authn_only (low)"));
+    assert!(stdout.contains("evidence_0001: authn `session_lookup`"));
+
+    let evidence = authmap(&[
+        "explain",
+        "evidence_0001",
+        "--input",
+        input.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&evidence, 0);
+    let stdout = String::from_utf8_lossy(&evidence.stdout);
+    assert!(stdout.contains("- Kind: evidence"));
+    assert!(stdout.contains("## Selected Evidence"));
+    assert!(stdout.contains("- Route ID: route_0001"));
+}
+
+#[test]
+fn explain_uses_default_authmap_json_in_current_directory() {
+    let temp = TestDir::new("explain-default");
+    write_file(&temp.path().join("authmap.json"), explain_document_json());
+
+    let output = authmap_in_dir(&["explain", "route_0001"], temp.path());
+
+    assert_exit(&output, 0);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("- ID: route_0001"));
+    assert!(stdout.contains("- Route: GET /accounts"));
+}
+
+#[test]
+fn explain_missing_input_fails_nonzero() {
+    let temp = TestDir::new("explain-missing");
+
+    let output = authmap_in_dir(&["explain", "route_0001"], temp.path());
+
+    assert_exit(&output, 10);
+    assert!(String::from_utf8_lossy(&output.stderr).contains("failed to read AuthMap input"));
+}
+
+#[test]
+fn explain_invalid_json_and_unsupported_schema_fail_nonzero() {
+    let temp = TestDir::new("explain-invalid");
+    let invalid = temp.path().join("invalid.json");
+    let unsupported = temp.path().join("unsupported.json");
+    write_file(&invalid, "{\n");
+    write_file(
+        &unsupported,
+        &explain_document_json().replace(
+            "\"schema_version\": \"0.1.0\"",
+            "\"schema_version\": \"99.0.0\"",
+        ),
+    );
+
+    let invalid_output = authmap(&[
+        "explain",
+        "route_0001",
+        "--input",
+        invalid.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&invalid_output, 12);
+    assert!(
+        String::from_utf8_lossy(&invalid_output.stderr).contains("failed to parse AuthMap JSON")
+    );
+
+    let unsupported_output = authmap(&[
+        "explain",
+        "route_0001",
+        "--input",
+        unsupported.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&unsupported_output, 13);
+    assert!(
+        String::from_utf8_lossy(&unsupported_output.stderr)
+            .contains("unsupported AuthMap schema version")
+    );
+}
+
+#[test]
+fn explain_unknown_and_ambiguous_ids_fail_nonzero() {
+    let temp = TestDir::new("explain-id-errors");
+    let unknown_input = temp.path().join("unknown.json");
+    let ambiguous_input = temp.path().join("ambiguous.json");
+    write_file(&unknown_input, explain_document_json());
+    write_file(&ambiguous_input, &ambiguous_explain_document_json());
+
+    let unknown = authmap(&[
+        "explain",
+        "missing",
+        "--input",
+        unknown_input.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&unknown, 13);
+    assert!(String::from_utf8_lossy(&unknown.stderr).contains("unknown AuthMap ID missing"));
+
+    let ambiguous = authmap(&[
+        "explain",
+        "route_0001",
+        "--input",
+        ambiguous_input.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&ambiguous, 13);
+    assert!(String::from_utf8_lossy(&ambiguous.stderr).contains("ambiguous AuthMap ID route_0001"));
+    assert!(String::from_utf8_lossy(&ambiguous.stderr).contains("route, evidence"));
 }
 
 #[test]

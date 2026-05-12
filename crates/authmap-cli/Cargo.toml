@@ -19,8 +19,8 @@ authmap-discovery.workspace = true
 authmap-report.workspace = true
 clap.workspace = true
 miette.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
 jsonschema.workspace = true
-serde_json.workspace = true

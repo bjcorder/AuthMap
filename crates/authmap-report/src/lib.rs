@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticSeverity, Evidence,
-    EvidenceType, Framework, Mutation, MutationOperation, RiskLevel, ScanMode, SourceFile, Span,
-    SymbolRef,
+    EvidenceType, Framework, Mutation, MutationOperation, ReachabilityLink, RiskLevel,
+    SCHEMA_VERSION, ScanMode, SourceFile, Span, SymbolRef,
 };
 use serde_json::{Value, json};
 use thiserror::Error;
@@ -66,8 +66,12 @@ fn render_markdown(document: &AuthMapDocument) -> String {
 
 struct ReportIndex<'a> {
     coverage_by_route: BTreeMap<&'a str, &'a Coverage>,
+    evidence_by_id: BTreeMap<&'a str, &'a Evidence>,
+    mutation_by_id: BTreeMap<&'a str, &'a Mutation>,
+    link_by_id: BTreeMap<&'a str, &'a ReachabilityLink>,
     evidence_by_route: BTreeMap<&'a str, Vec<&'a Evidence>>,
     mutations_by_route: BTreeMap<&'a str, Vec<&'a Mutation>>,
+    links_by_route: BTreeMap<&'a str, Vec<&'a ReachabilityLink>>,
 }
 
 impl<'a> ReportIndex<'a> {
@@ -87,6 +91,11 @@ impl<'a> ReportIndex<'a> {
             .iter()
             .map(|mutation| (mutation.id.as_str(), mutation))
             .collect::<BTreeMap<_, _>>();
+        let link_by_id = document
+            .links
+            .iter()
+            .map(|link| (link.id.as_str(), link))
+            .collect::<BTreeMap<_, _>>();
 
         let mut evidence_by_route: BTreeMap<&str, Vec<&Evidence>> = BTreeMap::new();
         for evidence in &document.evidence {
@@ -99,7 +108,12 @@ impl<'a> ReportIndex<'a> {
         }
 
         let mut mutations_by_route: BTreeMap<&str, Vec<&Mutation>> = BTreeMap::new();
+        let mut links_by_route: BTreeMap<&str, Vec<&ReachabilityLink>> = BTreeMap::new();
         for link in &document.links {
+            links_by_route
+                .entry(link.route_id.as_str())
+                .or_default()
+                .push(link);
             if let Some(evidence_id) = &link.evidence_id
                 && let Some(evidence) = evidence_by_id.get(evidence_id.as_str())
             {
@@ -124,11 +138,18 @@ impl<'a> ReportIndex<'a> {
         for mutations in mutations_by_route.values_mut() {
             dedup_mutations(mutations);
         }
+        for links in links_by_route.values_mut() {
+            dedup_links(links);
+        }
 
         Self {
             coverage_by_route,
+            evidence_by_id,
+            mutation_by_id,
+            link_by_id,
             evidence_by_route,
             mutations_by_route,
+            links_by_route,
         }
     }
 }
@@ -571,6 +592,537 @@ fn render_skipped_files(output: &mut String, document: &AuthMapDocument) {
     let _ = writeln!(output);
 }
 
+pub fn render_explain(document: &AuthMapDocument, id: &str) -> Result<String, ExplainError> {
+    if document.schema_version != SCHEMA_VERSION {
+        return Err(ExplainError::UnsupportedSchemaVersion {
+            actual: document.schema_version.clone(),
+            expected: SCHEMA_VERSION,
+        });
+    }
+
+    let index = ReportIndex::new(document);
+    let route = document.routes.iter().find(|route| route.id == id);
+    let evidence = index.evidence_by_id.get(id).copied();
+    let mutation = index.mutation_by_id.get(id).copied();
+    let link = index.link_by_id.get(id).copied();
+
+    let mut matches = Vec::new();
+    if route.is_some() {
+        matches.push("route");
+    }
+    if evidence.is_some() {
+        matches.push("evidence");
+    }
+    if mutation.is_some() {
+        matches.push("mutation");
+    }
+    if link.is_some() {
+        matches.push("link");
+    }
+
+    if matches.is_empty() {
+        return Err(ExplainError::UnknownId(id.to_string()));
+    }
+    if matches.len() > 1 {
+        return Err(ExplainError::AmbiguousId {
+            id: id.to_string(),
+            matches: matches.join(", "),
+        });
+    }
+
+    let mut output = String::new();
+    render_explain_header(&mut output, document, id, matches[0]);
+    match matches[0] {
+        "route" => render_explain_route(
+            &mut output,
+            route.expect("route was matched"),
+            document,
+            &index,
+        ),
+        "evidence" => render_explain_evidence(
+            &mut output,
+            evidence.expect("evidence was matched"),
+            document,
+            &index,
+        ),
+        "mutation" => render_explain_mutation(
+            &mut output,
+            mutation.expect("mutation was matched"),
+            document,
+            &index,
+        ),
+        "link" => render_explain_link(
+            &mut output,
+            link.expect("link was matched"),
+            document,
+            &index,
+        ),
+        _ => unreachable!("matches only contains known kinds"),
+    }
+    Ok(output)
+}
+
+fn render_explain_header(output: &mut String, document: &AuthMapDocument, id: &str, kind: &str) {
+    let _ = writeln!(output, "# AuthMap Explain");
+    let _ = writeln!(output);
+    let _ = writeln!(output, "- ID: {}", escape_inline(id));
+    let _ = writeln!(output, "- Kind: {kind}");
+    let _ = writeln!(
+        output,
+        "- Tool: {} {}",
+        escape_inline(&document.metadata.tool_name),
+        escape_inline(&document.metadata.tool_version)
+    );
+    let _ = writeln!(
+        output,
+        "- Schema: {}",
+        escape_inline(&document.schema_version)
+    );
+    let _ = writeln!(
+        output,
+        "- Note: Risk levels are review priorities, not confirmed vulnerabilities."
+    );
+    let _ = writeln!(output);
+}
+
+fn render_explain_route(
+    output: &mut String,
+    route: &authmap_core::Route,
+    document: &AuthMapDocument,
+    index: &ReportIndex<'_>,
+) {
+    render_explain_route_context(output, route, document, index);
+}
+
+fn render_explain_evidence(
+    output: &mut String,
+    evidence: &Evidence,
+    document: &AuthMapDocument,
+    index: &ReportIndex<'_>,
+) {
+    let _ = writeln!(output, "## Selected Evidence");
+    let _ = writeln!(output);
+    render_explain_evidence_item(output, evidence, "- Evidence");
+    let _ = writeln!(output);
+    let routes = related_routes_for_evidence(evidence, document, index);
+    if routes.is_empty() {
+        render_related_routes(output, routes, document, index);
+        render_explain_diagnostics(output, document, &context_files_for_evidence(evidence));
+    } else {
+        render_related_routes(output, routes, document, index);
+    }
+}
+
+fn render_explain_mutation(
+    output: &mut String,
+    mutation: &Mutation,
+    document: &AuthMapDocument,
+    index: &ReportIndex<'_>,
+) {
+    let _ = writeln!(output, "## Selected Mutation");
+    let _ = writeln!(output);
+    render_explain_mutation_item(output, mutation, "- Mutation");
+    let _ = writeln!(output);
+    let routes = related_routes_for_mutation(mutation, document, index);
+    if routes.is_empty() {
+        render_related_routes(output, routes, document, index);
+        render_explain_diagnostics(output, document, &context_files_for_mutation(mutation));
+    } else {
+        render_related_routes(output, routes, document, index);
+    }
+}
+
+fn render_explain_link(
+    output: &mut String,
+    link: &ReachabilityLink,
+    document: &AuthMapDocument,
+    index: &ReportIndex<'_>,
+) {
+    let _ = writeln!(output, "## Selected Link");
+    let _ = writeln!(output);
+    render_explain_link_item(output, link, "- Link");
+    let _ = writeln!(output);
+    render_related_routes(
+        output,
+        related_routes_for_link(link, document),
+        document,
+        index,
+    );
+}
+
+fn render_related_routes(
+    output: &mut String,
+    routes: Vec<&authmap_core::Route>,
+    document: &AuthMapDocument,
+    index: &ReportIndex<'_>,
+) {
+    if routes.is_empty() {
+        let _ = writeln!(output, "## Related Route Context");
+        let _ = writeln!(output);
+        let _ = writeln!(output, "- Related routes: none");
+        let _ = writeln!(output);
+        return;
+    }
+
+    for route in routes {
+        render_explain_route_context(output, route, document, index);
+    }
+}
+
+fn render_explain_route_context(
+    output: &mut String,
+    route: &authmap_core::Route,
+    document: &AuthMapDocument,
+    index: &ReportIndex<'_>,
+) {
+    let _ = writeln!(output, "## Route Context");
+    let _ = writeln!(output);
+    let _ = writeln!(output, "- Route ID: {}", escape_inline(&route.id));
+    let _ = writeln!(
+        output,
+        "- Route: {} {}",
+        escape_inline(&route.method),
+        escape_inline(&route.path)
+    );
+    let _ = writeln!(output, "- Framework: {}", framework_label(route.framework));
+    let _ = writeln!(
+        output,
+        "- Handler: {}",
+        format_optional_symbol(route.handler.as_ref())
+    );
+    let _ = writeln!(
+        output,
+        "- Middleware: {}",
+        format_symbols(&route.middleware)
+    );
+    let _ = writeln!(
+        output,
+        "- Route location: {}",
+        format_optional_span(route.span.as_ref())
+    );
+    let _ = writeln!(
+        output,
+        "- Route confidence: {}",
+        confidence_label(route.confidence)
+    );
+    render_explain_source_evidence(output, route);
+    render_explain_coverage(output, route.id.as_str(), index);
+    render_explain_route_evidence(output, route.id.as_str(), index);
+    render_explain_route_mutations(output, route.id.as_str(), index);
+    render_explain_route_links(output, route.id.as_str(), index);
+    render_explain_diagnostics(output, document, &context_files_for_route(route, index));
+    let _ = writeln!(output);
+}
+
+fn render_explain_source_evidence(output: &mut String, route: &authmap_core::Route) {
+    if route.source_evidence.is_empty() {
+        let _ = writeln!(output, "- Source evidence: none");
+        return;
+    }
+    let _ = writeln!(output, "- Source evidence:");
+    for item in &route.source_evidence {
+        let _ = writeln!(
+            output,
+            "  - {} at {} ({})",
+            escape_inline(&item.mechanism),
+            format_optional_span(item.span.as_ref()),
+            confidence_label(item.confidence)
+        );
+    }
+}
+
+fn render_explain_coverage(output: &mut String, route_id: &str, index: &ReportIndex<'_>) {
+    let Some(coverage) = index.coverage_by_route.get(route_id) else {
+        let _ = writeln!(output, "- Coverage: not classified");
+        return;
+    };
+
+    let _ = writeln!(
+        output,
+        "- Coverage: {} ({})",
+        coverage_class_label(coverage.class),
+        risk_label(coverage.risk)
+    );
+    if coverage.rationale.is_empty() {
+        let _ = writeln!(output, "- Coverage rationale: none");
+    } else {
+        let _ = writeln!(
+            output,
+            "- Coverage rationale: {}",
+            coverage
+                .rationale
+                .iter()
+                .map(|item| escape_inline(item))
+                .collect::<Vec<_>>()
+                .join("; ")
+        );
+    }
+    render_coverage_support(output, coverage);
+    render_named_list(output, "Reviewer questions", &coverage.reviewer_questions);
+    render_named_list(
+        output,
+        "Coverage uncertainty",
+        &coverage.uncertainty_reasons,
+    );
+}
+
+fn render_explain_route_evidence(output: &mut String, route_id: &str, index: &ReportIndex<'_>) {
+    let Some(evidence) = index.evidence_by_route.get(route_id) else {
+        let _ = writeln!(output, "- Auth evidence: none");
+        return;
+    };
+    if evidence.is_empty() {
+        let _ = writeln!(output, "- Auth evidence: none");
+        return;
+    }
+    let _ = writeln!(output, "- Auth evidence:");
+    for item in evidence {
+        render_explain_evidence_item(output, item, "  -");
+    }
+}
+
+fn render_explain_evidence_item(output: &mut String, evidence: &Evidence, prefix: &str) {
+    let _ = writeln!(
+        output,
+        "{prefix} {}: {} `{}` at {} ({})",
+        escape_inline(&evidence.id),
+        evidence_type_label(evidence.evidence_type),
+        escape_inline(&evidence.mechanism),
+        format_optional_span(evidence.span.as_ref()),
+        confidence_label(evidence.confidence)
+    );
+    if let Some(route_id) = &evidence.route_id {
+        let _ = writeln!(output, "    - Route ID: {}", escape_inline(route_id));
+    }
+    if let Some(symbol) = &evidence.symbol {
+        let _ = writeln!(output, "    - Symbol: {}", format_symbol(symbol));
+    }
+    for note in &evidence.notes {
+        let _ = writeln!(output, "    - Note: {}", escape_inline(note));
+    }
+}
+
+fn render_explain_route_mutations(output: &mut String, route_id: &str, index: &ReportIndex<'_>) {
+    let Some(mutations) = index.mutations_by_route.get(route_id) else {
+        let _ = writeln!(output, "- Data mutations: none");
+        return;
+    };
+    if mutations.is_empty() {
+        let _ = writeln!(output, "- Data mutations: none");
+        return;
+    }
+    let _ = writeln!(output, "- Data mutations:");
+    for mutation in mutations {
+        render_explain_mutation_item(output, mutation, "  -");
+    }
+}
+
+fn render_explain_mutation_item(output: &mut String, mutation: &Mutation, prefix: &str) {
+    let resource = mutation.resource.as_deref().unwrap_or("unknown resource");
+    let library = mutation.library.as_deref().unwrap_or("unknown library");
+    let _ = writeln!(
+        output,
+        "{prefix} {}: {} `{}` via `{}` at {} ({})",
+        escape_inline(&mutation.id),
+        mutation_operation_label(mutation.operation),
+        escape_inline(resource),
+        escape_inline(library),
+        format_optional_span(mutation.span.as_ref()),
+        confidence_label(mutation.confidence)
+    );
+    for note in &mutation.notes {
+        let _ = writeln!(output, "    - Note: {}", escape_inline(note));
+    }
+}
+
+fn render_explain_route_links(output: &mut String, route_id: &str, index: &ReportIndex<'_>) {
+    let Some(links) = index.links_by_route.get(route_id) else {
+        let _ = writeln!(output, "- Reachability links: none");
+        return;
+    };
+    if links.is_empty() {
+        let _ = writeln!(output, "- Reachability links: none");
+        return;
+    }
+    let _ = writeln!(output, "- Reachability links:");
+    for link in links {
+        render_explain_link_item(output, link, "  -");
+    }
+}
+
+fn render_explain_link_item(output: &mut String, link: &ReachabilityLink, prefix: &str) {
+    let _ = writeln!(
+        output,
+        "{prefix} {}: route={} evidence={} mutation={} ({})",
+        escape_inline(&link.id),
+        escape_inline(&link.route_id),
+        link.evidence_id
+            .as_deref()
+            .map(escape_inline)
+            .unwrap_or_else(|| "none".to_string()),
+        link.mutation_id
+            .as_deref()
+            .map(escape_inline)
+            .unwrap_or_else(|| "none".to_string()),
+        confidence_label(link.confidence)
+    );
+    for note in &link.notes {
+        let _ = writeln!(output, "    - Note: {}", escape_inline(note));
+    }
+}
+
+fn render_explain_diagnostics(
+    output: &mut String,
+    document: &AuthMapDocument,
+    context_files: &BTreeSet<String>,
+) {
+    let diagnostics = sorted_diagnostics(document)
+        .into_iter()
+        .filter(|diagnostic| {
+            diagnostic
+                .span
+                .as_ref()
+                .is_some_and(|span| context_files.contains(&span.file))
+        })
+        .collect::<Vec<_>>();
+
+    if diagnostics.is_empty() {
+        let _ = writeln!(output, "- Related diagnostics: none");
+        return;
+    }
+    let _ = writeln!(output, "- Related diagnostics:");
+    for diagnostic in diagnostics {
+        let _ = writeln!(
+            output,
+            "  - {} {} at {}: {}",
+            diagnostic_severity_label(diagnostic.severity),
+            escape_inline(&diagnostic.code),
+            format_optional_span(diagnostic.span.as_ref()),
+            escape_inline(&diagnostic.message)
+        );
+    }
+}
+
+fn render_named_list(output: &mut String, label: &str, items: &[String]) {
+    if items.is_empty() {
+        let _ = writeln!(output, "- {label}: none");
+        return;
+    }
+    let _ = writeln!(output, "- {label}:");
+    for item in items {
+        let _ = writeln!(output, "  - {}", escape_inline(item));
+    }
+}
+
+fn related_routes_for_evidence<'a>(
+    evidence: &Evidence,
+    document: &'a AuthMapDocument,
+    index: &ReportIndex<'a>,
+) -> Vec<&'a authmap_core::Route> {
+    let mut route_ids = BTreeSet::new();
+    if let Some(route_id) = &evidence.route_id {
+        route_ids.insert(route_id.as_str());
+    }
+    for links in index.links_by_route.values() {
+        for link in links {
+            if link.evidence_id.as_deref() == Some(evidence.id.as_str()) {
+                route_ids.insert(link.route_id.as_str());
+            }
+        }
+    }
+    routes_by_id(document, route_ids)
+}
+
+fn related_routes_for_mutation<'a>(
+    mutation: &Mutation,
+    document: &'a AuthMapDocument,
+    index: &ReportIndex<'a>,
+) -> Vec<&'a authmap_core::Route> {
+    let mut route_ids = BTreeSet::new();
+    for links in index.links_by_route.values() {
+        for link in links {
+            if link.mutation_id.as_deref() == Some(mutation.id.as_str()) {
+                route_ids.insert(link.route_id.as_str());
+            }
+        }
+    }
+    routes_by_id(document, route_ids)
+}
+
+fn related_routes_for_link<'a>(
+    link: &ReachabilityLink,
+    document: &'a AuthMapDocument,
+) -> Vec<&'a authmap_core::Route> {
+    routes_by_id(document, BTreeSet::from([link.route_id.as_str()]))
+}
+
+fn routes_by_id<'a>(
+    document: &'a AuthMapDocument,
+    route_ids: BTreeSet<&str>,
+) -> Vec<&'a authmap_core::Route> {
+    let mut routes = route_ids
+        .into_iter()
+        .filter_map(|route_id| document.routes.iter().find(|route| route.id == route_id))
+        .collect::<Vec<_>>();
+    routes.sort_by_key(|route| route_sort_key(route));
+    routes
+}
+
+fn context_files_for_route(
+    route: &authmap_core::Route,
+    index: &ReportIndex<'_>,
+) -> BTreeSet<String> {
+    let mut files = BTreeSet::new();
+    collect_span_file(&mut files, route.span.as_ref());
+    if let Some(handler) = &route.handler {
+        collect_span_file(&mut files, handler.span.as_ref());
+    }
+    for middleware in &route.middleware {
+        collect_span_file(&mut files, middleware.span.as_ref());
+    }
+    for source in &route.source_evidence {
+        collect_span_file(&mut files, source.span.as_ref());
+        if let Some(symbol) = &source.symbol {
+            collect_span_file(&mut files, symbol.span.as_ref());
+        }
+    }
+    if let Some(evidence) = index.evidence_by_route.get(route.id.as_str()) {
+        for item in evidence {
+            collect_span_file(&mut files, item.span.as_ref());
+            if let Some(symbol) = &item.symbol {
+                collect_span_file(&mut files, symbol.span.as_ref());
+            }
+        }
+    }
+    if let Some(mutations) = index.mutations_by_route.get(route.id.as_str()) {
+        for mutation in mutations {
+            collect_span_file(&mut files, mutation.span.as_ref());
+        }
+    }
+    files
+}
+
+fn context_files_for_evidence(evidence: &Evidence) -> BTreeSet<String> {
+    let mut files = BTreeSet::new();
+    collect_span_file(&mut files, evidence.span.as_ref());
+    if let Some(symbol) = &evidence.symbol {
+        collect_span_file(&mut files, symbol.span.as_ref());
+    }
+    files
+}
+
+fn context_files_for_mutation(mutation: &Mutation) -> BTreeSet<String> {
+    let mut files = BTreeSet::new();
+    collect_span_file(&mut files, mutation.span.as_ref());
+    files
+}
+
+fn collect_span_file(files: &mut BTreeSet<String>, span: Option<&Span>) {
+    if let Some(span) = span {
+        files.insert(span.file.clone());
+    }
+}
+
 fn render_table(output: &mut String, headers: &[&str], rows: &[Vec<String>]) {
     let _ = writeln!(
         output,
@@ -657,6 +1209,12 @@ fn dedup_mutations(mutations: &mut Vec<&Mutation>) {
     let mut seen = BTreeSet::new();
     mutations.retain(|item| seen.insert(item.id.as_str()));
     mutations.sort_by(|left, right| left.id.cmp(&right.id));
+}
+
+fn dedup_links(links: &mut Vec<&ReachabilityLink>) {
+    let mut seen = BTreeSet::new();
+    links.retain(|item| seen.insert(item.id.as_str()));
+    links.sort_by(|left, right| left.id.cmp(&right.id));
 }
 
 fn route_anchor(id: &str) -> String {
@@ -1001,6 +1559,19 @@ fn temp_path_for(path: &Path) -> PathBuf {
 }
 
 #[derive(Debug, Error)]
+pub enum ExplainError {
+    #[error("unsupported AuthMap schema version {actual}; expected {expected}")]
+    UnsupportedSchemaVersion {
+        actual: String,
+        expected: &'static str,
+    },
+    #[error("unknown AuthMap ID {0}")]
+    UnknownId(String),
+    #[error("ambiguous AuthMap ID {id}; matches: {matches}")]
+    AmbiguousId { id: String, matches: String },
+}
+
+#[derive(Debug, Error)]
 pub enum ReportError {
     #[error("failed to render JSON report: {0}")]
     Json(serde_json::Error),
@@ -1046,6 +1617,98 @@ mod tests {
         assert!(rendered.contains("update `user.disabled` via `sqlalchemy`"));
         assert!(rendered.contains("Should this require a tenant check?"));
         assert!(rendered.contains("risk is review_required"));
+    }
+
+    #[test]
+    fn explain_route_includes_classification_support_and_context() {
+        let document = synthetic_document();
+        let rendered = render_explain(&document, "route_0001").expect("route should explain");
+
+        assert!(rendered.contains("# AuthMap Explain"));
+        assert!(rendered.contains("- Kind: route"));
+        assert!(rendered.contains("- Route: POST /admin|users"));
+        assert!(rendered.contains("- Coverage: unknown_or_dynamic (review_required)"));
+        assert!(rendered.contains("- Coverage rationale: dynamic policy branch"));
+        assert!(rendered.contains("evidence_0001: admin_check `requires_admin`"));
+        assert!(rendered.contains("mutation_0001: update `user.disabled` via `sqlalchemy`"));
+        assert!(rendered.contains("link_0001: route=route_0001"));
+        assert!(rendered.contains("Should this require a tenant check?"));
+        assert!(rendered.contains("warning dynamic_policy"));
+        assert!(rendered.contains("not confirmed vulnerabilities"));
+    }
+
+    #[test]
+    fn explain_evidence_mutation_and_link_resolve_route_context() {
+        let document = synthetic_document();
+
+        let evidence = render_explain(&document, "evidence_0001").expect("evidence should explain");
+        assert!(evidence.contains("## Selected Evidence"));
+        assert!(evidence.contains("- Kind: evidence"));
+        assert!(evidence.contains("Route ID: route_0001"));
+        assert!(evidence.contains("## Route Context"));
+
+        let mutation = render_explain(&document, "mutation_0001").expect("mutation should explain");
+        assert!(mutation.contains("## Selected Mutation"));
+        assert!(mutation.contains("- Kind: mutation"));
+        assert!(mutation.contains("mutation_0001: update `user.disabled` via `sqlalchemy`"));
+        assert!(mutation.contains("- Route ID: route_0001"));
+
+        let link = render_explain(&document, "link_0001").expect("link should explain");
+        assert!(link.contains("## Selected Link"));
+        assert!(link.contains("- Kind: link"));
+        assert!(
+            link.contains(
+                "link_0001: route=route_0001 evidence=evidence_0001 mutation=mutation_0001"
+            )
+        );
+        assert!(link.contains("- Route: POST /admin|users"));
+    }
+
+    #[test]
+    fn explain_errors_for_unknown_ambiguous_and_unsupported_ids() {
+        let document = synthetic_document();
+        let error = render_explain(&document, "missing").expect_err("unknown IDs should fail");
+        assert!(matches!(error, ExplainError::UnknownId(id) if id == "missing"));
+
+        let mut ambiguous = synthetic_document();
+        ambiguous.evidence.push(Evidence {
+            id: "route_0001".to_string(),
+            route_id: Some("route_0001".to_string()),
+            evidence_type: EvidenceType::Authn,
+            mechanism: "session".to_string(),
+            symbol: None,
+            span: None,
+            confidence: Confidence::High,
+            notes: Vec::new(),
+            extensions: ExtensionMap::new(),
+        });
+        let error =
+            render_explain(&ambiguous, "route_0001").expect_err("ambiguous IDs should fail");
+        assert!(
+            matches!(error, ExplainError::AmbiguousId { matches, .. } if matches == "route, evidence")
+        );
+
+        let mut unsupported = synthetic_document();
+        unsupported.schema_version = "99.0.0".to_string();
+        let error = render_explain(&unsupported, "route_0001")
+            .expect_err("unsupported schemas should fail");
+        assert!(matches!(
+            error,
+            ExplainError::UnsupportedSchemaVersion {
+                actual,
+                expected: SCHEMA_VERSION
+            } if actual == "99.0.0"
+        ));
+    }
+
+    #[test]
+    fn explain_output_is_deterministic() {
+        let document = synthetic_document();
+
+        let first = render_explain(&document, "route_0001").expect("route should explain");
+        let second = render_explain(&document, "route_0001").expect("route should explain");
+
+        assert_eq!(first, second);
     }
 
     #[test]

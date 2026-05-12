@@ -5,8 +5,10 @@ use std::process::ExitCode;
 
 use authmap_analysis::run_scan;
 use authmap_config::{ScanPlan, load_config};
-use authmap_core::{ScanMode, diagnostic_codes};
-use authmap_report::{JsonReporter, MarkdownReporter, Reporter, SarifReporter, write_atomic};
+use authmap_core::{AuthMapDocument, ScanMode, diagnostic_codes};
+use authmap_report::{
+    JsonReporter, MarkdownReporter, Reporter, SarifReporter, render_explain, write_atomic,
+};
 use clap::{Parser, Subcommand, ValueEnum};
 use thiserror::Error;
 
@@ -48,6 +50,8 @@ enum Command {
     },
     Explain {
         id: String,
+        #[arg(long, default_value = "authmap.json")]
+        input: PathBuf,
     },
     Baseline {
         #[command(subcommand)]
@@ -138,7 +142,7 @@ fn run() -> Result<ExitCode, CliError> {
             }
         }
         Command::Diff { range } => Err(CliError::NotImplementedWithArg("authmap diff", range)),
-        Command::Explain { id } => Err(CliError::NotImplementedWithArg("authmap explain", id)),
+        Command::Explain { id, input } => run_explain(&id, &input),
         Command::Baseline {
             command: BaselineCommand::Create,
         } => Err(CliError::NotImplemented("authmap baseline create")),
@@ -146,6 +150,21 @@ fn run() -> Result<ExitCode, CliError> {
             command: RulesCommand::Suggest,
         } => Err(CliError::NotImplemented("authmap rules suggest")),
     }
+}
+
+fn run_explain(id: &str, input: &Path) -> Result<ExitCode, CliError> {
+    let text = fs::read_to_string(input).map_err(|source| CliError::ExplainRead {
+        path: input.to_path_buf(),
+        source,
+    })?;
+    let document: AuthMapDocument =
+        serde_json::from_str(&text).map_err(|source| CliError::ExplainParse {
+            path: input.to_path_buf(),
+            source,
+        })?;
+    let rendered = render_explain(&document, id).map_err(CliError::Explain)?;
+    print!("{rendered}");
+    Ok(ExitCode::SUCCESS)
 }
 
 fn run_init(output: &Path, yes: bool, force: bool) -> Result<ExitCode, CliError> {
@@ -281,6 +300,18 @@ enum CliError {
     Scan(#[from] authmap_analysis::ScanError),
     #[error(transparent)]
     Report(#[from] authmap_report::ReportError),
+    #[error(transparent)]
+    Explain(#[from] authmap_report::ExplainError),
+    #[error("failed to read AuthMap input {path}: {source}")]
+    ExplainRead {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error("failed to parse AuthMap JSON {path}: {source}")]
+    ExplainParse {
+        path: PathBuf,
+        source: serde_json::Error,
+    },
     #[error("refusing to overwrite existing config {0}; pass --force to replace it")]
     InitExists(PathBuf),
     #[error("failed to read init prompt response: {0}")]
@@ -305,6 +336,9 @@ impl CliError {
             CliError::Scan(error) if error.is_empty_target() => 11,
             CliError::Scan(_) => 13,
             CliError::Report(_) => 14,
+            CliError::ExplainRead { .. } => 10,
+            CliError::ExplainParse { .. } => 12,
+            CliError::Explain(_) => 13,
             CliError::InitExists(_) => 15,
             CliError::InitIo(_) | CliError::InitWrite { .. } => 14,
             CliError::NotImplemented(_) | CliError::NotImplementedWithArg(_, _) => 13,
@@ -341,6 +375,9 @@ impl CliError {
             CliError::Report(authmap_report::ReportError::Write { .. }) => {
                 diagnostic_codes::REPORT_WRITE_FAILED
             }
+            CliError::ExplainRead { .. } => diagnostic_codes::CONFIG_READ_FAILED,
+            CliError::ExplainParse { .. } => diagnostic_codes::CONFIG_PARSE_FAILED,
+            CliError::Explain(_) => diagnostic_codes::REPORT_RENDER_FAILED,
             CliError::InitExists(_) => diagnostic_codes::CONFIG_VALIDATION_FAILED,
             CliError::InitIo(_) | CliError::InitWrite { .. } => {
                 diagnostic_codes::REPORT_WRITE_FAILED
