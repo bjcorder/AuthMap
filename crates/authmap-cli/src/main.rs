@@ -1,14 +1,16 @@
 use std::fs;
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
-use std::process::ExitCode;
+use std::path::{Component, Path, PathBuf};
+use std::process::{Command as ProcessCommand, ExitCode, Stdio};
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use authmap_analysis::{run_scan, suggest_rules};
-use authmap_config::{ScanConfig, ScanPlan, load_config};
-use authmap_core::{AuthMapDocument, ScanMode, diagnostic_codes};
+use authmap_analysis::{analyze_drift, run_scan, suggest_rules};
+use authmap_config::{DriftFailCategory, ScanConfig, ScanPlan, load_config};
+use authmap_core::{AuthMapDocument, SCHEMA_VERSION, ScanMode, diagnostic_codes};
 use authmap_report::{
-    JsonReporter, MarkdownReporter, Reporter, SarifReporter, render_explain,
-    render_rule_suggestions_json, render_rule_suggestions_markdown, write_atomic,
+    JsonReporter, MarkdownReporter, Reporter, SarifReporter, render_drift_json,
+    render_drift_markdown, render_explain, render_rule_suggestions_json,
+    render_rule_suggestions_markdown, write_atomic,
 };
 use clap::{Parser, Subcommand, ValueEnum};
 use thiserror::Error;
@@ -55,7 +57,23 @@ enum Command {
         max_runtime_ms: Option<u64>,
     },
     Diff {
-        range: String,
+        range: Option<String>,
+        #[arg(long)]
+        base: Option<PathBuf>,
+        #[arg(long)]
+        head: Option<PathBuf>,
+        #[arg(long, value_enum, default_value_t = DiffOutputFormat::Markdown)]
+        format: DiffOutputFormat,
+        #[arg(long)]
+        output: Option<PathBuf>,
+        #[arg(long)]
+        config: Option<PathBuf>,
+        #[arg(long, value_enum)]
+        mode: Option<ScanModeArg>,
+        #[arg(long, default_value = ".")]
+        target: PathBuf,
+        #[arg(long)]
+        fail_on: Option<String>,
     },
     Explain {
         id: String,
@@ -96,7 +114,24 @@ impl From<ScanModeArg> for ScanMode {
 
 #[derive(Debug, Subcommand)]
 enum BaselineCommand {
-    Create,
+    Create {
+        #[arg(default_value = ".")]
+        target: PathBuf,
+        #[arg(long, default_value = "authmap.baseline.json")]
+        output: PathBuf,
+        #[arg(long)]
+        config: Option<PathBuf>,
+        #[arg(long, value_enum)]
+        mode: Option<ScanModeArg>,
+        #[arg(long)]
+        max_files: Option<usize>,
+        #[arg(long)]
+        max_file_size_bytes: Option<u64>,
+        #[arg(long)]
+        max_total_bytes: Option<u64>,
+        #[arg(long)]
+        max_runtime_ms: Option<u64>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -123,6 +158,12 @@ enum RulesCommand {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 enum RuleSuggestOutputFormat {
+    Markdown,
+    Json,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum DiffOutputFormat {
     Markdown,
     Json,
 }
@@ -186,11 +227,52 @@ fn run() -> Result<ExitCode, CliError> {
                 Ok(ExitCode::SUCCESS)
             }
         }
-        Command::Diff { range } => Err(CliError::NotImplementedWithArg("authmap diff", range)),
+        Command::Diff {
+            range,
+            base,
+            head,
+            format,
+            output,
+            config,
+            mode,
+            target,
+            fail_on,
+        } => run_diff(DiffArgs {
+            range,
+            base,
+            head,
+            format,
+            output,
+            config,
+            mode,
+            target,
+            fail_on,
+        }),
         Command::Explain { id, input } => run_explain(&id, &input),
         Command::Baseline {
-            command: BaselineCommand::Create,
-        } => Err(CliError::NotImplemented("authmap baseline create")),
+            command:
+                BaselineCommand::Create {
+                    target,
+                    output,
+                    config,
+                    mode,
+                    max_files,
+                    max_file_size_bytes,
+                    max_total_bytes,
+                    max_runtime_ms,
+                },
+        } => run_baseline_create(
+            target,
+            output,
+            config,
+            mode,
+            LimitOverrides {
+                max_files,
+                max_file_size_bytes,
+                max_total_bytes,
+                max_runtime_ms,
+            },
+        ),
         Command::Rules {
             command:
                 RulesCommand::Suggest {
@@ -267,6 +349,274 @@ fn apply_limit_overrides(
         config.limits.max_runtime_ms = value;
     }
     Ok(())
+}
+
+#[derive(Clone, Debug)]
+struct DiffArgs {
+    range: Option<String>,
+    base: Option<PathBuf>,
+    head: Option<PathBuf>,
+    format: DiffOutputFormat,
+    output: Option<PathBuf>,
+    config: Option<PathBuf>,
+    mode: Option<ScanModeArg>,
+    target: PathBuf,
+    fail_on: Option<String>,
+}
+
+fn run_baseline_create(
+    target: PathBuf,
+    output: PathBuf,
+    config: Option<PathBuf>,
+    mode: Option<ScanModeArg>,
+    limit_overrides: LimitOverrides,
+) -> Result<ExitCode, CliError> {
+    let (config_path, mut config) = load_config(config).map_err(CliError::Config)?;
+    if let Some(mode) = mode {
+        config.mode = mode.into();
+    }
+    apply_limit_overrides(&mut config, limit_overrides)?;
+    let plan = ScanPlan::new(vec![target], config_path, config);
+    let document = run_scan(&plan).map_err(CliError::Scan)?;
+    let rendered = JsonReporter.render(&document).map_err(CliError::Report)?;
+    write_atomic(&output, &rendered).map_err(CliError::Report)?;
+    if document.has_enforce_blocking_diagnostics() {
+        Ok(ExitCode::from(20))
+    } else {
+        Ok(ExitCode::SUCCESS)
+    }
+}
+
+fn run_diff(args: DiffArgs) -> Result<ExitCode, CliError> {
+    if args.base.is_some() != args.head.is_some() {
+        return Err(CliError::InvalidDiffInput(
+            "--base and --head must be provided together".to_string(),
+        ));
+    }
+    if args.range.is_some() && (args.base.is_some() || args.head.is_some()) {
+        return Err(CliError::InvalidDiffInput(
+            "use either map-file diff or git range diff, not both".to_string(),
+        ));
+    }
+
+    let (config_path, mut config) = load_config(args.config.clone()).map_err(CliError::Config)?;
+    if let Some(mode) = args.mode {
+        config.mode = mode.into();
+    }
+    let fail_on = if let Some(fail_on) = args.fail_on.as_deref() {
+        parse_fail_on(fail_on)?
+    } else {
+        config.drift.fail_on.clone()
+    };
+
+    let (base_document, head_document, base_label, head_label) =
+        if let (Some(base), Some(head)) = (&args.base, &args.head) {
+            (
+                read_authmap_document(base)?,
+                read_authmap_document(head)?,
+                base.display().to_string(),
+                head.display().to_string(),
+            )
+        } else if let Some(range) = &args.range {
+            validate_git_range_target(&args.target)?;
+            let (base_ref, head_ref) = parse_git_range(range)?;
+            let temp = TempDir::new("authmap-diff")?;
+            let base_dir = temp.path().join("base");
+            let head_dir = temp.path().join("head");
+            extract_git_ref(&base_ref, &base_dir)?;
+            extract_git_ref(&head_ref, &head_dir)?;
+            let mut base_config = config.clone();
+            let mut head_config = config.clone();
+            base_config.mode = config.mode;
+            head_config.mode = config.mode;
+            let base_document = run_scan(&ScanPlan::new(
+                vec![base_dir.join(&args.target)],
+                config_path.clone(),
+                base_config,
+            ))
+            .map_err(CliError::Scan)?;
+            let head_document = run_scan(&ScanPlan::new(
+                vec![head_dir.join(&args.target)],
+                config_path,
+                head_config,
+            ))
+            .map_err(CliError::Scan)?;
+            (base_document, head_document, base_ref, head_ref)
+        } else {
+            return Err(CliError::InvalidDiffInput(
+                "pass --base and --head map files, or a BASE...HEAD range".to_string(),
+            ));
+        };
+
+    ensure_supported_document(&base_document, &base_label)?;
+    ensure_supported_document(&head_document, &head_label)?;
+
+    let report = analyze_drift(
+        &base_document,
+        &head_document,
+        config.mode,
+        &fail_on,
+        base_label,
+        head_label,
+    );
+    let rendered = match args.format {
+        DiffOutputFormat::Markdown => render_drift_markdown(&report),
+        DiffOutputFormat::Json => render_drift_json(&report).map_err(CliError::Report)?,
+    };
+
+    if let Some(output) = args.output {
+        write_atomic(&output, &rendered).map_err(CliError::Report)?;
+    } else {
+        println!("{rendered}");
+    }
+
+    if report.has_enforce_blocking_changes() {
+        Ok(ExitCode::from(20))
+    } else {
+        Ok(ExitCode::SUCCESS)
+    }
+}
+
+fn validate_git_range_target(target: &Path) -> Result<(), CliError> {
+    if target.is_absolute()
+        || target
+            .components()
+            .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)))
+    {
+        return Err(CliError::InvalidDiffInput(
+            "git range --target must be relative to the archived refs".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn parse_fail_on(value: &str) -> Result<Vec<DriftFailCategory>, CliError> {
+    let mut categories = Vec::new();
+    for raw in value.split(',') {
+        let item = raw.trim();
+        if item.is_empty() {
+            continue;
+        }
+        let category = match item {
+            "added_high_risk_route" => DriftFailCategory::AddedHighRiskRoute,
+            "added_review_required_route" => DriftFailCategory::AddedReviewRequiredRoute,
+            "auth_downgrade" => DriftFailCategory::AuthDowngrade,
+            "new_linked_mutation" => DriftFailCategory::NewLinkedMutation,
+            _ => return Err(CliError::InvalidDriftFailCategory(item.to_string())),
+        };
+        if !categories.contains(&category) {
+            categories.push(category);
+        }
+    }
+    Ok(categories)
+}
+
+fn parse_git_range(range: &str) -> Result<(String, String), CliError> {
+    let Some((base, head)) = range.split_once("...") else {
+        return Err(CliError::InvalidDiffInput(
+            "git range must use BASE...HEAD".to_string(),
+        ));
+    };
+    if base.trim().is_empty() || head.trim().is_empty() {
+        return Err(CliError::InvalidDiffInput(
+            "git range must include both BASE and HEAD".to_string(),
+        ));
+    }
+    Ok((base.trim().to_string(), head.trim().to_string()))
+}
+
+fn read_authmap_document(path: &Path) -> Result<AuthMapDocument, CliError> {
+    let text = fs::read_to_string(path).map_err(|source| CliError::DiffRead {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    serde_json::from_str(&text).map_err(|source| CliError::DiffParse {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
+fn ensure_supported_document(document: &AuthMapDocument, label: &str) -> Result<(), CliError> {
+    if document.schema_version != SCHEMA_VERSION {
+        return Err(CliError::InvalidDiffInput(format!(
+            "{label} uses unsupported schema {}; expected {SCHEMA_VERSION}",
+            document.schema_version
+        )));
+    }
+    Ok(())
+}
+
+fn extract_git_ref(ref_name: &str, destination: &Path) -> Result<(), CliError> {
+    fs::create_dir_all(destination).map_err(|source| CliError::TempDir {
+        path: destination.to_path_buf(),
+        source,
+    })?;
+    let mut archive = ProcessCommand::new("git")
+        .args(["archive", "--format=tar", ref_name])
+        .stdout(Stdio::piped())
+        .spawn()
+        .map_err(|source| CliError::GitArchive {
+            ref_name: ref_name.to_string(),
+            source,
+        })?;
+    let archive_stdout = archive
+        .stdout
+        .take()
+        .ok_or_else(|| CliError::InvalidDiffInput("failed to capture git archive".to_string()))?;
+    let status = ProcessCommand::new("tar")
+        .arg("-xf")
+        .arg("-")
+        .arg("-C")
+        .arg(destination)
+        .stdin(Stdio::from(archive_stdout))
+        .status()
+        .map_err(|source| CliError::TarExtract {
+            path: destination.to_path_buf(),
+            source,
+        })?;
+    let archive_status = archive.wait().map_err(|source| CliError::GitArchive {
+        ref_name: ref_name.to_string(),
+        source,
+    })?;
+    if !archive_status.success() {
+        return Err(CliError::InvalidDiffInput(format!(
+            "git archive failed for ref {ref_name}"
+        )));
+    }
+    if !status.success() {
+        return Err(CliError::InvalidDiffInput(format!(
+            "tar extraction failed for ref {ref_name}"
+        )));
+    }
+    Ok(())
+}
+
+struct TempDir {
+    path: PathBuf,
+}
+
+impl TempDir {
+    fn new(prefix: &str) -> Result<Self, CliError> {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos());
+        let path = std::env::temp_dir().join(format!("{prefix}-{}-{nonce}", std::process::id()));
+        fs::create_dir_all(&path).map_err(|source| CliError::TempDir {
+            path: path.clone(),
+            source,
+        })?;
+        Ok(Self { path })
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
+    }
 }
 
 fn run_rules_suggest(
@@ -421,6 +771,12 @@ limits:
   max_total_bytes: 268435456
   max_runtime_ms: 120000
 
+drift:
+  fail_on:
+    - added_high_risk_route
+    - auth_downgrade
+    - new_linked_mutation
+
 authorization:
   rules: []
 
@@ -458,6 +814,13 @@ sensitivity:
 #         contains: [permission]
 #       notes:
 #         - Project-specific permission helper.
+#
+# drift:
+#   fail_on:
+#     - added_high_risk_route
+#     - added_review_required_route
+#     - auth_downgrade
+#     - new_linked_mutation
 #
 # sensitivity:
 #   routes:
@@ -502,6 +865,35 @@ enum CliError {
         path: PathBuf,
         source: serde_json::Error,
     },
+    #[error("failed to read AuthMap diff input {path}: {source}")]
+    DiffRead {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error("failed to parse AuthMap diff input {path}: {source}")]
+    DiffParse {
+        path: PathBuf,
+        source: serde_json::Error,
+    },
+    #[error("invalid diff input: {0}")]
+    InvalidDiffInput(String),
+    #[error("invalid drift fail category {0}")]
+    InvalidDriftFailCategory(String),
+    #[error("failed to archive git ref {ref_name}: {source}")]
+    GitArchive {
+        ref_name: String,
+        source: std::io::Error,
+    },
+    #[error("failed to extract git archive into {path}: {source}")]
+    TarExtract {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error("failed to create temporary diff directory {path}: {source}")]
+    TempDir {
+        path: PathBuf,
+        source: std::io::Error,
+    },
     #[error("refusing to overwrite existing config {0}; pass --force to replace it")]
     InitExists(PathBuf),
     #[error("refusing to overwrite symlinked init config {0}")]
@@ -515,10 +907,6 @@ enum CliError {
     },
     #[error("invalid CLI limit --{0}: {1}")]
     InvalidCliLimit(&'static str, &'static str),
-    #[error("{0} is scaffolded but not implemented yet")]
-    NotImplemented(&'static str),
-    #[error("{0} is scaffolded but not implemented yet: {1}")]
-    NotImplementedWithArg(&'static str, String),
 }
 
 impl CliError {
@@ -533,10 +921,14 @@ impl CliError {
             CliError::ExplainRead { .. } => 10,
             CliError::ExplainParse { .. } => 12,
             CliError::Explain(_) => 13,
+            CliError::DiffRead { .. } => 10,
+            CliError::DiffParse { .. } => 12,
+            CliError::InvalidDiffInput(_) | CliError::InvalidDriftFailCategory(_) => 2,
+            CliError::GitArchive { .. } | CliError::TarExtract { .. } => 13,
+            CliError::TempDir { .. } => 14,
             CliError::InitExists(_) | CliError::InitSymlink(_) => 15,
             CliError::InitIo(_) | CliError::InitWrite { .. } => 14,
             CliError::InvalidCliLimit(_, _) => 2,
-            CliError::NotImplemented(_) | CliError::NotImplementedWithArg(_, _) => 13,
         }
     }
 
@@ -573,6 +965,15 @@ impl CliError {
             CliError::ExplainRead { .. } => diagnostic_codes::CONFIG_READ_FAILED,
             CliError::ExplainParse { .. } => diagnostic_codes::CONFIG_PARSE_FAILED,
             CliError::Explain(_) => diagnostic_codes::REPORT_RENDER_FAILED,
+            CliError::DiffRead { .. } => diagnostic_codes::CONFIG_READ_FAILED,
+            CliError::DiffParse { .. } => diagnostic_codes::CONFIG_PARSE_FAILED,
+            CliError::InvalidDiffInput(_) | CliError::InvalidDriftFailCategory(_) => {
+                diagnostic_codes::CONFIG_VALIDATION_FAILED
+            }
+            CliError::GitArchive { .. } | CliError::TarExtract { .. } => {
+                diagnostic_codes::INTERNAL_SCAN_FAILED
+            }
+            CliError::TempDir { .. } => diagnostic_codes::REPORT_WRITE_FAILED,
             CliError::InitExists(_) | CliError::InitSymlink(_) => {
                 diagnostic_codes::CONFIG_VALIDATION_FAILED
             }
@@ -580,9 +981,6 @@ impl CliError {
                 diagnostic_codes::REPORT_WRITE_FAILED
             }
             CliError::InvalidCliLimit(_, _) => diagnostic_codes::CONFIG_VALIDATION_FAILED,
-            CliError::NotImplemented(_) | CliError::NotImplementedWithArg(_, _) => {
-                diagnostic_codes::INTERNAL_SCAN_FAILED
-            }
         }
     }
 }

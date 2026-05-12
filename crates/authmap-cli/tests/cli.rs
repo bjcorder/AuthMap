@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde_json::Value;
+use serde_json::{Value, json};
 
 struct TestDir {
     path: PathBuf,
@@ -186,6 +186,57 @@ fn ambiguous_explain_document_json() -> String {
     explain_document_json().replace("\"id\": \"evidence_0001\"", "\"id\": \"route_0001\"")
 }
 
+fn drift_head_document() -> Value {
+    let mut document: Value =
+        serde_json::from_str(explain_document_json()).expect("fixture JSON should parse");
+    document["coverage"][0]["class"] = json!("unauthenticated");
+    document["coverage"][0]["risk"] = json!("high");
+    document["coverage"][0]["rationale"] =
+        json!(["authentication evidence disappeared between baseline and head"]);
+    document["routes"]
+        .as_array_mut()
+        .expect("routes should be an array")
+        .push(json!({
+            "id": "route_0002",
+            "framework": "fast_api",
+            "method": "POST",
+            "path": "/admin",
+            "name": null,
+            "tags": [],
+            "middleware": [],
+            "handler": {
+                "name": "create_admin",
+                "span": {
+                    "file": "app.py",
+                    "line": 8,
+                    "column": 1,
+                    "byte_range": { "start": 120, "end": 160 }
+                }
+            },
+            "span": {
+                "file": "app.py",
+                "line": 7,
+                "column": 1,
+                "byte_range": { "start": 100, "end": 119 }
+            },
+            "source_evidence": [],
+            "confidence": "high",
+            "notes": []
+        }));
+    document["coverage"]
+        .as_array_mut()
+        .expect("coverage should be an array")
+        .push(json!({
+            "route_id": "route_0002",
+            "class": "unauthenticated",
+            "risk": "high",
+            "rationale": ["new sensitive route has no authorization evidence"],
+            "reviewer_questions": ["Should this route require explicit authorization?"],
+            "uncertainty_reasons": []
+        }));
+    document
+}
+
 fn write_rules_suggest_project(project: &Path) {
     write_file(
         &project.join("app.js"),
@@ -260,6 +311,7 @@ fn action_metadata_defines_expected_wrapper_contract() {
         "target:",
         "config:",
         "baseline:",
+        "fail-on:",
         "output-directory:",
         "upload-artifact:",
         "artifact-name:",
@@ -272,6 +324,8 @@ fn action_metadata_defines_expected_wrapper_contract() {
         "json-path:",
         "markdown-path:",
         "sarif-path:",
+        "diff-json-path:",
+        "diff-markdown-path:",
         "output-directory:",
     ] {
         assert!(action.contains(output), "missing action output {output}");
@@ -287,7 +341,9 @@ fn action_metadata_defines_expected_wrapper_contract() {
     assert!(action.contains("Propagate AuthMap exit code"));
     assert!(script.contains("cargo run --locked"));
     assert!(script.contains("GITHUB_STEP_SUMMARY"));
-    assert!(script.contains("baseline input is reserved"));
+    assert!(script.contains("authmap.diff.json"));
+    assert!(script.contains("authmap.diff.md"));
+    assert!(script.contains("--fail-on"));
     assert!(script.contains("AUTHMAP_DEFER_EXIT"));
     assert!(script.contains("exit-code"));
 }
@@ -303,6 +359,20 @@ fn action_runner_generates_reports_outputs_and_step_summary() {
     let github_output = temp.path().join("github-output.txt");
     let step_summary = temp.path().join("summary.md");
     let output_dir = temp.path().join("reports");
+    let baseline_path = temp.path().join("baseline.json");
+
+    let baseline = authmap_in_dir(
+        &[
+            "scan",
+            "tests/fixtures/negative/frontend_only",
+            "--format",
+            "json",
+            "--output",
+            baseline_path.to_str().expect("path should be UTF-8"),
+        ],
+        &root,
+    );
+    assert_exit(&baseline, 0);
 
     let output = Command::new("bash")
         .arg(root.join(".github/actions/authmap/run.sh"))
@@ -315,7 +385,8 @@ fn action_runner_generates_reports_outputs_and_step_summary() {
         .env("INPUT_OUTPUT", "markdown,json,sarif")
         .env("INPUT_TARGET", "tests/fixtures/negative/frontend_only")
         .env("INPUT_CONFIG", "")
-        .env("INPUT_BASELINE", "authmap.baseline.json")
+        .env("INPUT_BASELINE", &baseline_path)
+        .env("INPUT_FAIL_ON", "")
         .env("INPUT_OUTPUT_DIRECTORY", &output_dir)
         .env("INPUT_UPLOAD_SARIF", "false")
         .output()
@@ -325,9 +396,13 @@ fn action_runner_generates_reports_outputs_and_step_summary() {
     let markdown_path = output_dir.join("authmap.md");
     let json_path = output_dir.join("authmap.json");
     let sarif_path = output_dir.join("authmap.sarif");
+    let diff_json_path = output_dir.join("authmap.diff.json");
+    let diff_markdown_path = output_dir.join("authmap.diff.md");
     assert!(markdown_path.exists());
     assert!(json_path.exists());
     assert!(sarif_path.exists());
+    assert!(diff_json_path.exists());
+    assert!(diff_markdown_path.exists());
 
     let json: Value = serde_json::from_str(
         &fs::read_to_string(&json_path).expect("JSON report should be readable"),
@@ -342,17 +417,234 @@ fn action_runner_generates_reports_outputs_and_step_summary() {
 
     let summary = fs::read_to_string(step_summary).expect("summary should be written");
     assert!(summary.contains("# AuthMap Report"));
+    assert!(summary.contains("# AuthMap Drift Report"));
     let outputs = fs::read_to_string(github_output).expect("GitHub outputs should be written");
     assert!(outputs.contains(&format!("json-path={}", json_path.display())));
     assert!(outputs.contains(&format!("markdown-path={}", markdown_path.display())));
     assert!(outputs.contains(&format!("sarif-path={}", sarif_path.display())));
+    assert!(outputs.contains(&format!("diff-json-path={}", diff_json_path.display())));
+    assert!(outputs.contains(&format!(
+        "diff-markdown-path={}",
+        diff_markdown_path.display()
+    )));
     assert!(outputs.contains("exit-code=0"));
-    let combined_output = format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
+}
+
+#[test]
+fn baseline_create_writes_schema_compatible_authmap_json() {
+    let temp = TestDir::new("baseline-create");
+    let project = temp.path().join("project");
+    let output_path = temp.path().join("authmap.baseline.json");
+    write_file(
+        &project.join("app.py"),
+        r#"
+from fastapi import FastAPI, Depends
+
+app = FastAPI()
+
+def require_user():
+    return {"id": "user_1"}
+
+@app.get("/accounts")
+def read_accounts(user=Depends(require_user)):
+    return []
+"#,
     );
-    assert!(combined_output.contains("baseline input is reserved"));
+
+    let output = authmap(&[
+        "baseline",
+        "create",
+        project.to_str().expect("path should be UTF-8"),
+        "--output",
+        output_path.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 0);
+    let document: Value =
+        serde_json::from_str(&fs::read_to_string(output_path).expect("output should exist"))
+            .expect("baseline should be valid JSON");
+    assert_valid_authmap_document(&document);
+    assert_eq!(document["schema_version"], "0.1.0");
+    assert_eq!(document["metadata"]["mode"], "advisory");
+}
+
+#[test]
+fn diff_map_files_emit_deterministic_json_markdown_and_enforce_policy() {
+    let temp = TestDir::new("diff-map-files");
+    let base_path = temp.path().join("base.json");
+    let head_path = temp.path().join("head.json");
+    let json_path = temp.path().join("authmap.diff.json");
+    let markdown_path = temp.path().join("authmap.diff.md");
+    let base_document: Value =
+        serde_json::from_str(explain_document_json()).expect("fixture JSON should parse");
+    let head_document = drift_head_document();
+    assert_valid_authmap_document(&base_document);
+    assert_valid_authmap_document(&head_document);
+    write_file(
+        &base_path,
+        &serde_json::to_string_pretty(&base_document).expect("base should serialize"),
+    );
+    write_file(
+        &head_path,
+        &serde_json::to_string_pretty(&head_document).expect("head should serialize"),
+    );
+
+    let output = authmap(&[
+        "diff",
+        "--base",
+        base_path.to_str().expect("path should be UTF-8"),
+        "--head",
+        head_path.to_str().expect("path should be UTF-8"),
+        "--format",
+        "json",
+        "--output",
+        json_path.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&output, 0);
+    let report: Value =
+        serde_json::from_str(&fs::read_to_string(&json_path).expect("diff JSON should exist"))
+            .expect("diff JSON should parse");
+    assert_eq!(report["report_type"], "authmap.diff");
+    assert_eq!(report["summary"]["added_routes"], 1);
+    assert_eq!(report["summary"]["coverage_changes"], 1);
+    assert!(
+        report["changes"]
+            .as_array()
+            .expect("changes should be an array")
+            .iter()
+            .any(|change| change["kind"] == "added_route"
+                && change["fail_category"] == "added_high_risk_route")
+    );
+    assert!(
+        report["changes"]
+            .as_array()
+            .expect("changes should be an array")
+            .iter()
+            .any(|change| change["kind"] == "coverage_changed"
+                && change["before"]["direction"] == "downgrade")
+    );
+
+    let output = authmap(&[
+        "diff",
+        "--base",
+        base_path.to_str().expect("path should be UTF-8"),
+        "--head",
+        head_path.to_str().expect("path should be UTF-8"),
+        "--format",
+        "markdown",
+        "--output",
+        markdown_path.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&output, 0);
+    let markdown = fs::read_to_string(&markdown_path).expect("diff Markdown should exist");
+    assert!(markdown.contains("# AuthMap Drift Report"));
+    assert!(markdown.contains("added_high_risk_route"));
+
+    let output = authmap(&[
+        "diff",
+        "--base",
+        base_path.to_str().expect("path should be UTF-8"),
+        "--head",
+        head_path.to_str().expect("path should be UTF-8"),
+        "--mode",
+        "enforce",
+        "--format",
+        "json",
+    ]);
+    assert_exit(&output, 20);
+
+    let output = authmap(&[
+        "diff",
+        "--base",
+        base_path.to_str().expect("path should be UTF-8"),
+        "--head",
+        head_path.to_str().expect("path should be UTF-8"),
+        "--mode",
+        "enforce",
+        "--fail-on",
+        "new_linked_mutation",
+        "--format",
+        "json",
+    ]);
+    assert_exit(&output, 0);
+}
+
+#[test]
+fn diff_git_range_scans_committed_refs_without_mutating_checkout() {
+    if Command::new("git").arg("--version").output().is_err() {
+        return;
+    }
+
+    let temp = TestDir::new("diff-git-range");
+    write_file(
+        &temp.path().join("app.py"),
+        r#"
+from fastapi import FastAPI, Depends
+
+app = FastAPI()
+
+def require_user():
+    return {"id": "user_1"}
+
+@app.get("/accounts")
+def read_accounts(user=Depends(require_user)):
+    return []
+"#,
+    );
+    for args in [
+        vec!["init"],
+        vec!["config", "user.email", "authmap@example.test"],
+        vec!["config", "user.name", "AuthMap Test"],
+        vec!["add", "."],
+        vec!["commit", "-m", "base"],
+    ] {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(temp.path())
+            .output()
+            .expect("git should run");
+        assert_exit(&output, 0);
+    }
+    write_file(
+        &temp.path().join("app.py"),
+        r#"
+from fastapi import FastAPI, Depends
+
+app = FastAPI()
+
+def require_user():
+    return {"id": "user_1"}
+
+@app.get("/accounts")
+def read_accounts(user=Depends(require_user)):
+    return []
+
+@app.post("/admin")
+def create_admin():
+    return {"ok": True}
+"#,
+    );
+    for args in [vec!["add", "."], vec!["commit", "-m", "head"]] {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(temp.path())
+            .output()
+            .expect("git should run");
+        assert_exit(&output, 0);
+    }
+
+    let output = authmap_in_dir(&["diff", "HEAD~1...HEAD", "--format", "json"], temp.path());
+    assert_exit(&output, 0);
+    let report: Value =
+        serde_json::from_slice(&output.stdout).expect("git range diff should emit JSON");
+    assert_eq!(report["report_type"], "authmap.diff");
+    assert!(
+        report["changes"]
+            .as_array()
+            .expect("changes should be an array")
+            .iter()
+            .any(|change| change["kind"] == "added_route")
+    );
 }
 
 #[test]
@@ -495,6 +787,8 @@ fn init_yes_creates_valid_starter_config() {
     let text = fs::read_to_string(config).expect("starter config should exist");
     assert!(text.contains("authorization:"));
     assert!(text.contains("sensitivity:"));
+    assert!(text.contains("drift:"));
+    assert!(text.contains("auth_downgrade"));
     assert!(text.contains("max_total_bytes: 268435456"));
     assert!(text.contains("max_runtime_ms: 120000"));
     assert!(text.contains("Starter examples:"));

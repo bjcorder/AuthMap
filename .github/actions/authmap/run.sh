@@ -91,9 +91,12 @@ if [[ -n "$config_input" ]]; then
 fi
 
 baseline_input="$(trim "${INPUT_BASELINE:-}")"
+baseline_path=""
 if [[ -n "$baseline_input" ]]; then
-  warn "baseline input is reserved for future baseline/diff support and is ignored by this version"
+  baseline_path="$(workspace_path "$baseline_input")"
 fi
+
+fail_on_input="$(trim "${INPUT_FAIL_ON:-}")"
 
 output_dir_input="$(trim "${INPUT_OUTPUT_DIRECTORY:-.authmap}")"
 [[ -n "$output_dir_input" ]] || die "output-directory must not be empty"
@@ -115,6 +118,10 @@ if is_true "$upload_sarif"; then
   add_format "sarif"
 fi
 
+if [[ -n "$baseline_path" ]]; then
+  add_format "json"
+fi
+
 if [[ "${#formats[@]}" -eq 0 ]]; then
   die "at least one output format must be requested"
 fi
@@ -122,6 +129,8 @@ fi
 json_path=""
 markdown_path=""
 sarif_path=""
+diff_json_path=""
+diff_markdown_path=""
 final_status=0
 
 for format in "${formats[@]}"; do
@@ -166,6 +175,55 @@ for format in "${formats[@]}"; do
   fi
 done
 
+if [[ -n "$baseline_path" && ( "$final_status" -eq 0 || "$final_status" -eq 20 ) ]]; then
+  if [[ -z "$json_path" || ! -s "$json_path" ]]; then
+    die "baseline diff requires a generated JSON AuthMap report"
+  fi
+
+  for diff_format in json markdown; do
+    case "$diff_format" in
+      json)
+        diff_output_path="$output_dir/authmap.diff.json"
+        diff_json_path="$diff_output_path"
+        ;;
+      markdown)
+        diff_output_path="$output_dir/authmap.diff.md"
+        diff_markdown_path="$diff_output_path"
+        ;;
+    esac
+
+    cmd=(
+      cargo run --locked
+      --manifest-path "$GITHUB_ACTION_PATH/Cargo.toml"
+      -p authmap-cli
+      --
+      diff
+      --base "$baseline_path"
+      --head "$json_path"
+      --format "$diff_format"
+      --output "$diff_output_path"
+      --mode "$mode"
+    )
+    if [[ -n "$config_path" ]]; then
+      cmd+=(--config "$config_path")
+    fi
+    if [[ -n "$fail_on_input" ]]; then
+      cmd+=(--fail-on "$fail_on_input")
+    fi
+
+    echo "Running AuthMap ${diff_format} drift report"
+    "${cmd[@]}"
+    status=$?
+    if [[ "$status" -eq 20 ]]; then
+      final_status=20
+      warn "AuthMap drift enforce mode returned exit code 20 for ${diff_format}; continuing to generate requested artifacts"
+    elif [[ "$status" -ne 0 ]]; then
+      final_status="$status"
+      break
+    fi
+  done
+fi
+
 if [[ -n "$markdown_path" && -s "$markdown_path" && -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     printf '\n'
@@ -174,9 +232,19 @@ if [[ -n "$markdown_path" && -s "$markdown_path" && -n "${GITHUB_STEP_SUMMARY:-}
   } >> "$GITHUB_STEP_SUMMARY"
 fi
 
+if [[ -n "$diff_markdown_path" && -s "$diff_markdown_path" && -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+  {
+    printf '\n'
+    cat "$diff_markdown_path"
+    printf '\n'
+  } >> "$GITHUB_STEP_SUMMARY"
+fi
+
 append_output "json-path" "$json_path"
 append_output "markdown-path" "$markdown_path"
 append_output "sarif-path" "$sarif_path"
+append_output "diff-json-path" "$diff_json_path"
+append_output "diff-markdown-path" "$diff_markdown_path"
 append_output "output-directory" "$output_dir"
 append_output "exit-code" "$final_status"
 

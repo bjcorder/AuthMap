@@ -4,7 +4,9 @@ use std::fs::{self, OpenOptions};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-use authmap_analysis::RuleSuggestionReport;
+use authmap_analysis::{
+    DriftChange, DriftChangeKind, DriftChangeSeverity, DriftReport, RuleSuggestionReport,
+};
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticSeverity, Evidence,
     EvidenceType, Framework, Mutation, MutationOperation, ReachabilityLink, RiskLevel,
@@ -785,6 +787,126 @@ pub fn render_rule_suggestions_markdown(report: &RuleSuggestionReport) -> String
 
 pub fn render_rule_suggestions_json(report: &RuleSuggestionReport) -> Result<String, ReportError> {
     serde_json::to_string_pretty(report).map_err(ReportError::Json)
+}
+
+pub fn render_drift_json(report: &DriftReport) -> Result<String, ReportError> {
+    serde_json::to_string_pretty(report).map_err(ReportError::Json)
+}
+
+pub fn render_drift_markdown(report: &DriftReport) -> String {
+    let mut output = String::new();
+    let _ = writeln!(output, "# AuthMap Drift Report");
+    let _ = writeln!(output);
+    let _ = writeln!(output, "- Mode: {}", scan_mode_label(report.metadata.mode));
+    let _ = writeln!(
+        output,
+        "- Base: {}",
+        escape_inline(&report.metadata.base.label)
+    );
+    let _ = writeln!(
+        output,
+        "- Head: {}",
+        escape_inline(&report.metadata.head.label)
+    );
+    let _ = writeln!(
+        output,
+        "- Enforce fail-on: {}",
+        list_or_none(
+            report
+                .metadata
+                .fail_on
+                .iter()
+                .map(enum_value)
+                .collect::<Vec<_>>()
+        )
+    );
+    let _ = writeln!(output);
+
+    let _ = writeln!(output, "## Summary");
+    let _ = writeln!(output);
+    let _ = writeln!(output, "- Total changes: {}", report.summary.total_changes);
+    let _ = writeln!(output, "- Added routes: {}", report.summary.added_routes);
+    let _ = writeln!(
+        output,
+        "- Removed routes: {}",
+        report.summary.removed_routes
+    );
+    let _ = writeln!(
+        output,
+        "- Handler changes: {}",
+        report.summary.handler_changes
+    );
+    let _ = writeln!(
+        output,
+        "- Evidence changes: {}",
+        report.summary.evidence_changes
+    );
+    let _ = writeln!(
+        output,
+        "- Coverage changes: {}",
+        report.summary.coverage_changes
+    );
+    let _ = writeln!(
+        output,
+        "- New linked mutations: {}",
+        report.summary.new_linked_mutations
+    );
+    let _ = writeln!(
+        output,
+        "- Blocking changes: {}",
+        report.summary.blocking_changes
+    );
+    let _ = writeln!(output);
+
+    let _ = writeln!(output, "## Changes");
+    let _ = writeln!(output);
+    if report.changes.is_empty() {
+        let _ = writeln!(output, "No authorization drift was detected.");
+        let _ = writeln!(output);
+        return output;
+    }
+
+    let rows = report
+        .changes
+        .iter()
+        .map(drift_change_row)
+        .collect::<Vec<_>>();
+    render_table(
+        &mut output,
+        &["ID", "Severity", "Kind", "Route", "Message"],
+        &rows,
+    );
+    let _ = writeln!(output);
+    output
+}
+
+fn drift_change_row(change: &DriftChange) -> Vec<String> {
+    vec![
+        escape_table(&change.id),
+        escape_table(drift_severity_label(change.severity)),
+        escape_table(drift_kind_label(change.kind)),
+        escape_table(&change.route_key),
+        escape_table(&change.message),
+    ]
+}
+
+fn drift_kind_label(kind: DriftChangeKind) -> &'static str {
+    match kind {
+        DriftChangeKind::AddedRoute => "added_route",
+        DriftChangeKind::RemovedRoute => "removed_route",
+        DriftChangeKind::HandlerChanged => "handler_changed",
+        DriftChangeKind::EvidenceChanged => "evidence_changed",
+        DriftChangeKind::CoverageChanged => "coverage_changed",
+        DriftChangeKind::NewLinkedMutation => "new_linked_mutation",
+    }
+}
+
+fn drift_severity_label(severity: DriftChangeSeverity) -> &'static str {
+    match severity {
+        DriftChangeSeverity::Note => "note",
+        DriftChangeSeverity::Warning => "warning",
+        DriftChangeSeverity::Error => "error",
+    }
 }
 
 fn render_rule_suggestion_diagnostics(output: &mut String, report: &RuleSuggestionReport) {

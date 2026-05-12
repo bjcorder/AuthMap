@@ -127,9 +127,10 @@ AuthMap should classify coverage in reviewable terms:
 authmap init
 authmap scan --format markdown --output authmap.md
 authmap scan --format json --output authmap.json
-authmap diff main...HEAD
+authmap baseline create . --output authmap.baseline.json
+authmap diff --base authmap.baseline.json --head authmap.json
+authmap diff main...HEAD --target .
 authmap explain ROUTE_OR_FINDING_ID
-authmap baseline create
 authmap rules suggest
 ```
 
@@ -166,6 +167,13 @@ writes the requested report and exits `20` when the completed document contains
 any `error` or `fatal` diagnostic. Warnings remain non-blocking; incomplete
 discovery conditions such as file truncation or oversized supported files are
 promoted to error diagnostics in enforce mode.
+
+`authmap baseline create [target] --output authmap.baseline.json` writes a
+normal AuthMap JSON document for later comparison. `authmap diff` supports
+map-file diffs with `--base` and `--head`, plus committed git ranges such as
+`main...HEAD` using `git archive` into temporary directories so the checkout is
+not mutated. Diff reports are available as Markdown or JSON; enforce mode exits
+`20` only when drift matches the effective `drift.fail_on` policy.
 
 Discovery honors gitignore-style `include` and `exclude` entries in
 `authmap.yml`. Includes narrow the supported source-file set, excludes win over
@@ -234,6 +242,21 @@ steps:
     with:
       mode: enforce
       output: markdown,json
+```
+
+To review drift against a baseline in CI, provide `baseline`. The action
+generates `authmap.diff.json` and `authmap.diff.md`, appends the drift Markdown
+to the job summary, and honors `fail-on` in enforce mode:
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - uses: bjcorder/AuthMap@v0
+    with:
+      mode: enforce
+      output: markdown,json
+      baseline: authmap.baseline.json
+      fail-on: added_high_risk_route,auth_downgrade,new_linked_mutation
 ```
 
 See [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md) for all inputs, outputs, and

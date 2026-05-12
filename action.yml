@@ -19,7 +19,11 @@ inputs:
     required: false
     default: ""
   baseline:
-    description: Reserved baseline path for future baseline/diff support. Currently accepted but ignored with a warning.
+    description: Optional AuthMap JSON baseline path. When set, the action generates a current JSON map and appends drift Markdown to the job summary.
+    required: false
+    default: ""
+  fail-on:
+    description: Optional comma-separated drift categories that fail enforce-mode baseline diffs.
     required: false
     default: ""
   output-directory:
@@ -53,6 +57,12 @@ outputs:
   sarif-path:
     description: Absolute path to the generated SARIF report, when generated.
     value: ${{ steps.run-authmap.outputs.sarif-path }}
+  diff-json-path:
+    description: Absolute path to the generated JSON drift report, when baseline is set.
+    value: ${{ steps.run-authmap.outputs.diff-json-path }}
+  diff-markdown-path:
+    description: Absolute path to the generated Markdown drift report, when baseline is set.
+    value: ${{ steps.run-authmap.outputs.diff-markdown-path }}
   output-directory:
     description: Absolute path to the directory containing generated AuthMap reports.
     value: ${{ steps.run-authmap.outputs.output-directory }}
@@ -69,6 +79,7 @@ runs:
         INPUT_TARGET: ${{ inputs.target }}
         INPUT_CONFIG: ${{ inputs.config }}
         INPUT_BASELINE: ${{ inputs.baseline }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
         INPUT_OUTPUT_DIRECTORY: ${{ inputs.output-directory }}
         INPUT_UPLOAD_SARIF: ${{ inputs.upload-sarif }}
         AUTHMAP_DEFER_EXIT: "true"
