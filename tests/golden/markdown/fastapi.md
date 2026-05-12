@@ -51,6 +51,10 @@
 | [route_0014](#route-route_0014) | fast_api | ANY | /fallback | \`fallback\` (tests/fixtures/fastapi/main.py:72:5) | none | medium | unauthenticated | high |
 | [route_0015](#route-route_0015) | fast_api | GET | &lt;dynamic&gt; | \`generated_path\` (tests/fixtures/fastapi/main.py:77:5) | none | medium | unauthenticated | low |
 
+## Data Mutations
+
+No data mutations were detected.
+
 ## Route Details
 
 <a id="route-route_0001"></a>

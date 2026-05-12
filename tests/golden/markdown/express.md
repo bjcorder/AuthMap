@@ -53,6 +53,10 @@
 | [route_0015](#route-route_0015) | express | GET | /secure/:tenantId/settings | \`&lt;inline_handler&gt;\` (tests/fixtures/express/routes/users.ts:27:50) | \`requireAuth\` (tests/fixtures/express/app.js:66:20), \`requireTenant\` (tests/fixtures/express/routes/users.ts:9:10) | high | tenant_guarded | low |
 | [route_0016](#route-route_0016) | express | GET | /v1/:tenantId/settings | \`&lt;inline_handler&gt;\` (tests/fixtures/express/routes/users.ts:27:50) | \`requireTenant\` (tests/fixtures/express/routes/users.ts:9:10) | high | tenant_guarded | low |
 
+## Data Mutations
+
+No data mutations were detected.
+
 ## Route Details
 
 <a id="route-route_0001"></a>

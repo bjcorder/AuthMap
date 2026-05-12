@@ -11,8 +11,9 @@ Fixtures are intentionally small source snippets. They are scanned statically an
 ## Layout
 
 - `fixtures/fastapi/` and `fixtures/express/` are active route-inventory regression inputs.
+- `fixtures/mutations/` contains active ORM/data mutation extraction coverage for Prisma, SQLAlchemy, and Django ORM.
 - `fixtures/negative/` contains source patterns that must not produce backend route, evidence, mutation, link, or coverage facts.
-- `fixtures/pending/` contains representative auth and mutation snippets for future extractor work. These files are intentionally not active snapshot inputs until the matching extractor or classifier issue implements those facts.
+- `fixtures/pending/` contains representative snippets for future extractor work. These files are intentionally not active snapshot inputs until the matching extractor or classifier issue implements those facts.
 - `golden/json/` stores normalized JSON snapshots from the full analysis pipeline.
 - `golden/markdown/` stores normalized Markdown snapshots from the reporter.
 

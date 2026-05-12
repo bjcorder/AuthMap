@@ -22,6 +22,10 @@ No review-required items were identified.
 
 No routes were discovered.
 
+## Data Mutations
+
+No data mutations were detected.
+
 ## Route Details
 
 No route details are available.

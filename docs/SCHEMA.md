@@ -75,6 +75,11 @@ Coverage entries include machine-readable support metadata in the namespaced
 extension key `authmap.coverage`. The extension can contain `evidence_ids`,
 `weak_evidence_ids`, `mutation_ids`, `link_ids`, and `sensitivity_reasons`.
 
+Raw or ambiguous mutation facts can include machine-readable review metadata in
+`mutation.extensions["authmap.mutation"]`. The MVP uses `review_required`,
+`detection`, and `uncertainty_reasons` fields for raw SQL and unknown mutation
+operations while keeping the canonical mutation schema unchanged.
+
 ## Project Authorization Rules
 
 Projects can extend built-in guard detection through `authmap.yml`:

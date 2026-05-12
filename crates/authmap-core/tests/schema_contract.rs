@@ -123,8 +123,19 @@ fn rust_document_serialization_validates_against_schema() {
         resource: Some("Account".to_string()),
         span: Some(span("src/routes/accounts.ts", 20, 5)),
         confidence: Confidence::Medium,
-        notes: Vec::new(),
-        extensions: ExtensionMap::new(),
+        notes: vec!["raw mutation requires review".to_string()],
+        extensions: {
+            let mut extensions = ExtensionMap::new();
+            extensions.insert(
+                "authmap.mutation".to_string(),
+                json!({
+                    "review_required": true,
+                    "uncertainty_reasons": ["raw SQL mutation requires review"],
+                    "detection": "raw_sql"
+                }),
+            );
+            extensions
+        },
     });
     document.links.push(ReachabilityLink {
         id: "link.accounts.delete".to_string(),

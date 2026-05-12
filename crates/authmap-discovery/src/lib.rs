@@ -384,14 +384,25 @@ fn detect_manifest_hints(text: &str, hints: &mut BTreeSet<ProjectHint>) {
     if lower.contains("fastapi") {
         hints.insert(ProjectHint::FastApi);
     }
+    if lower.contains("sqlalchemy") || lower.contains("sql-alchemy") {
+        hints.insert(ProjectHint::SqlAlchemy);
+    }
     if lower.contains("django") {
         hints.insert(ProjectHint::Django);
+        hints.insert(ProjectHint::DjangoOrm);
     }
     if lower.contains("djangorestframework") || lower.contains("rest_framework") {
         hints.insert(ProjectHint::DjangoRestFramework);
     }
     if lower.contains("\"express\"") || lower.contains("'express'") || lower.contains(" express") {
         hints.insert(ProjectHint::Express);
+    }
+    if lower.contains("\"@prisma/client\"")
+        || lower.contains("'@prisma/client'")
+        || lower.contains("\"prisma\"")
+        || lower.contains("'prisma'")
+    {
+        hints.insert(ProjectHint::Prisma);
     }
     if lower.contains("\"next\"") || lower.contains("'next'") || lower.contains(" next") {
         hints.insert(ProjectHint::NextJs);
@@ -406,9 +417,28 @@ fn detect_source_hints(text: &str, hints: &mut BTreeSet<ProjectHint>) {
     if lower.contains("from django") || lower.contains("import django") || lower.contains("django.")
     {
         hints.insert(ProjectHint::Django);
+        hints.insert(ProjectHint::DjangoOrm);
+    }
+    if lower.contains("models.model")
+        || lower.contains(".objects.")
+        || lower.contains("from django.db import models")
+    {
+        hints.insert(ProjectHint::DjangoOrm);
     }
     if lower.contains("rest_framework") {
         hints.insert(ProjectHint::DjangoRestFramework);
+    }
+    if lower.contains("sqlalchemy")
+        || lower.contains("from sqlalchemy")
+        || lower.contains("import sqlalchemy")
+    {
+        hints.insert(ProjectHint::SqlAlchemy);
+    }
+    if lower.contains("@prisma/client")
+        || lower.contains("prismaclient")
+        || lower.contains("prisma.")
+    {
+        hints.insert(ProjectHint::Prisma);
     }
     if lower.contains("from \"express\"")
         || lower.contains("from 'express'")

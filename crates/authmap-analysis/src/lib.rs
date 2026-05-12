@@ -8,8 +8,8 @@ use authmap_config::{
 };
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticCategory,
-    DiagnosticSeverity, Evidence, EvidenceType, Framework, Mutation, ReachabilityLink,
-    Recoverability, RiskLevel, ScanMetadata, Span, SymbolRef,
+    DiagnosticSeverity, Evidence, EvidenceType, Framework, Mutation, MutationOperation,
+    ReachabilityLink, Recoverability, RiskLevel, ScanMetadata, Span, SymbolRef,
 };
 use authmap_discovery::discover_sources;
 use authmap_parsers::{ParseError, ParsedFile, TreeSitterBackend, parse_files_in_parallel};
@@ -115,6 +115,43 @@ impl EvidenceExtractor for BuiltInEvidenceExtractor {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct BuiltInMutationExtractor;
+
+impl MutationExtractor for BuiltInMutationExtractor {
+    fn extract_mutations(&self, input: &AnalysisInput<'_>) -> AnalysisFacts {
+        let mut mutations = input.mutations.to_vec();
+        for parsed in input.parsed_files {
+            let Some(root) = parsed.root_node() else {
+                continue;
+            };
+            match parsed.language {
+                authmap_core::Language::JavaScript
+                | authmap_core::Language::JavaScriptReact
+                | authmap_core::Language::TypeScript
+                | authmap_core::Language::TypeScriptReact => {
+                    mutations.extend(extract_prisma_mutations(parsed, root));
+                }
+                authmap_core::Language::Python => {
+                    mutations.extend(extract_python_mutations(parsed, root));
+                }
+                authmap_core::Language::Unknown => {}
+            }
+        }
+
+        dedup_mutations(&mut mutations);
+        mutations.sort_by_key(mutation_sort_key);
+        for (index, mutation) in mutations.iter_mut().enumerate() {
+            mutation.id = format!("mutation_{:04}", index + 1);
+        }
+
+        AnalysisFacts {
+            mutations,
+            ..AnalysisFacts::default()
+        }
+    }
+}
+
 pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
     let discovery = discover_sources(plan)?;
     let backend = TreeSitterBackend;
@@ -126,7 +163,7 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
     });
 
     let adapter_registry = AdapterRegistry::built_in();
-    let mut adapter_output =
+    let adapter_output =
         adapter_registry.discover_routes(&parse_output.parsed_files, &AdapterContext::default());
 
     let mut document = AuthMapDocument::empty(ScanMetadata {
@@ -163,9 +200,11 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
         mutations: &adapter_output.mutations,
     };
     let facts = BuiltInEvidenceExtractor.extract_evidence(&input);
+    let mutation_facts = BuiltInMutationExtractor.extract_mutations(&input);
     document.evidence = facts.evidence;
-    document.mutations.append(&mut adapter_output.mutations);
+    document.mutations = mutation_facts.mutations;
     document.diagnostics.extend(facts.diagnostics);
+    document.diagnostics.extend(mutation_facts.diagnostics);
     document.coverage = classify_coverage(
         &document.routes,
         &document.evidence,
@@ -754,6 +793,579 @@ fn call_argument_nodes(call: Node<'_>) -> Vec<Node<'_>> {
         .children(&mut cursor)
         .filter(|child| child.is_named())
         .collect()
+}
+
+fn extract_prisma_mutations(parsed: &ParsedFile, root: Node<'_>) -> Vec<Mutation> {
+    let mut mutations = Vec::new();
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if matches!(node.kind(), "call_expression" | "call")
+            && let Some(function) = node.child_by_field_name("function")
+        {
+            let function_text = parsed.text_for(function).unwrap_or_default();
+            if let Some(mutation) = prisma_mutation_from_call(parsed, node, function_text) {
+                mutations.push(mutation);
+            }
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    mutations
+}
+
+fn prisma_mutation_from_call(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    function_text: &str,
+) -> Option<Mutation> {
+    let parts = function_text.split('.').collect::<Vec<_>>();
+    if parts.len() < 2 || parts.first().copied() != Some("prisma") {
+        return None;
+    }
+    let method = parts.last().copied().unwrap_or_default();
+    if matches!(method, "$executeRaw" | "$executeRawUnsafe" | "$queryRaw") {
+        if method == "$queryRaw" && !call_has_mutating_sql(parsed, call) {
+            return None;
+        }
+        return Some(raw_or_unknown_mutation(
+            MutationOperation::RawSqlMutation,
+            "prisma",
+            raw_sql_resource(parsed, call),
+            parsed.span_for(call),
+            "raw_sql",
+            "Prisma raw SQL mutation requires review",
+        ));
+    }
+
+    if parts.len() < 3 {
+        return None;
+    }
+    let resource = parts
+        .get(parts.len() - 2)
+        .copied()
+        .filter(|item| !item.is_empty());
+    let operation = match method {
+        "create" | "createMany" => MutationOperation::Create,
+        "update" => MutationOperation::Update,
+        "updateMany" => MutationOperation::BulkUpdate,
+        "delete" | "deleteMany" => MutationOperation::Delete,
+        "upsert" => MutationOperation::UnknownMutation,
+        _ => return None,
+    };
+    let confidence = if operation == MutationOperation::UnknownMutation {
+        Confidence::Low
+    } else {
+        Confidence::High
+    };
+    let extensions = if operation == MutationOperation::UnknownMutation {
+        review_required_extension(
+            "unknown_operation",
+            "Prisma upsert may create or update data and requires review",
+        )
+    } else {
+        authmap_core::ExtensionMap::new()
+    };
+    Some(Mutation {
+        id: String::new(),
+        operation,
+        library: Some("prisma".to_string()),
+        resource: resource.map(str::to_string),
+        span: Some(parsed.span_for(call)),
+        confidence,
+        notes: if operation == MutationOperation::UnknownMutation {
+            vec!["Prisma upsert has create-or-update semantics; review required".to_string()]
+        } else {
+            Vec::new()
+        },
+        extensions,
+    })
+}
+
+fn extract_python_mutations(parsed: &ParsedFile, root: Node<'_>) -> Vec<Mutation> {
+    let mut mutations = Vec::new();
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "function_definition" {
+            mutations.extend(extract_python_function_mutations(parsed, node));
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    mutations
+}
+
+fn extract_python_function_mutations(parsed: &ParsedFile, function: Node<'_>) -> Vec<Mutation> {
+    let mut mutations = Vec::new();
+    let mut model_by_var = BTreeMap::<String, String>::new();
+    collect_python_model_bindings(parsed, function, &mut model_by_var);
+
+    let mut stack = vec![function];
+    while let Some(node) = stack.pop() {
+        match node.kind() {
+            "call" => {
+                if let Some(mutation) = python_call_mutation(parsed, node, &model_by_var) {
+                    mutations.push(mutation);
+                }
+            }
+            "assignment" => {
+                if let Some(mutation) = sqlalchemy_assignment_mutation(parsed, node, &model_by_var)
+                {
+                    mutations.push(mutation);
+                }
+            }
+            _ => {}
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    mutations
+}
+
+fn collect_python_model_bindings(
+    parsed: &ParsedFile,
+    function: Node<'_>,
+    model_by_var: &mut BTreeMap<String, String>,
+) {
+    let mut stack = vec![function];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "assignment"
+            && let Some((left, right)) = assignment_sides(parsed, node)
+            && let Some(model) = python_model_binding_from_expression(&right)
+        {
+            model_by_var.insert(left, model);
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+}
+
+fn python_model_binding_from_expression(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    if let Some(args) = trimmed
+        .strip_prefix("session.get(")
+        .and_then(|value| value.split_once(')').map(|(args, _)| args))
+    {
+        return args
+            .split(',')
+            .next()
+            .map(clean_symbol)
+            .filter(|item| !item.is_empty())
+            .map(|model| format!("sqlalchemy:{model}"));
+    }
+    if let Some((model, _)) = trimmed.split_once(".objects.get(") {
+        return Some(format!("django_orm:{}", clean_symbol(model)));
+    }
+    if let Some((model, _)) = trimmed.split_once(".objects.filter(") {
+        return Some(format!("django_orm:{}", clean_symbol(model)));
+    }
+    trimmed
+        .split_once('(')
+        .map(|(name, _)| clean_symbol(name))
+        .filter(|name| looks_like_model_name(name))
+        .map(|model| format!("model:{model}"))
+}
+
+fn binding_model(binding: &str) -> String {
+    binding
+        .split_once(':')
+        .map_or(binding, |(_, model)| model)
+        .to_string()
+}
+
+fn binding_library(binding: &str) -> Option<&str> {
+    binding.split_once(':').map(|(library, _)| library)
+}
+
+fn python_call_mutation(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    model_by_var: &BTreeMap<String, String>,
+) -> Option<Mutation> {
+    let function = call.child_by_field_name("function")?;
+    let function_text = parsed.text_for(function).unwrap_or_default();
+
+    if let Some(mutation) = django_call_mutation(parsed, call, function_text, model_by_var) {
+        return Some(mutation);
+    }
+    sqlalchemy_call_mutation(parsed, call, function_text, model_by_var)
+}
+
+fn sqlalchemy_call_mutation(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    function_text: &str,
+    model_by_var: &BTreeMap<String, String>,
+) -> Option<Mutation> {
+    match function_text {
+        text if text.ends_with(".add") => {
+            let resource = call_argument_nodes(call)
+                .first()
+                .and_then(|arg| parsed.text_for(*arg))
+                .and_then(|text| {
+                    model_by_var
+                        .get(text.trim())
+                        .map(|binding| binding_model(binding))
+                        .or_else(|| {
+                            python_model_binding_from_expression(text)
+                                .map(|binding| binding_model(&binding))
+                        })
+                });
+            let confidence = if resource.is_some() {
+                Confidence::Medium
+            } else {
+                Confidence::Low
+            };
+            Some(orm_mutation(
+                MutationOperation::Create,
+                "sqlalchemy",
+                resource,
+                parsed.span_for(call),
+                confidence,
+            ))
+        }
+        text if text.ends_with(".add_all") => Some(orm_mutation(
+            MutationOperation::Create,
+            "sqlalchemy",
+            None,
+            parsed.span_for(call),
+            Confidence::Low,
+        )),
+        text if text.ends_with(".delete") => {
+            let resource = call_argument_nodes(call)
+                .first()
+                .and_then(|arg| parsed.text_for(*arg))
+                .and_then(|text| {
+                    model_by_var
+                        .get(text.trim())
+                        .map(|binding| binding_model(binding))
+                });
+            Some(orm_mutation(
+                MutationOperation::Delete,
+                "sqlalchemy",
+                resource,
+                parsed.span_for(call),
+                Confidence::Medium,
+            ))
+        }
+        text if text.ends_with(".execute") => sqlalchemy_execute_mutation(parsed, call),
+        _ => None,
+    }
+}
+
+fn sqlalchemy_execute_mutation(parsed: &ParsedFile, call: Node<'_>) -> Option<Mutation> {
+    let first_arg = call_argument_nodes(call).into_iter().next()?;
+    let arg_text = parsed.text_for(first_arg).unwrap_or_default().trim();
+    if let Some(resource) = call_resource(arg_text, "update") {
+        return Some(orm_mutation(
+            MutationOperation::Update,
+            "sqlalchemy",
+            Some(resource),
+            parsed.span_for(call),
+            Confidence::High,
+        ));
+    }
+    if let Some(resource) = call_resource(arg_text, "delete") {
+        return Some(orm_mutation(
+            MutationOperation::Delete,
+            "sqlalchemy",
+            Some(resource),
+            parsed.span_for(call),
+            Confidence::High,
+        ));
+    }
+    if arg_text.starts_with("text(") && raw_sql_is_mutating(arg_text) {
+        return Some(raw_or_unknown_mutation(
+            MutationOperation::RawSqlMutation,
+            "sqlalchemy",
+            raw_sql_resource_from_text(arg_text),
+            parsed.span_for(call),
+            "raw_sql",
+            "SQLAlchemy raw SQL mutation requires review",
+        ));
+    }
+    None
+}
+
+fn sqlalchemy_assignment_mutation(
+    parsed: &ParsedFile,
+    assignment: Node<'_>,
+    model_by_var: &BTreeMap<String, String>,
+) -> Option<Mutation> {
+    let (left, _right) = assignment_sides(parsed, assignment)?;
+    let (var, field) = left.split_once('.')?;
+    let binding = model_by_var.get(var.trim())?;
+    if binding_library(binding) != Some("sqlalchemy") {
+        return None;
+    }
+    let model = binding_model(binding);
+    Some(orm_mutation(
+        MutationOperation::Update,
+        "sqlalchemy",
+        Some(format!("{}.{}", model, field.trim())),
+        parsed.span_for(assignment),
+        Confidence::Medium,
+    ))
+}
+
+fn django_call_mutation(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    function_text: &str,
+    model_by_var: &BTreeMap<String, String>,
+) -> Option<Mutation> {
+    if let Some((model, method)) = django_objects_call(function_text) {
+        let operation = match method {
+            "create" => MutationOperation::Create,
+            "update" => MutationOperation::BulkUpdate,
+            "bulk_update" => MutationOperation::BulkUpdate,
+            "delete" => MutationOperation::Delete,
+            _ => return None,
+        };
+        return Some(orm_mutation(
+            operation,
+            "django_orm",
+            Some(model),
+            parsed.span_for(call),
+            Confidence::High,
+        ));
+    }
+    if function_text.ends_with(".save") || function_text.ends_with(".delete") {
+        let Some((var, method)) = function_text.rsplit_once('.') else {
+            return None;
+        };
+        let binding = model_by_var.get(var.trim())?;
+        if !matches!(binding_library(binding), Some("django_orm" | "model")) {
+            return None;
+        }
+        let model = binding_model(binding);
+        let operation = if method == "save" {
+            MutationOperation::Save
+        } else {
+            MutationOperation::Delete
+        };
+        return Some(orm_mutation(
+            operation,
+            "django_orm",
+            Some(model),
+            parsed.span_for(call),
+            Confidence::Medium,
+        ));
+    }
+    None
+}
+
+fn django_objects_call(function_text: &str) -> Option<(String, &str)> {
+    let (model, rest) = function_text.split_once(".objects.")?;
+    let method = function_text.rsplit('.').next()?;
+    if matches!(method, "create" | "update" | "bulk_update" | "delete")
+        && (rest.starts_with(method) || rest.contains(&format!(".{method}")))
+    {
+        return Some((clean_symbol(model), method));
+    }
+    None
+}
+
+fn assignment_sides(parsed: &ParsedFile, assignment: Node<'_>) -> Option<(String, String)> {
+    let left = assignment
+        .child_by_field_name("left")
+        .or_else(|| assignment.child_by_field_name("target"))
+        .and_then(|node| parsed.text_for(node))
+        .map(str::trim)
+        .map(str::to_string);
+    let right = assignment
+        .child_by_field_name("right")
+        .and_then(|node| parsed.text_for(node))
+        .map(str::trim)
+        .map(str::to_string);
+    left.zip(right).or_else(|| {
+        let text = parsed.text_for(assignment)?;
+        let (left, right) = text.split_once('=')?;
+        Some((left.trim().to_string(), right.trim().to_string()))
+    })
+}
+
+fn call_resource(text: &str, function_name: &str) -> Option<String> {
+    let prefix = format!("{function_name}(");
+    text.strip_prefix(&prefix)
+        .and_then(|value| value.split_once(')').map(|(args, _)| args))
+        .map(|args| args.split(',').next().unwrap_or(args))
+        .map(clean_symbol)
+        .filter(|item| !item.is_empty())
+}
+
+fn call_has_mutating_sql(parsed: &ParsedFile, call: Node<'_>) -> bool {
+    let call_text = parsed.text_for(call).unwrap_or_default();
+    raw_sql_is_mutating(call_text)
+}
+
+fn raw_sql_resource(parsed: &ParsedFile, call: Node<'_>) -> Option<String> {
+    parsed.text_for(call).and_then(raw_sql_resource_from_text)
+}
+
+fn raw_sql_is_mutating(text: &str) -> bool {
+    static MUTATING_SQL: &[&str] = &[
+        "insert", "update", "delete", "merge", "truncate", "drop", "alter",
+    ];
+    let Some(sql) = first_static_string_like(text) else {
+        return false;
+    };
+    let trimmed = sql.trim_start().to_ascii_lowercase();
+    MUTATING_SQL
+        .iter()
+        .any(|keyword| trimmed.starts_with(keyword))
+}
+
+fn raw_sql_resource_from_text(text: &str) -> Option<String> {
+    let sql = first_static_string_like(text)?;
+    let words = sql
+        .split(|ch: char| ch.is_whitespace() || matches!(ch, '"' | '\'' | '`' | ';' | '(' | ')'))
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>();
+    let first = words.first()?.to_ascii_lowercase();
+    match first.as_str() {
+        "insert" => words
+            .windows(2)
+            .find(|pair| pair[0].eq_ignore_ascii_case("into"))
+            .map(|pair| pair[1].to_string()),
+        "update" | "delete" | "truncate" | "drop" | "alter" => words.get(1).map(|item| {
+            if item.eq_ignore_ascii_case("from") || item.eq_ignore_ascii_case("table") {
+                words.get(2).copied().unwrap_or(*item).to_string()
+            } else {
+                (*item).to_string()
+            }
+        }),
+        "merge" => words
+            .windows(2)
+            .find(|pair| pair[0].eq_ignore_ascii_case("into"))
+            .map(|pair| pair[1].to_string()),
+        _ => None,
+    }
+}
+
+fn first_static_string_like(text: &str) -> Option<String> {
+    let bytes = text.as_bytes();
+    for (index, ch) in text.char_indices() {
+        if matches!(ch, '"' | '\'' | '`') {
+            let previous = text[..index]
+                .chars()
+                .rev()
+                .take_while(|item| item.is_ascii_alphabetic())
+                .collect::<String>();
+            if matches!(
+                previous.chars().rev().collect::<String>().as_str(),
+                "f" | "format"
+            ) {
+                continue;
+            }
+            let mut end = index + ch.len_utf8();
+            while end < text.len() {
+                let current = bytes[end] as char;
+                if current == ch && bytes.get(end.wrapping_sub(1)).copied() != Some(b'\\') {
+                    return Some(text[index + ch.len_utf8()..end].to_string());
+                }
+                end += current.len_utf8();
+            }
+        }
+    }
+    None
+}
+
+fn orm_mutation(
+    operation: MutationOperation,
+    library: &str,
+    resource: Option<String>,
+    span: Span,
+    confidence: Confidence,
+) -> Mutation {
+    Mutation {
+        id: String::new(),
+        operation,
+        library: Some(library.to_string()),
+        resource,
+        span: Some(span),
+        confidence,
+        notes: Vec::new(),
+        extensions: authmap_core::ExtensionMap::new(),
+    }
+}
+
+fn raw_or_unknown_mutation(
+    operation: MutationOperation,
+    library: &str,
+    resource: Option<String>,
+    span: Span,
+    detection: &str,
+    note: &str,
+) -> Mutation {
+    Mutation {
+        id: String::new(),
+        operation,
+        library: Some(library.to_string()),
+        resource,
+        span: Some(span),
+        confidence: Confidence::Low,
+        notes: vec![note.to_string()],
+        extensions: review_required_extension(detection, note),
+    }
+}
+
+fn review_required_extension(detection: &str, reason: &str) -> authmap_core::ExtensionMap {
+    let mut extensions = authmap_core::ExtensionMap::new();
+    extensions.insert(
+        "authmap.mutation".to_string(),
+        serde_json::json!({
+            "review_required": true,
+            "uncertainty_reasons": [reason],
+            "detection": detection,
+        }),
+    );
+    extensions
+}
+
+fn dedup_mutations(mutations: &mut Vec<Mutation>) {
+    let mut seen = BTreeSet::new();
+    mutations.retain(|item| {
+        seen.insert((
+            item.operation,
+            item.library.clone(),
+            item.resource.clone(),
+            item.span
+                .as_ref()
+                .map(|span| (span.file.clone(), span.line, span.column)),
+        ))
+    });
+}
+
+fn mutation_sort_key(mutation: &Mutation) -> (String, u32, u32, MutationOperation, String, String) {
+    (
+        mutation
+            .span
+            .as_ref()
+            .map_or_else(String::new, |span| span.file.clone()),
+        mutation.span.as_ref().map_or(0, |span| span.line),
+        mutation.span.as_ref().map_or(0, |span| span.column),
+        mutation.operation,
+        mutation.library.clone().unwrap_or_default(),
+        mutation.resource.clone().unwrap_or_default(),
+    )
+}
+
+fn clean_symbol(value: &str) -> String {
+    value
+        .trim()
+        .trim_matches(|ch: char| matches!(ch, '"' | '\'' | '`' | ' ' | '\n' | '\r' | '\t'))
+        .rsplit('.')
+        .next()
+        .unwrap_or(value)
+        .trim()
+        .to_string()
+}
+
+fn looks_like_model_name(value: &str) -> bool {
+    value
+        .chars()
+        .next()
+        .is_some_and(|ch| ch.is_ascii_uppercase())
 }
 
 fn rule_suggestion_sort_key(
@@ -2550,6 +3162,122 @@ sensitivity:
     }
 
     #[test]
+    fn scan_pipeline_detects_orm_data_mutations() {
+        let target = fixture_path("mutations");
+        let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        assert_eq!(document.routes.len(), 0);
+        assert_eq!(document.links.len(), 0);
+        assert_eq!(document.mutations.len(), 21);
+
+        assert_mutation(
+            &document.mutations,
+            "prisma",
+            MutationOperation::Create,
+            Some("user"),
+            Confidence::High,
+        );
+        assert_mutation(
+            &document.mutations,
+            "prisma",
+            MutationOperation::BulkUpdate,
+            Some("user"),
+            Confidence::High,
+        );
+        assert_mutation(
+            &document.mutations,
+            "prisma",
+            MutationOperation::Delete,
+            Some("session"),
+            Confidence::High,
+        );
+        assert_review_required_mutation(
+            &document.mutations,
+            "prisma",
+            MutationOperation::UnknownMutation,
+            "unknown_operation",
+        );
+        assert_review_required_mutation(
+            &document.mutations,
+            "prisma",
+            MutationOperation::RawSqlMutation,
+            "raw_sql",
+        );
+
+        assert_mutation(
+            &document.mutations,
+            "sqlalchemy",
+            MutationOperation::Create,
+            Some("User"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "sqlalchemy",
+            MutationOperation::Update,
+            Some("User.disabled"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "sqlalchemy",
+            MutationOperation::Update,
+            Some("User"),
+            Confidence::High,
+        );
+        assert_mutation(
+            &document.mutations,
+            "sqlalchemy",
+            MutationOperation::Delete,
+            Some("SessionToken"),
+            Confidence::High,
+        );
+        assert_review_required_mutation(
+            &document.mutations,
+            "sqlalchemy",
+            MutationOperation::RawSqlMutation,
+            "raw_sql",
+        );
+
+        assert_mutation(
+            &document.mutations,
+            "django_orm",
+            MutationOperation::Create,
+            Some("Account"),
+            Confidence::High,
+        );
+        assert_mutation(
+            &document.mutations,
+            "django_orm",
+            MutationOperation::BulkUpdate,
+            Some("Account"),
+            Confidence::High,
+        );
+        assert_mutation(
+            &document.mutations,
+            "django_orm",
+            MutationOperation::Save,
+            Some("Account"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "django_orm",
+            MutationOperation::Delete,
+            Some("Account"),
+            Confidence::High,
+        );
+
+        assert!(document.mutations.iter().all(|mutation| {
+            !mutation
+                .span
+                .as_ref()
+                .is_some_and(|span| span.file.contains("negative"))
+        }));
+    }
+
+    #[test]
     fn project_specific_authorization_rules_add_permission_evidence() {
         let temp = TestDir::new("custom-authorization-rules");
         write_file(
@@ -3035,6 +3763,51 @@ function authorizeRecord(req, res, next) { next(); }
             notes: Vec::new(),
             extensions: authmap_core::ExtensionMap::new(),
         }
+    }
+
+    fn assert_mutation(
+        mutations: &[Mutation],
+        library: &str,
+        operation: MutationOperation,
+        resource: Option<&str>,
+        confidence: Confidence,
+    ) {
+        assert!(
+            mutations.iter().any(|mutation| {
+                mutation.library.as_deref() == Some(library)
+                    && mutation.operation == operation
+                    && mutation.resource.as_deref() == resource
+                    && mutation.confidence == confidence
+                    && mutation.span.is_some()
+            }),
+            "missing {library} {operation:?} {resource:?} {confidence:?}"
+        );
+    }
+
+    fn assert_review_required_mutation(
+        mutations: &[Mutation],
+        library: &str,
+        operation: MutationOperation,
+        detection: &str,
+    ) {
+        let mutation = mutations
+            .iter()
+            .find(|mutation| {
+                mutation.library.as_deref() == Some(library) && mutation.operation == operation
+            })
+            .unwrap_or_else(|| panic!("missing {library} {operation:?}"));
+        assert_eq!(mutation.confidence, Confidence::Low);
+        let extension = mutation
+            .extensions
+            .get("authmap.mutation")
+            .expect("review-required mutation should have metadata");
+        assert_eq!(extension["review_required"], serde_json::json!(true));
+        assert_eq!(extension["detection"], serde_json::json!(detection));
+        assert!(
+            extension["uncertainty_reasons"]
+                .as_array()
+                .is_some_and(|items| !items.is_empty())
+        );
     }
 
     fn assert_coverage(

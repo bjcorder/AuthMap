@@ -59,6 +59,7 @@ fn render_markdown(document: &AuthMapDocument) -> String {
     render_summary(&mut output, document);
     render_review_required(&mut output, document, &index);
     render_route_inventory(&mut output, document, &index);
+    render_data_mutations(&mut output, document);
     render_route_details(&mut output, document, &index);
     render_diagnostics(&mut output, document);
     render_skipped_files(&mut output, document);
@@ -342,6 +343,45 @@ fn render_route_inventory(
             "Confidence",
             "Coverage",
             "Risk",
+        ],
+        &rows,
+    );
+    let _ = writeln!(output);
+}
+
+fn render_data_mutations(output: &mut String, document: &AuthMapDocument) {
+    let _ = writeln!(output, "## Data Mutations");
+    let _ = writeln!(output);
+    if document.mutations.is_empty() {
+        let _ = writeln!(output, "No data mutations were detected.");
+        let _ = writeln!(output);
+        return;
+    }
+
+    let rows = sorted_mutations(document)
+        .into_iter()
+        .map(|mutation| {
+            vec![
+                escape_table(&mutation.id),
+                mutation_operation_label(mutation.operation).to_string(),
+                escape_table(mutation.library.as_deref().unwrap_or("unknown library")),
+                escape_table(mutation.resource.as_deref().unwrap_or("unknown resource")),
+                escape_table(&format_optional_span_table(mutation.span.as_ref())),
+                confidence_label(mutation.confidence).to_string(),
+                escape_table(&mutation_review_summary(mutation)),
+            ]
+        })
+        .collect::<Vec<_>>();
+    render_table(
+        output,
+        &[
+            "ID",
+            "Operation",
+            "Library",
+            "Resource",
+            "Location",
+            "Confidence",
+            "Review",
         ],
         &rows,
     );
@@ -1342,6 +1382,12 @@ fn sorted_routes(document: &AuthMapDocument) -> Vec<&authmap_core::Route> {
     routes
 }
 
+fn sorted_mutations(document: &AuthMapDocument) -> Vec<&Mutation> {
+    let mut mutations = document.mutations.iter().collect::<Vec<_>>();
+    mutations.sort_by_key(|mutation| mutation_sort_key(mutation));
+    mutations
+}
+
 fn sorted_diagnostics(document: &AuthMapDocument) -> Vec<&Diagnostic> {
     let mut diagnostics = document.diagnostics.iter().collect::<Vec<_>>();
     diagnostics.sort_by_key(|diagnostic| diagnostic_sort_key(diagnostic));
@@ -1368,6 +1414,20 @@ fn route_sort_key(route: &authmap_core::Route) -> (String, u32, String, String, 
             .handler
             .as_ref()
             .map_or_else(String::new, |handler| handler.name.clone()),
+    )
+}
+
+fn mutation_sort_key(mutation: &Mutation) -> (String, u32, u32, MutationOperation, String, String) {
+    (
+        mutation
+            .span
+            .as_ref()
+            .map_or_else(String::new, |span| span.file.clone()),
+        mutation.span.as_ref().map_or(0, |span| span.line),
+        mutation.span.as_ref().map_or(0, |span| span.column),
+        mutation.operation,
+        mutation.library.clone().unwrap_or_default(),
+        mutation.resource.clone().unwrap_or_default(),
     )
 }
 
@@ -1601,6 +1661,24 @@ fn mutation_operation_label(operation: MutationOperation) -> &'static str {
         MutationOperation::RawSqlMutation => "raw_sql_mutation",
         MutationOperation::UnknownMutation => "unknown_mutation",
     }
+}
+
+fn mutation_review_summary(mutation: &Mutation) -> String {
+    let Some(metadata) = mutation.extensions.get("authmap.mutation") else {
+        return "none".to_string();
+    };
+    if metadata
+        .get("review_required")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        let detection = metadata
+            .get("detection")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        return format!("review_required ({detection})");
+    }
+    "none".to_string()
 }
 
 fn diagnostic_severity_label(severity: DiagnosticSeverity) -> &'static str {
