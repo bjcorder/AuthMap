@@ -95,7 +95,9 @@ authorization:
 
 Rule matching supports exact symbol names and case-insensitive substring
 matches. Rules emit canonical evidence entries and keep the core output schema
-unchanged.
+unchanged. The complete config format and CLI helpers are documented in
+[`docs/CONFIGURATION.md`](CONFIGURATION.md), including `authmap explain` and
+the read-only `authmap rules suggest` workflow.
 
 ## Project Sensitivity Rules
 

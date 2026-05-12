@@ -7,8 +7,9 @@ use authmap_config::{
     ScanConfig, ScanPlan,
 };
 use authmap_core::{
-    AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, Evidence, EvidenceType,
-    Framework, Mutation, ReachabilityLink, RiskLevel, ScanMetadata, Span, SymbolRef,
+    AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticCategory,
+    DiagnosticSeverity, Evidence, EvidenceType, Framework, Mutation, ReachabilityLink,
+    Recoverability, RiskLevel, ScanMetadata, Span, SymbolRef,
 };
 use authmap_discovery::discover_sources;
 use authmap_parsers::{ParseError, ParsedFile, TreeSitterBackend, parse_files_in_parallel};
@@ -147,14 +148,18 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
     document.routes = adapter_output.routes;
     document.diagnostics.extend(adapter_output.diagnostics);
     document.routes.sort_by_key(route_sort_key);
-    for (index, route) in document.routes.iter_mut().enumerate() {
-        route.id = format!("route_{:04}", index + 1);
-    }
+    let route_id_remaps = route_id_remaps(&mut document.routes);
+    let adapter_evidence = normalize_adapter_evidence(
+        adapter_output.evidence,
+        &document.routes,
+        &route_id_remaps,
+        &mut document.diagnostics,
+    );
     let input = AnalysisInput {
         routes: &document.routes,
         parsed_files: &parse_output.parsed_files,
         config: &plan.config,
-        adapter_evidence: &adapter_output.evidence,
+        adapter_evidence: &adapter_evidence,
         mutations: &adapter_output.mutations,
     };
     let facts = BuiltInEvidenceExtractor.extract_evidence(&input);
@@ -175,6 +180,72 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
             .then(left.message.cmp(&right.message))
     });
     Ok(document)
+}
+
+fn route_id_remaps(routes: &mut [authmap_core::Route]) -> BTreeMap<String, BTreeSet<String>> {
+    let mut remaps = BTreeMap::<String, BTreeSet<String>>::new();
+    for (index, route) in routes.iter_mut().enumerate() {
+        let old_id = route.id.clone();
+        let new_id = format!("route_{:04}", index + 1);
+        if !old_id.is_empty() {
+            remaps.entry(old_id).or_default().insert(new_id.clone());
+        }
+        route.id = new_id;
+    }
+    remaps
+}
+
+fn normalize_adapter_evidence(
+    evidence: Vec<Evidence>,
+    routes: &[authmap_core::Route],
+    route_id_remaps: &BTreeMap<String, BTreeSet<String>>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Vec<Evidence> {
+    let final_route_ids = routes
+        .iter()
+        .map(|route| route.id.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut normalized = Vec::new();
+    for mut item in evidence {
+        let Some(route_id) = item.route_id.clone() else {
+            normalized.push(item);
+            continue;
+        };
+        if let Some(remapped) = route_id_remaps.get(&route_id) {
+            if remapped.len() == 1 {
+                item.route_id = remapped.iter().next().cloned();
+                normalized.push(item);
+            } else {
+                diagnostics.push(internal_diagnostic(
+                    item.span.clone(),
+                    format!(
+                        "Adapter evidence referenced ambiguous pre-final route ID {route_id}; evidence was dropped"
+                    ),
+                ));
+            }
+        } else if final_route_ids.contains(route_id.as_str()) {
+            normalized.push(item);
+        } else {
+            diagnostics.push(internal_diagnostic(
+                item.span.clone(),
+                format!(
+                    "Adapter evidence referenced unknown route ID {route_id}; evidence was dropped"
+                ),
+            ));
+        }
+    }
+    normalized
+}
+
+fn internal_diagnostic(span: Option<Span>, message: String) -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Internal,
+        code: "analysis.adapter_evidence_route_id".to_string(),
+        severity: DiagnosticSeverity::Warning,
+        recoverability: Recoverability::Recoverable,
+        span,
+        message,
+    }
 }
 
 pub fn suggest_rules(plan: &ScanPlan) -> Result<RuleSuggestionReport, ScanError> {
@@ -739,11 +810,18 @@ struct EvidenceRuleSpec {
     exact: Vec<String>,
     contains: Vec<String>,
     notes: Vec<String>,
+    origin: EvidenceRuleOrigin,
 }
 
 #[derive(Clone, Debug)]
 struct EvidenceRules {
     rules: Vec<EvidenceRuleSpec>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum EvidenceRuleOrigin {
+    BuiltIn,
+    Config,
 }
 
 impl EvidenceRules {
@@ -760,13 +838,68 @@ impl EvidenceRules {
 
 impl EvidenceRuleSpec {
     fn matches(&self, symbol: &str) -> bool {
-        let symbol_lower = symbol.to_ascii_lowercase();
-        self.exact.iter().any(|item| item == symbol)
-            || self
-                .contains
-                .iter()
-                .any(|item| symbol_lower.contains(&item.to_ascii_lowercase()))
+        match self.origin {
+            EvidenceRuleOrigin::BuiltIn => self.builtin_matches(symbol),
+            EvidenceRuleOrigin::Config => {
+                let symbol_lower = symbol.to_ascii_lowercase();
+                self.exact.iter().any(|item| item == symbol)
+                    || self
+                        .contains
+                        .iter()
+                        .any(|item| symbol_lower.contains(&item.to_ascii_lowercase()))
+            }
+        }
     }
+
+    fn builtin_matches(&self, symbol: &str) -> bool {
+        let terminal = terminal_symbol_name(symbol);
+        if self
+            .exact
+            .iter()
+            .any(|item| item == symbol || item == &terminal)
+        {
+            return true;
+        }
+        let lower = terminal.to_ascii_lowercase();
+        if !looks_guard_like(&lower)
+            && !lower.contains("middleware")
+            && !lower.contains("decorator")
+            && !lower.ends_with("required")
+        {
+            return false;
+        }
+        let tokens = symbol_tokens(&terminal);
+        self.contains.iter().any(|item| {
+            let item_lower = item.to_ascii_lowercase();
+            tokens.iter().any(|token| token == &item_lower)
+        })
+    }
+}
+
+fn symbol_tokens(symbol: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut previous_lowercase = false;
+    for ch in symbol.chars() {
+        if ch.is_ascii_alphanumeric() {
+            if ch.is_ascii_uppercase() && previous_lowercase && !current.is_empty() {
+                tokens.push(current.to_ascii_lowercase());
+                current.clear();
+            }
+            previous_lowercase = ch.is_ascii_lowercase();
+            current.push(ch);
+        } else {
+            if !current.is_empty() {
+                tokens.push(current.to_ascii_lowercase());
+                current.clear();
+            }
+            previous_lowercase = false;
+        }
+    }
+    if !current.is_empty() {
+        tokens.push(current.to_ascii_lowercase());
+    }
+    tokens
 }
 
 fn config_rule_to_spec(rule: &AuthorizationRule) -> EvidenceRuleSpec {
@@ -777,6 +910,7 @@ fn config_rule_to_spec(rule: &AuthorizationRule) -> EvidenceRuleSpec {
         exact: rule.matcher.exact.clone(),
         contains: rule.matcher.contains.clone(),
         notes: rule.notes.clone(),
+        origin: EvidenceRuleOrigin::Config,
     }
 }
 
@@ -854,7 +988,7 @@ fn builtin_rules() -> Vec<EvidenceRuleSpec> {
                 "session",
                 "auth",
             ],
-            &["auth", "session", "current_user", "authenticated"],
+            &["auth", "session", "authenticated"],
         ),
         rule(
             EvidenceType::UnknownDynamicCheck,
@@ -880,6 +1014,7 @@ fn rule(
         exact: exact.iter().map(|item| (*item).to_string()).collect(),
         contains: contains.iter().map(|item| (*item).to_string()).collect(),
         notes: Vec::new(),
+        origin: EvidenceRuleOrigin::BuiltIn,
     }
 }
 
@@ -912,12 +1047,8 @@ fn extract_express_route_evidence(
                 rules,
                 "handler_call",
             ));
-            evidence.extend(extract_textual_body_evidence(
-                parsed,
-                node,
-                route,
-                handler,
-                "handler_body",
+            evidence.extend(extract_guard_condition_evidence(
+                parsed, node, route, handler,
             ));
         }
     }
@@ -942,12 +1073,8 @@ fn extract_fastapi_route_evidence(
     };
 
     let mut evidence = extract_calls_from_node(parsed, node, route, rules, "handler_call");
-    evidence.extend(extract_textual_body_evidence(
-        parsed,
-        node,
-        route,
-        handler,
-        "handler_body",
+    evidence.extend(extract_guard_condition_evidence(
+        parsed, node, route, handler,
     ));
     evidence
 }
@@ -978,17 +1105,17 @@ fn extract_calls_from_node(
                                 Some(symbol),
                                 Some(parsed.span_for(current)),
                             ));
-                        } else {
+                        } else if looks_dynamic_policy(&symbol.name) {
                             evidence.push(Evidence {
                                 id: String::new(),
                                 route_id: Some(route.id.clone()),
-                                evidence_type: EvidenceType::Authn,
-                                mechanism: "fastapi_dependency".to_string(),
+                                evidence_type: EvidenceType::UnknownDynamicCheck,
+                                mechanism: default_mechanism.to_string(),
                                 symbol: Some(symbol),
                                 span: Some(parsed.span_for(current)),
-                                confidence: Confidence::Medium,
+                                confidence: Confidence::Low,
                                 notes: vec![
-                                    "FastAPI dependency was detected but no specific guard type matched"
+                                    "FastAPI dependency looks policy-related but no specific guard type matched"
                                         .to_string(),
                                 ],
                                 extensions: authmap_core::ExtensionMap::new(),
@@ -1029,114 +1156,81 @@ fn extract_calls_from_node(
     evidence
 }
 
-fn extract_textual_body_evidence(
+fn extract_guard_condition_evidence(
     parsed: &ParsedFile,
     node: Node<'_>,
     route: &authmap_core::Route,
     symbol: &SymbolRef,
-    mechanism: &str,
 ) -> Vec<Evidence> {
-    let Some(text) = parsed.text_for(node) else {
-        return Vec::new();
-    };
-    let lower = text.to_ascii_lowercase();
     let mut evidence = Vec::new();
-    let span = symbol.span.clone().or_else(|| Some(parsed.span_for(node)));
-
-    if lower.contains("req.user")
-        || lower.contains("request.user")
-        || lower.contains("current_user")
-        || lower.contains("session")
-        || lower.contains("user=depends")
-    {
-        evidence.push(textual_evidence(
-            route,
-            EvidenceType::Authn,
-            mechanism,
-            "user/session reference",
-            symbol.clone(),
-            span.clone(),
-            Confidence::Medium,
-        ));
-    }
-    if lower.contains("permission") || lower.contains("permissions") {
-        evidence.push(textual_evidence(
-            route,
-            EvidenceType::PermissionCheck,
-            mechanism,
-            "permission reference",
-            symbol.clone(),
-            span.clone(),
-            Confidence::Medium,
-        ));
-    }
-    if lower.contains("role") {
-        evidence.push(textual_evidence(
-            route,
-            EvidenceType::RoleCheck,
-            mechanism,
-            "role reference",
-            symbol.clone(),
-            span.clone(),
-            Confidence::Medium,
-        ));
-    }
-    if lower.contains("admin") {
-        evidence.push(textual_evidence(
-            route,
-            EvidenceType::AdminCheck,
-            mechanism,
-            "admin reference",
-            symbol.clone(),
-            span.clone(),
-            Confidence::Medium,
-        ));
-    }
-    if lower.contains("tenant") {
-        evidence.push(textual_evidence(
-            route,
-            EvidenceType::TenantCheck,
-            mechanism,
-            "tenant reference",
-            symbol.clone(),
-            span.clone(),
-            Confidence::Medium,
-        ));
-    }
-    if lower.contains("owner") || lower.contains("ownership") {
-        evidence.push(textual_evidence(
-            route,
-            EvidenceType::OwnershipCheck,
-            mechanism,
-            "ownership reference",
-            symbol.clone(),
-            span,
-            Confidence::Medium,
-        ));
+    let mut stack = vec![node];
+    while let Some(current) = stack.pop() {
+        if matches!(current.kind(), "if_statement" | "if")
+            && let Some(condition) = condition_node(current)
+            && guard_condition_needs_review(parsed, condition)
+        {
+            evidence.push(Evidence {
+                id: String::new(),
+                route_id: Some(route.id.clone()),
+                evidence_type: EvidenceType::UnknownDynamicCheck,
+                mechanism: "handler_condition".to_string(),
+                symbol: Some(symbol.clone()),
+                span: Some(parsed.span_for(condition)),
+                confidence: Confidence::Low,
+                notes: vec![
+                    "Handler condition references user authorization attributes; review required"
+                        .to_string(),
+                ],
+                extensions: authmap_core::ExtensionMap::new(),
+            });
+        }
+        let mut cursor = current.walk();
+        stack.extend(current.children(&mut cursor));
     }
     evidence
 }
 
-fn textual_evidence(
-    route: &authmap_core::Route,
-    evidence_type: EvidenceType,
-    mechanism: &str,
-    note: &str,
-    symbol: SymbolRef,
-    span: Option<Span>,
-    confidence: Confidence,
-) -> Evidence {
-    Evidence {
-        id: String::new(),
-        route_id: Some(route.id.clone()),
-        evidence_type,
-        mechanism: mechanism.to_string(),
-        symbol: Some(symbol),
-        span,
-        confidence,
-        notes: vec![note.to_string()],
-        extensions: authmap_core::ExtensionMap::new(),
+fn condition_node(node: Node<'_>) -> Option<Node<'_>> {
+    node.child_by_field_name("condition")
+        .or_else(|| node.named_child(0))
+}
+
+fn guard_condition_needs_review(parsed: &ParsedFile, condition: Node<'_>) -> bool {
+    let mut has_user_subject = false;
+    let mut has_authz_attribute = false;
+    let mut stack = vec![condition];
+    while let Some(current) = stack.pop() {
+        if !matches!(
+            current.kind(),
+            "string" | "string_fragment" | "comment" | "template_string"
+        ) && let Some(text) = parsed.text_for(current)
+        {
+            let lower = text.to_ascii_lowercase();
+            if lower.contains("req.user")
+                || lower.contains("request.user")
+                || lower.contains("current_user")
+                || lower.contains("user.")
+                || lower.contains("user[")
+            {
+                has_user_subject = true;
+            }
+            if contains_authz_token(&lower) {
+                has_authz_attribute = true;
+            }
+        }
+        let mut cursor = current.walk();
+        stack.extend(current.children(&mut cursor));
     }
+    has_user_subject && has_authz_attribute
+}
+
+fn contains_authz_token(lower: &str) -> bool {
+    lower.contains("role")
+        || lower.contains("admin")
+        || lower.contains("permission")
+        || lower.contains("tenant")
+        || lower.contains("owner")
+        || lower.contains("ownership")
 }
 
 fn evidence_from_rule(
@@ -1894,6 +1988,7 @@ impl ScanError {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1904,7 +1999,9 @@ mod tests {
     };
     use authmap_testkit::fixture_path;
 
-    use super::{classify_coverage, run_scan, suggest_rules};
+    use super::{
+        classify_coverage, normalize_adapter_evidence, route_id_remaps, run_scan, suggest_rules,
+    };
 
     #[test]
     fn classifier_covers_all_coverage_classes() {
@@ -2507,6 +2604,162 @@ authorization:
     }
 
     #[test]
+    fn fastapi_unmatched_dependencies_and_sessions_do_not_emit_authn() {
+        let temp = TestDir::new("fastapi-unmatched-dependencies");
+        write_file(
+            &temp.path().join("app.py"),
+            r#"
+from fastapi import Depends, FastAPI
+
+app = FastAPI()
+
+class Session:
+    pass
+
+def get_db():
+    return Session()
+
+def require_user():
+    return {"id": "user_1"}
+
+@app.post("/items")
+def create_item(db=Depends(get_db)):
+    session = db
+    return {"ok": True, "session": str(session)}
+
+@app.get("/me")
+def me(user=Depends(require_user)):
+    return user
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        let create_route = document
+            .routes
+            .iter()
+            .find(|route| route.path == "/items")
+            .expect("POST /items should exist");
+        assert!(!document.evidence.iter().any(|evidence| {
+            evidence.route_id.as_deref() == Some(create_route.id.as_str())
+                && evidence.evidence_type == EvidenceType::Authn
+        }));
+        let coverage = document
+            .coverage
+            .iter()
+            .find(|coverage| coverage.route_id == create_route.id)
+            .expect("route should have coverage");
+        assert_eq!(coverage.class, CoverageClass::Unauthenticated);
+        assert_eq!(coverage.risk, RiskLevel::High);
+
+        assert!(document.evidence.iter().any(|evidence| {
+            evidence.evidence_type == EvidenceType::Authn
+                && evidence
+                    .symbol
+                    .as_ref()
+                    .is_some_and(|symbol| symbol.name == "require_user")
+        }));
+    }
+
+    #[test]
+    fn broad_symbols_comments_strings_and_plain_user_reads_do_not_emit_strong_evidence() {
+        let temp = TestDir::new("express-false-positive-hardening");
+        write_file(
+            &temp.path().join("app.js"),
+            r#"
+const express = require("express");
+const app = express();
+const authorService = { load() { return []; } };
+const publicationService = { list() { return []; } };
+
+app.get("/authors", function listAuthors(req, res) {
+  // admin role permission tenant owner public auth session
+  const data = authorService.load();
+  const publications = publicationService.list();
+  res.json({ data, publications, role: "reader", user: req.user });
+});
+
+app.delete("/accounts/:id", function deleteAccount(req, res) {
+  if (req.user.role !== "admin") {
+    return res.sendStatus(403);
+  }
+  res.sendStatus(204);
+});
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        let authors_route = document
+            .routes
+            .iter()
+            .find(|route| route.path == "/authors")
+            .expect("GET /authors should exist");
+        assert!(
+            !document.evidence.iter().any(|evidence| {
+                evidence.route_id.as_deref() == Some(authors_route.id.as_str())
+            })
+        );
+
+        let delete_route = document
+            .routes
+            .iter()
+            .find(|route| route.path == "/accounts/:id")
+            .expect("DELETE /accounts/:id should exist");
+        let dynamic = document
+            .evidence
+            .iter()
+            .find(|evidence| evidence.route_id.as_deref() == Some(delete_route.id.as_str()))
+            .expect("guard-like condition should require review");
+        assert_eq!(dynamic.evidence_type, EvidenceType::UnknownDynamicCheck);
+        assert_eq!(dynamic.confidence, Confidence::Low);
+        let coverage = document
+            .coverage
+            .iter()
+            .find(|coverage| coverage.route_id == delete_route.id)
+            .expect("route should have coverage");
+        assert_eq!(coverage.class, CoverageClass::UnknownOrDynamic);
+        assert_eq!(coverage.risk, RiskLevel::ReviewRequired);
+    }
+
+    #[test]
+    fn adapter_evidence_is_remapped_after_final_route_ids_or_dropped() {
+        let mut routes = vec![route("adapter_route_7", "GET", "/status")];
+        let remaps = route_id_remaps(&mut routes);
+        let mut diagnostics = Vec::new();
+        let normalized = normalize_adapter_evidence(
+            vec![
+                evidence(
+                    "adapter_evidence",
+                    "adapter_route_7",
+                    EvidenceType::Authn,
+                    Confidence::High,
+                ),
+                evidence(
+                    "orphaned_evidence",
+                    "missing_route",
+                    EvidenceType::Authn,
+                    Confidence::High,
+                ),
+            ],
+            &routes,
+            &remaps,
+            &mut diagnostics,
+        );
+
+        assert_eq!(normalized.len(), 1);
+        assert_eq!(normalized[0].route_id.as_deref(), Some("route_0001"));
+        assert_eq!(diagnostics.len(), 1);
+        assert!(
+            diagnostics[0]
+                .message
+                .contains("unknown route ID missing_route")
+        );
+    }
+
+    #[test]
     fn suggest_rules_finds_fastapi_custom_dependency() {
         let temp = TestDir::new("suggest-fastapi");
         write_file(
@@ -2668,6 +2921,47 @@ authorization:
                 .iter()
                 .all(|suggestion| suggestion.matcher.exact != vec!["ensurePaidPlan"])
         );
+    }
+
+    #[test]
+    fn suggest_rules_covers_all_canonical_evidence_type_families() {
+        let temp = TestDir::new("suggest-evidence-families");
+        write_file(
+            &temp.path().join("guards.js"),
+            r#"
+function ensureLogin(req, res, next) { next(); }
+function groupGate(req, res, next) { next(); }
+function paidAccess(req, res, next) { next(); }
+function owningResource(req, res, next) { next(); }
+function workspaceGate(req, res, next) { next(); }
+function staffGate(req, res, next) { next(); }
+function anonymousAccess(req, res, next) { next(); }
+function securityLog(req, res, next) { next(); }
+function authorizeRecord(req, res, next) { next(); }
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let report = suggest_rules(&plan).expect("suggestions should run");
+        let types = report
+            .suggestions
+            .iter()
+            .map(|suggestion| suggestion.evidence_type)
+            .collect::<BTreeSet<_>>();
+
+        for expected in [
+            EvidenceType::Authn,
+            EvidenceType::RoleCheck,
+            EvidenceType::PermissionCheck,
+            EvidenceType::OwnershipCheck,
+            EvidenceType::TenantCheck,
+            EvidenceType::AdminCheck,
+            EvidenceType::ExplicitPublic,
+            EvidenceType::AuditLog,
+            EvidenceType::UnknownDynamicCheck,
+        ] {
+            assert!(types.contains(&expected), "missing {expected:?}");
+        }
     }
 
     struct TestDir {

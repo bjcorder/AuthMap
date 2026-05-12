@@ -9,7 +9,7 @@
 - Targets: tests/fixtures/express
 - Source files: 4
 - Routes: 16
-- Evidence entries: 18
+- Evidence entries: 19
 - Mutations: 0
 - Diagnostics: 4
 - Frameworks: express: 16
@@ -42,15 +42,15 @@
 | [route_0004](#route-route_0004) | express | PATCH | /accounts/:id/permissions | \`&lt;inline_handler&gt;\` (tests/fixtures/express/app.js:52:77) | \`requirePermission\` (tests/fixtures/express/app.js:25:10) | high | permission_guarded | low |
 | [route_0005](#route-route_0005) | express | DELETE | &lt;dynamic&gt; | \`listAccounts\` (tests/fixtures/express/app.js:42:10) | \`requireAuth\` (tests/fixtures/express/app.js:12:10) | low | authn_only | review_required |
 | [route_0006](#route-route_0006) | express | PUT | /api/:id | \`listAccounts\` (tests/fixtures/express/app.js:42:10) | \`requireAuth\` (tests/fixtures/express/app.js:12:10) | high | authn_only | review_required |
-| [route_0007](#route-route_0007) | express | GET | /api/nested/child | \`listAccounts\` (tests/fixtures/express/app.js:42:10) | \`audit\` (tests/fixtures/express/app.js:34:10) | high | unauthenticated | low |
+| [route_0007](#route-route_0007) | express | GET | /api/nested/child | \`listAccounts\` (tests/fixtures/express/app.js:42:10) | \`requireAuth\` (tests/fixtures/express/app.js:62:28), \`audit\` (tests/fixtures/express/app.js:34:10) | high | authn_only | low |
 | [route_0008](#route-route_0008) | express | GET | /child | \`listAccounts\` (tests/fixtures/express/app.js:42:10) | \`audit\` (tests/fixtures/express/app.js:34:10) | medium | unauthenticated | low |
 | [route_0009](#route-route_0009) | express | GET | /admin/dashboard | \`listAdmins\` (tests/fixtures/express/routes/admin.js:9:10) | \`requireAdmin\` (tests/fixtures/express/routes/admin.js:5:10) | high | admin_guarded | low |
 | [route_0010](#route-route_0010) | express | PATCH | /exported/audit | \`exportAudit\` (tests/fixtures/express/routes/exported.ts:9:10) | \`audit\` (tests/fixtures/express/routes/exported.ts:5:10) | high | unauthenticated | high |
-| [route_0011](#route-route_0011) | express | GET | /secure/:userId | \`&lt;inline_handler&gt;\` (tests/fixtures/express/routes/users.ts:22:21) | \`requireUser\` (tests/fixtures/express/routes/users.ts:5:10) | high | authn_only | review_required |
+| [route_0011](#route-route_0011) | express | GET | /secure/:userId | \`&lt;inline_handler&gt;\` (tests/fixtures/express/routes/users.ts:22:21) | \`requireAuth\` (tests/fixtures/express/app.js:66:20), \`requireUser\` (tests/fixtures/express/routes/users.ts:5:10) | high | authn_only | review_required |
 | [route_0012](#route-route_0012) | express | GET | /v1/:userId | \`&lt;inline_handler&gt;\` (tests/fixtures/express/routes/users.ts:22:21) | \`requireUser\` (tests/fixtures/express/routes/users.ts:5:10) | high | authn_only | review_required |
-| [route_0013](#route-route_0013) | express | POST | /secure/:userId | \`updateUser\` (tests/fixtures/express/routes/users.ts:16:7) | \`requireUser\` (tests/fixtures/express/routes/users.ts:5:10) | high | authn_only | review_required |
+| [route_0013](#route-route_0013) | express | POST | /secure/:userId | \`updateUser\` (tests/fixtures/express/routes/users.ts:16:7) | \`requireAuth\` (tests/fixtures/express/app.js:66:20), \`requireUser\` (tests/fixtures/express/routes/users.ts:5:10) | high | authn_only | review_required |
 | [route_0014](#route-route_0014) | express | POST | /v1/:userId | \`updateUser\` (tests/fixtures/express/routes/users.ts:16:7) | \`requireUser\` (tests/fixtures/express/routes/users.ts:5:10) | high | authn_only | review_required |
-| [route_0015](#route-route_0015) | express | GET | /secure/:tenantId/settings | \`&lt;inline_handler&gt;\` (tests/fixtures/express/routes/users.ts:27:50) | \`requireTenant\` (tests/fixtures/express/routes/users.ts:9:10) | high | tenant_guarded | low |
+| [route_0015](#route-route_0015) | express | GET | /secure/:tenantId/settings | \`&lt;inline_handler&gt;\` (tests/fixtures/express/routes/users.ts:27:50) | \`requireAuth\` (tests/fixtures/express/app.js:66:20), \`requireTenant\` (tests/fixtures/express/routes/users.ts:9:10) | high | tenant_guarded | low |
 | [route_0016](#route-route_0016) | express | GET | /v1/:tenantId/settings | \`&lt;inline_handler&gt;\` (tests/fixtures/express/routes/users.ts:27:50) | \`requireTenant\` (tests/fixtures/express/routes/users.ts:9:10) | high | tenant_guarded | low |
 
 ## Route Details
@@ -131,8 +131,9 @@
 - Auth evidence:
   - permission_check `permission_guard` at tests/fixtures/express/app.js:25:10 (high)
     - Symbol: `requirePermission` (tests/fixtures/express/app.js:25:10)
-  - unknown_dynamic_check `dynamic_policy` at tests/fixtures/express/app.js:53:8 (low)
+  - unknown_dynamic_check `handler_call` at tests/fixtures/express/app.js:53:8 (low)
     - Symbol: `dynamicPolicyCheck` (tests/fixtures/express/app.js:53:8)
+    - Note: Dynamic or indirect policy call requires review
 - Data mutations: none
 
 <a id="route-route_0005"></a>
@@ -182,11 +183,14 @@
 - Framework: express
 - Handler: `listAccounts` (tests/fixtures/express/app.js:42:10)
 - Route location: tests/fixtures/express/app.js:61:1
-- Middleware: `audit` (tests/fixtures/express/app.js:34:10)
+- Middleware: `requireAuth` (tests/fixtures/express/app.js:62:28), `audit` (tests/fixtures/express/app.js:34:10)
 - Confidence: high
-- Coverage: unauthenticated (low)
-- Coverage rationale: No authorization evidence was detected.
-- Auth evidence: none
+- Coverage: authn_only (low)
+- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
+- Coverage support: evidence: evidence_0009
+- Auth evidence:
+  - authn `authn_guard` at tests/fixtures/express/app.js:62:28 (high)
+    - Symbol: `requireAuth` (tests/fixtures/express/app.js:62:28)
 - Data mutations: none
 
 <a id="route-route_0008"></a>
@@ -215,16 +219,13 @@
 - Middleware: `requireAdmin` (tests/fixtures/express/routes/admin.js:5:10)
 - Confidence: high
 - Coverage: admin_guarded (low)
-- Coverage rationale: 2 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): admin_path.
-- Coverage support: evidence: evidence_0009, evidence_0010; sensitivity: admin_path
+- Coverage rationale: 1 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): admin_path.
+- Coverage support: evidence: evidence_0010; sensitivity: admin_path
 - Reviewer questions:
   - Should this route require an admin or role guard?
 - Auth evidence:
   - admin_check `admin_guard` at tests/fixtures/express/routes/admin.js:5:10 (high)
     - Symbol: `requireAdmin` (tests/fixtures/express/routes/admin.js:5:10)
-  - admin_check `handler_body` at tests/fixtures/express/routes/admin.js:9:10 (medium)
-    - Symbol: `listAdmins` (tests/fixtures/express/routes/admin.js:9:10)
-    - Note: admin reference
 - Data mutations: none
 
 <a id="route-route_0010"></a>
@@ -249,14 +250,16 @@
 - Framework: express
 - Handler: `&lt;inline_handler&gt;` (tests/fixtures/express/routes/users.ts:22:21)
 - Route location: tests/fixtures/express/routes/users.ts:20:1
-- Middleware: `requireUser` (tests/fixtures/express/routes/users.ts:5:10)
+- Middleware: `requireAuth` (tests/fixtures/express/app.js:66:20), `requireUser` (tests/fixtures/express/routes/users.ts:5:10)
 - Confidence: high
 - Coverage: authn_only (review_required)
-- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, user_path.
-- Coverage support: evidence: evidence_0011; sensitivity: path_param, user_path
+- Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, user_path.
+- Coverage support: evidence: evidence_0011, evidence_0012; sensitivity: path_param, user_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
 - Auth evidence:
+  - authn `authn_guard` at tests/fixtures/express/app.js:66:20 (high)
+    - Symbol: `requireAuth` (tests/fixtures/express/app.js:66:20)
   - authn `authn_guard` at tests/fixtures/express/routes/users.ts:5:10 (high)
     - Symbol: `requireUser` (tests/fixtures/express/routes/users.ts:5:10)
 - Data mutations: none
@@ -271,7 +274,7 @@
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, user_path.
-- Coverage support: evidence: evidence_0012; sensitivity: path_param, user_path
+- Coverage support: evidence: evidence_0013; sensitivity: path_param, user_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
 - Auth evidence:
@@ -285,15 +288,17 @@
 - Framework: express
 - Handler: `updateUser` (tests/fixtures/express/routes/users.ts:16:7)
 - Route location: tests/fixtures/express/routes/users.ts:20:1
-- Middleware: `requireUser` (tests/fixtures/express/routes/users.ts:5:10)
+- Middleware: `requireAuth` (tests/fixtures/express/app.js:66:20), `requireUser` (tests/fixtures/express/routes/users.ts:5:10)
 - Confidence: high
 - Coverage: authn_only (review_required)
-- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, unsafe_method, user_path.
-- Coverage support: evidence: evidence_0013; sensitivity: path_param, unsafe_method, user_path
+- Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, unsafe_method, user_path.
+- Coverage support: evidence: evidence_0014, evidence_0015; sensitivity: path_param, unsafe_method, user_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
 - Auth evidence:
+  - authn `authn_guard` at tests/fixtures/express/app.js:66:20 (high)
+    - Symbol: `requireAuth` (tests/fixtures/express/app.js:66:20)
   - authn `authn_guard` at tests/fixtures/express/routes/users.ts:5:10 (high)
     - Symbol: `requireUser` (tests/fixtures/express/routes/users.ts:5:10)
 - Data mutations: none
@@ -308,7 +313,7 @@
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, unsafe_method, user_path.
-- Coverage support: evidence: evidence_0014; sensitivity: path_param, unsafe_method, user_path
+- Coverage support: evidence: evidence_0016; sensitivity: path_param, unsafe_method, user_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
@@ -323,20 +328,19 @@
 - Framework: express
 - Handler: `&lt;inline_handler&gt;` (tests/fixtures/express/routes/users.ts:27:50)
 - Route location: tests/fixtures/express/routes/users.ts:27:1
-- Middleware: `requireTenant` (tests/fixtures/express/routes/users.ts:9:10)
+- Middleware: `requireAuth` (tests/fixtures/express/app.js:66:20), `requireTenant` (tests/fixtures/express/routes/users.ts:9:10)
 - Confidence: high
 - Coverage: tenant_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support tenant_guarded coverage.; Sensitive route modifier(s): path_param, tenant_path.
-- Coverage support: evidence: evidence_0015, evidence_0016; sensitivity: path_param, tenant_path
+- Coverage support: evidence: evidence_0017, evidence_0018; sensitivity: path_param, tenant_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this route require tenant isolation checks?
 - Auth evidence:
+  - authn `authn_guard` at tests/fixtures/express/app.js:66:20 (high)
+    - Symbol: `requireAuth` (tests/fixtures/express/app.js:66:20)
   - tenant_check `tenant_guard` at tests/fixtures/express/routes/users.ts:9:10 (high)
     - Symbol: `requireTenant` (tests/fixtures/express/routes/users.ts:9:10)
-  - tenant_check `handler_body` at tests/fixtures/express/routes/users.ts:27:50 (medium)
-    - Symbol: `&lt;inline_handler&gt;` (tests/fixtures/express/routes/users.ts:27:50)
-    - Note: tenant reference
 - Data mutations: none
 
 <a id="route-route_0016"></a>
@@ -348,17 +352,14 @@
 - Middleware: `requireTenant` (tests/fixtures/express/routes/users.ts:9:10)
 - Confidence: high
 - Coverage: tenant_guarded (low)
-- Coverage rationale: 2 strong authorization evidence item(s) support tenant_guarded coverage.; Sensitive route modifier(s): path_param, tenant_path.
-- Coverage support: evidence: evidence_0017, evidence_0018; sensitivity: path_param, tenant_path
+- Coverage rationale: 1 strong authorization evidence item(s) support tenant_guarded coverage.; Sensitive route modifier(s): path_param, tenant_path.
+- Coverage support: evidence: evidence_0019; sensitivity: path_param, tenant_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this route require tenant isolation checks?
 - Auth evidence:
   - tenant_check `tenant_guard` at tests/fixtures/express/routes/users.ts:9:10 (high)
     - Symbol: `requireTenant` (tests/fixtures/express/routes/users.ts:9:10)
-  - tenant_check `handler_body` at tests/fixtures/express/routes/users.ts:27:50 (medium)
-    - Symbol: `&lt;inline_handler&gt;` (tests/fixtures/express/routes/users.ts:27:50)
-    - Note: tenant reference
 - Data mutations: none
 
 ## Diagnostics

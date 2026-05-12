@@ -1499,13 +1499,27 @@ fn list_or_none(items: Vec<String>) -> String {
 }
 
 fn escape_table(input: &str) -> String {
-    escape_inline(input)
-        .replace('|', "\\|")
-        .replace(['\n', '\r'], " ")
+    escape_inline(input).replace('|', "\\|")
 }
 
 fn escape_inline(input: &str) -> String {
-    input
+    let mut sanitized = String::new();
+    for ch in input.chars() {
+        match ch {
+            '\n' => sanitized.push_str("\\n"),
+            '\r' => sanitized.push_str("\\r"),
+            '\t' => sanitized.push(' '),
+            '\u{1b}' => sanitized.push_str("\\x1b"),
+            ch if ch.is_control() => {
+                let _ = write!(sanitized, "\\u{{{:x}}}", ch as u32);
+            }
+            ch => sanitized.push(ch),
+        }
+    }
+    if matches!(sanitized.chars().next(), Some('#' | '>' | '-' | '*' | '+')) {
+        sanitized.insert(0, '\\');
+    }
+    sanitized
         .replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
@@ -1832,6 +1846,16 @@ mod tests {
             "ensurePaidPlan"
         );
         assert_eq!(json["suggestions"][0]["evidence_type"], "permission_check");
+    }
+
+    #[test]
+    fn inline_escaping_neutralizes_line_breaks_controls_and_markdown_markers() {
+        assert_eq!(
+            escape_inline("- forged\n\u{1b}[31m"),
+            "\\- forged\\n\\x1b\\[31m"
+        );
+        assert_eq!(escape_inline("# heading\rnext"), "\\# heading\\rnext");
+        assert_eq!(escape_table("a|b\nc"), "a\\|b\\nc");
     }
 
     #[test]

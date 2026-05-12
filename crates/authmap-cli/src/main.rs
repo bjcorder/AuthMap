@@ -214,6 +214,12 @@ fn run_explain(id: &str, input: &Path) -> Result<ExitCode, CliError> {
 }
 
 fn run_init(output: &Path, yes: bool, force: bool) -> Result<ExitCode, CliError> {
+    if output
+        .symlink_metadata()
+        .is_ok_and(|metadata| metadata.file_type().is_symlink())
+    {
+        return Err(CliError::InitSymlink(output.to_path_buf()));
+    }
     if output.exists() && !force {
         if yes {
             return Err(CliError::InitExists(output.to_path_buf()));
@@ -360,6 +366,8 @@ enum CliError {
     },
     #[error("refusing to overwrite existing config {0}; pass --force to replace it")]
     InitExists(PathBuf),
+    #[error("refusing to overwrite symlinked init config {0}")]
+    InitSymlink(PathBuf),
     #[error("failed to read init prompt response: {0}")]
     InitIo(std::io::Error),
     #[error("failed to write init config {path}: {source}")]
@@ -385,7 +393,7 @@ impl CliError {
             CliError::ExplainRead { .. } => 10,
             CliError::ExplainParse { .. } => 12,
             CliError::Explain(_) => 13,
-            CliError::InitExists(_) => 15,
+            CliError::InitExists(_) | CliError::InitSymlink(_) => 15,
             CliError::InitIo(_) | CliError::InitWrite { .. } => 14,
             CliError::NotImplemented(_) | CliError::NotImplementedWithArg(_, _) => 13,
         }
@@ -424,7 +432,9 @@ impl CliError {
             CliError::ExplainRead { .. } => diagnostic_codes::CONFIG_READ_FAILED,
             CliError::ExplainParse { .. } => diagnostic_codes::CONFIG_PARSE_FAILED,
             CliError::Explain(_) => diagnostic_codes::REPORT_RENDER_FAILED,
-            CliError::InitExists(_) => diagnostic_codes::CONFIG_VALIDATION_FAILED,
+            CliError::InitExists(_) | CliError::InitSymlink(_) => {
+                diagnostic_codes::CONFIG_VALIDATION_FAILED
+            }
             CliError::InitIo(_) | CliError::InitWrite { .. } => {
                 diagnostic_codes::REPORT_WRITE_FAILED
             }

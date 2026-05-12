@@ -569,37 +569,6 @@
       "id": "evidence_0001",
       "route_id": "route_0007",
       "evidence_type": "authn",
-      "mechanism": "handler_body",
-      "symbol": {
-        "name": "profile",
-        "span": {
-          "file": "tests/fixtures/fastapi/main.py",
-          "line": 40,
-          "column": 5,
-          "byte_range": {
-            "start": 860,
-            "end": 867
-          }
-        }
-      },
-      "span": {
-        "file": "tests/fixtures/fastapi/main.py",
-        "line": 40,
-        "column": 5,
-        "byte_range": {
-          "start": 860,
-          "end": 867
-        }
-      },
-      "confidence": "medium",
-      "notes": [
-        "user/session reference"
-      ]
-    },
-    {
-      "id": "evidence_0002",
-      "route_id": "route_0007",
-      "evidence_type": "authn",
       "mechanism": "authn_guard",
       "symbol": {
         "name": "require_user",
@@ -626,7 +595,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0003",
+      "id": "evidence_0002",
       "route_id": "route_0008",
       "evidence_type": "admin_check",
       "mechanism": "admin_guard",
@@ -655,38 +624,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0004",
-      "route_id": "route_0008",
-      "evidence_type": "admin_check",
-      "mechanism": "handler_body",
-      "symbol": {
-        "name": "delete_account",
-        "span": {
-          "file": "tests/fixtures/fastapi/main.py",
-          "line": 45,
-          "column": 5,
-          "byte_range": {
-            "start": 1002,
-            "end": 1016
-          }
-        }
-      },
-      "span": {
-        "file": "tests/fixtures/fastapi/main.py",
-        "line": 45,
-        "column": 5,
-        "byte_range": {
-          "start": 1002,
-          "end": 1016
-        }
-      },
-      "confidence": "medium",
-      "notes": [
-        "admin reference"
-      ]
-    },
-    {
-      "id": "evidence_0005",
+      "id": "evidence_0003",
       "route_id": "route_0009",
       "evidence_type": "permission_check",
       "mechanism": "permission_guard",
@@ -715,41 +653,10 @@
       "notes": []
     },
     {
-      "id": "evidence_0006",
-      "route_id": "route_0009",
-      "evidence_type": "permission_check",
-      "mechanism": "handler_body",
-      "symbol": {
-        "name": "grant_permission",
-        "span": {
-          "file": "tests/fixtures/fastapi/main.py",
-          "line": 50,
-          "column": 5,
-          "byte_range": {
-            "start": 1167,
-            "end": 1183
-          }
-        }
-      },
-      "span": {
-        "file": "tests/fixtures/fastapi/main.py",
-        "line": 50,
-        "column": 5,
-        "byte_range": {
-          "start": 1167,
-          "end": 1183
-        }
-      },
-      "confidence": "medium",
-      "notes": [
-        "permission reference"
-      ]
-    },
-    {
-      "id": "evidence_0007",
+      "id": "evidence_0004",
       "route_id": "route_0009",
       "evidence_type": "unknown_dynamic_check",
-      "mechanism": "dynamic_policy",
+      "mechanism": "handler_call",
       "symbol": {
         "name": "dynamic_policy_check",
         "span": {
@@ -772,36 +679,9 @@
         }
       },
       "confidence": "low",
-      "notes": []
-    },
-    {
-      "id": "evidence_0008",
-      "route_id": "route_0009",
-      "evidence_type": "permission_check",
-      "mechanism": "permission_guard",
-      "symbol": {
-        "name": "PermissionError",
-        "span": {
-          "file": "tests/fixtures/fastapi/main.py",
-          "line": 52,
-          "column": 15,
-          "byte_range": {
-            "start": 1267,
-            "end": 1282
-          }
-        }
-      },
-      "span": {
-        "file": "tests/fixtures/fastapi/main.py",
-        "line": 52,
-        "column": 15,
-        "byte_range": {
-          "start": 1267,
-          "end": 1299
-        }
-      },
-      "confidence": "high",
-      "notes": []
+      "notes": [
+        "Dynamic or indirect policy call requires review"
+      ]
     }
   ],
   "mutations": [],
@@ -962,15 +842,14 @@
       "class": "authn_only",
       "risk": "low",
       "rationale": [
-        "2 strong authorization evidence item(s) support authn_only coverage."
+        "1 strong authorization evidence item(s) support authn_only coverage."
       ],
       "reviewer_questions": [],
       "uncertainty_reasons": [],
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0001",
-            "evidence_0002"
+            "evidence_0001"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -984,7 +863,7 @@
       "class": "admin_guarded",
       "risk": "low",
       "rationale": [
-        "2 strong authorization evidence item(s) support admin_guarded coverage.",
+        "1 strong authorization evidence item(s) support admin_guarded coverage.",
         "Sensitive route modifier(s): account_path, admin_path, path_param, unsafe_method."
       ],
       "reviewer_questions": [
@@ -996,8 +875,7 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0003",
-            "evidence_0004"
+            "evidence_0002"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -1016,7 +894,7 @@
       "class": "permission_guarded",
       "risk": "low",
       "rationale": [
-        "3 strong authorization evidence item(s) support permission_guarded coverage.",
+        "1 strong authorization evidence item(s) support permission_guarded coverage.",
         "Sensitive route modifier(s): account_path, path_param, unsafe_method."
       ],
       "reviewer_questions": [
@@ -1030,10 +908,8 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0005",
-            "evidence_0006",
-            "evidence_0007",
-            "evidence_0008"
+            "evidence_0003",
+            "evidence_0004"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -1043,7 +919,7 @@
             "unsafe_method"
           ],
           "weak_evidence_ids": [
-            "evidence_0007"
+            "evidence_0004"
           ]
         }
       }

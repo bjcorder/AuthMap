@@ -9,7 +9,7 @@
 - Targets: tests/fixtures/fastapi
 - Source files: 3
 - Routes: 15
-- Evidence entries: 8
+- Evidence entries: 4
 - Mutations: 0
 - Diagnostics: 4
 - Frameworks: fast_api: 15
@@ -157,12 +157,9 @@
 - Middleware: none
 - Confidence: high
 - Coverage: authn_only (low)
-- Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.
-- Coverage support: evidence: evidence_0001, evidence_0002
+- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
+- Coverage support: evidence: evidence_0001
 - Auth evidence:
-  - authn `handler_body` at tests/fixtures/fastapi/main.py:40:5 (medium)
-    - Symbol: `profile` (tests/fixtures/fastapi/main.py:40:5)
-    - Note: user/session reference
   - authn `authn_guard` at tests/fixtures/fastapi/main.py:40:18 (high)
     - Symbol: `require_user` (tests/fixtures/fastapi/main.py:40:26)
 - Data mutations: none
@@ -176,8 +173,8 @@
 - Middleware: none
 - Confidence: high
 - Coverage: admin_guarded (low)
-- Coverage rationale: 2 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): account_path, admin_path, path_param, unsafe_method.
-- Coverage support: evidence: evidence_0003, evidence_0004; sensitivity: account_path, admin_path, path_param, unsafe_method
+- Coverage rationale: 1 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): account_path, admin_path, path_param, unsafe_method.
+- Coverage support: evidence: evidence_0002; sensitivity: account_path, admin_path, path_param, unsafe_method
 - Reviewer questions:
   - Should this route require an admin or role guard?
   - Should this route require ownership or permission checks?
@@ -185,9 +182,6 @@
 - Auth evidence:
   - admin_check `admin_guard` at tests/fixtures/fastapi/main.py:44:59 (high)
     - Symbol: `require_admin` (tests/fixtures/fastapi/main.py:44:67)
-  - admin_check `handler_body` at tests/fixtures/fastapi/main.py:45:5 (medium)
-    - Symbol: `delete_account` (tests/fixtures/fastapi/main.py:45:5)
-    - Note: admin reference
 - Data mutations: none
 
 <a id="route-route_0009"></a>
@@ -199,8 +193,8 @@
 - Middleware: none
 - Confidence: high
 - Coverage: permission_guarded (low)
-- Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param, unsafe_method.
-- Coverage support: evidence: evidence_0005, evidence_0006, evidence_0007, evidence_0008; weak evidence: evidence_0007; sensitivity: account_path, path_param, unsafe_method
+- Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param, unsafe_method.
+- Coverage support: evidence: evidence_0003, evidence_0004; weak evidence: evidence_0004; sensitivity: account_path, path_param, unsafe_method
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
@@ -210,13 +204,9 @@
 - Auth evidence:
   - permission_check `permission_guard` at tests/fixtures/fastapi/main.py:49:64 (high)
     - Symbol: `can_edit_account` (tests/fixtures/fastapi/main.py:49:72)
-  - permission_check `handler_body` at tests/fixtures/fastapi/main.py:50:5 (medium)
-    - Symbol: `grant_permission` (tests/fixtures/fastapi/main.py:50:5)
-    - Note: permission reference
-  - unknown_dynamic_check `dynamic_policy` at tests/fixtures/fastapi/main.py:51:12 (low)
+  - unknown_dynamic_check `handler_call` at tests/fixtures/fastapi/main.py:51:12 (low)
     - Symbol: `dynamic_policy_check` (tests/fixtures/fastapi/main.py:51:12)
-  - permission_check `permission_guard` at tests/fixtures/fastapi/main.py:52:15 (high)
-    - Symbol: `PermissionError` (tests/fixtures/fastapi/main.py:52:15)
+    - Note: Dynamic or indirect policy call requires review
 - Data mutations: none
 
 <a id="route-route_0010"></a>

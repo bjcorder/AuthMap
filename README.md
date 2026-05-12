@@ -133,6 +133,16 @@ authmap baseline create
 authmap rules suggest
 ```
 
+`authmap explain <id>` reads `authmap.json` by default, or another AuthMap JSON
+document via `--input <path>`, and explains route, evidence, mutation, or link
+IDs. It validates the schema version and treats risk as review priority rather
+than a confirmed vulnerability.
+
+`authmap rules suggest [target]` is a local read-only helper for discovering
+project-specific guard names. It prints Markdown by default, supports
+`--format json`, `--output <path>`, and `--config <path>`, and never modifies
+`authmap.yml`.
+
 ## Local development
 
 AuthMap is implemented as a Rust Cargo workspace. Useful local commands:

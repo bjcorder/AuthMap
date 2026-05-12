@@ -59,7 +59,7 @@ app.delete(dynamicPath, requireAuth, listAccounts);
 
 localRouter.put("/:id", requireAuth, listAccounts);
 childRouter.get("/child", audit, listAccounts);
-localRouter.use("/nested", childRouter);
+localRouter.use("/nested", requireAuth, childRouter);
 localRouter.use("/loop", localRouter);
 
 app.use("/api", localRouter);

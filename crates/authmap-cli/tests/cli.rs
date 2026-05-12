@@ -394,6 +394,32 @@ fn init_force_overwrites_existing_config() {
 }
 
 #[test]
+fn init_refuses_symlink_output_even_with_force() {
+    let temp = TestDir::new("init-symlink");
+    let target = temp.path().join("target.yml");
+    let link = temp.path().join("authmap.yml");
+    write_file(&target, "mode: enforce\n");
+    if create_file_symlink(&target, &link).is_err() {
+        return;
+    }
+
+    let output = authmap(&[
+        "init",
+        "--yes",
+        "--force",
+        "--output",
+        link.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 15);
+    assert_eq!(
+        fs::read_to_string(target).expect("target should remain readable"),
+        "mode: enforce\n"
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("refusing to overwrite symlinked"));
+}
+
+#[test]
 fn init_interactive_overwrite_confirmation_handles_no_and_yes() {
     let temp = TestDir::new("init-interactive");
     let config = temp.path().join("authmap.yml");
@@ -425,6 +451,16 @@ fn init_interactive_overwrite_confirmation_handles_no_and_yes() {
     let text = fs::read_to_string(config).expect("config should exist");
     assert!(text.contains("mode: advisory"));
     assert!(!text.contains("Starter examples:"));
+}
+
+#[cfg(unix)]
+fn create_file_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
+#[cfg(windows)]
+fn create_file_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_file(target, link)
 }
 
 #[test]

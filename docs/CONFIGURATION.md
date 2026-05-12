@@ -43,9 +43,9 @@ authorization:
         - configured by project
 ```
 
-Supported `evidence_type` values are the canonical AuthMap evidence types such
-as `authn`, `role_check`, `permission_check`, `ownership_check`, `tenant_check`,
-`admin_check`, `policy_check`, `explicit_public`, and `unknown_dynamic_check`.
+Supported `evidence_type` values are the canonical AuthMap evidence types:
+`authn`, `role_check`, `permission_check`, `ownership_check`, `tenant_check`,
+`admin_check`, `explicit_public`, `audit_log`, and `unknown_dynamic_check`.
 
 Matching is intentionally conservative:
 
@@ -102,3 +102,23 @@ routes into `medium` or, when combined with unsafe methods or linked mutations,
 coverage on sensitive routes becomes `review_required`.
 
 AuthMap reports these as review prompts, not vulnerability findings.
+
+## Command Helpers
+
+`authmap explain <id>` reads a local AuthMap JSON document and prints a
+deterministic terminal explanation. The default input is `authmap.json` in the
+current directory; pass `--input <path>` to select another JSON report. The
+command supports route IDs plus fact IDs from `evidence`, `mutations`, and
+`links`. It validates the JSON schema version before rendering and fails
+nonzero for missing files, invalid JSON, unsupported schema versions, unknown
+IDs, and IDs that appear in multiple namespaces. Risk text is phrased as review
+priority, not a confirmed vulnerability.
+
+`authmap rules suggest [target]` scans local source and prints reviewable
+starter `authorization.rules[]` suggestions. It is read-only: it does not edit
+`authmap.yml` or apply suggestions automatically. Defaults are target `.`,
+Markdown output, and stdout. Use `--format json` for machine-readable output,
+`--output <path>` to write the report, and `--config <path>` to reuse
+include/exclude limits and suppress suggestions already covered by custom
+rules. Suggestions are heuristics and should be reviewed before copying into
+configuration.

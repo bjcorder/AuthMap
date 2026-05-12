@@ -13,7 +13,7 @@
     {
       "path": "tests/fixtures/express/app.js",
       "language": "java_script",
-      "size_bytes": 1897,
+      "size_bytes": 1910,
       "sha256": null,
       "project_hints": [
         "express"
@@ -363,6 +363,18 @@
       "tags": [],
       "middleware": [
         {
+          "name": "requireAuth",
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 62,
+            "column": 28,
+            "byte_range": {
+              "start": 1572,
+              "end": 1583
+            }
+          }
+        },
+        {
           "name": "audit",
           "span": {
             "file": "tests/fixtures/express/app.js",
@@ -549,6 +561,18 @@
       "tags": [],
       "middleware": [
         {
+          "name": "requireAuth",
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 66,
+            "column": 20,
+            "byte_range": {
+              "start": 1688,
+              "end": 1699
+            }
+          }
+        },
+        {
           "name": "requireUser",
           "span": {
             "file": "tests/fixtures/express/routes/users.ts",
@@ -641,6 +665,18 @@
       "tags": [],
       "middleware": [
         {
+          "name": "requireAuth",
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 66,
+            "column": 20,
+            "byte_range": {
+              "start": 1688,
+              "end": 1699
+            }
+          }
+        },
+        {
           "name": "requireUser",
           "span": {
             "file": "tests/fixtures/express/routes/users.ts",
@@ -732,6 +768,18 @@
       "name": null,
       "tags": [],
       "middleware": [
+        {
+          "name": "requireAuth",
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 66,
+            "column": 20,
+            "byte_range": {
+              "start": 1688,
+              "end": 1699
+            }
+          }
+        },
         {
           "name": "requireTenant",
           "span": {
@@ -967,7 +1015,7 @@
       "id": "evidence_0006",
       "route_id": "route_0004",
       "evidence_type": "unknown_dynamic_check",
-      "mechanism": "dynamic_policy",
+      "mechanism": "handler_call",
       "symbol": {
         "name": "dynamicPolicyCheck",
         "span": {
@@ -990,7 +1038,9 @@
         }
       },
       "confidence": "low",
-      "notes": []
+      "notes": [
+        "Dynamic or indirect policy call requires review"
+      ]
     },
     {
       "id": "evidence_0007",
@@ -1052,6 +1102,35 @@
     },
     {
       "id": "evidence_0009",
+      "route_id": "route_0007",
+      "evidence_type": "authn",
+      "mechanism": "authn_guard",
+      "symbol": {
+        "name": "requireAuth",
+        "span": {
+          "file": "tests/fixtures/express/app.js",
+          "line": 62,
+          "column": 28,
+          "byte_range": {
+            "start": 1572,
+            "end": 1583
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 62,
+        "column": 28,
+        "byte_range": {
+          "start": 1572,
+          "end": 1583
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0010",
       "route_id": "route_0009",
       "evidence_type": "admin_check",
       "mechanism": "admin_guard",
@@ -1080,38 +1159,36 @@
       "notes": []
     },
     {
-      "id": "evidence_0010",
-      "route_id": "route_0009",
-      "evidence_type": "admin_check",
-      "mechanism": "handler_body",
+      "id": "evidence_0011",
+      "route_id": "route_0011",
+      "evidence_type": "authn",
+      "mechanism": "authn_guard",
       "symbol": {
-        "name": "listAdmins",
+        "name": "requireAuth",
         "span": {
-          "file": "tests/fixtures/express/routes/admin.js",
-          "line": 9,
-          "column": 10,
+          "file": "tests/fixtures/express/app.js",
+          "line": 66,
+          "column": 20,
           "byte_range": {
-            "start": 133,
-            "end": 143
+            "start": 1688,
+            "end": 1699
           }
         }
       },
       "span": {
-        "file": "tests/fixtures/express/routes/admin.js",
-        "line": 9,
-        "column": 10,
+        "file": "tests/fixtures/express/app.js",
+        "line": 66,
+        "column": 20,
         "byte_range": {
-          "start": 133,
-          "end": 143
+          "start": 1688,
+          "end": 1699
         }
       },
-      "confidence": "medium",
-      "notes": [
-        "admin reference"
-      ]
+      "confidence": "high",
+      "notes": []
     },
     {
-      "id": "evidence_0011",
+      "id": "evidence_0012",
       "route_id": "route_0011",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -1140,7 +1217,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0012",
+      "id": "evidence_0013",
       "route_id": "route_0012",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -1169,7 +1246,36 @@
       "notes": []
     },
     {
-      "id": "evidence_0013",
+      "id": "evidence_0014",
+      "route_id": "route_0013",
+      "evidence_type": "authn",
+      "mechanism": "authn_guard",
+      "symbol": {
+        "name": "requireAuth",
+        "span": {
+          "file": "tests/fixtures/express/app.js",
+          "line": 66,
+          "column": 20,
+          "byte_range": {
+            "start": 1688,
+            "end": 1699
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 66,
+        "column": 20,
+        "byte_range": {
+          "start": 1688,
+          "end": 1699
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0015",
       "route_id": "route_0013",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -1198,7 +1304,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0014",
+      "id": "evidence_0016",
       "route_id": "route_0014",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -1227,89 +1333,29 @@
       "notes": []
     },
     {
-      "id": "evidence_0015",
-      "route_id": "route_0015",
-      "evidence_type": "tenant_check",
-      "mechanism": "tenant_guard",
-      "symbol": {
-        "name": "requireTenant",
-        "span": {
-          "file": "tests/fixtures/express/routes/users.ts",
-          "line": 9,
-          "column": 10,
-          "byte_range": {
-            "start": 184,
-            "end": 197
-          }
-        }
-      },
-      "span": {
-        "file": "tests/fixtures/express/routes/users.ts",
-        "line": 9,
-        "column": 10,
-        "byte_range": {
-          "start": 184,
-          "end": 197
-        }
-      },
-      "confidence": "high",
-      "notes": []
-    },
-    {
-      "id": "evidence_0016",
-      "route_id": "route_0015",
-      "evidence_type": "tenant_check",
-      "mechanism": "handler_body",
-      "symbol": {
-        "name": "<inline_handler>",
-        "span": {
-          "file": "tests/fixtures/express/routes/users.ts",
-          "line": 27,
-          "column": 50,
-          "byte_range": {
-            "start": 670,
-            "end": 769
-          }
-        }
-      },
-      "span": {
-        "file": "tests/fixtures/express/routes/users.ts",
-        "line": 27,
-        "column": 50,
-        "byte_range": {
-          "start": 670,
-          "end": 769
-        }
-      },
-      "confidence": "medium",
-      "notes": [
-        "tenant reference"
-      ]
-    },
-    {
       "id": "evidence_0017",
-      "route_id": "route_0016",
-      "evidence_type": "tenant_check",
-      "mechanism": "tenant_guard",
+      "route_id": "route_0015",
+      "evidence_type": "authn",
+      "mechanism": "authn_guard",
       "symbol": {
-        "name": "requireTenant",
+        "name": "requireAuth",
         "span": {
-          "file": "tests/fixtures/express/routes/users.ts",
-          "line": 9,
-          "column": 10,
+          "file": "tests/fixtures/express/app.js",
+          "line": 66,
+          "column": 20,
           "byte_range": {
-            "start": 184,
-            "end": 197
+            "start": 1688,
+            "end": 1699
           }
         }
       },
       "span": {
-        "file": "tests/fixtures/express/routes/users.ts",
-        "line": 9,
-        "column": 10,
+        "file": "tests/fixtures/express/app.js",
+        "line": 66,
+        "column": 20,
         "byte_range": {
-          "start": 184,
-          "end": 197
+          "start": 1688,
+          "end": 1699
         }
       },
       "confidence": "high",
@@ -1317,34 +1363,61 @@
     },
     {
       "id": "evidence_0018",
-      "route_id": "route_0016",
+      "route_id": "route_0015",
       "evidence_type": "tenant_check",
-      "mechanism": "handler_body",
+      "mechanism": "tenant_guard",
       "symbol": {
-        "name": "<inline_handler>",
+        "name": "requireTenant",
         "span": {
           "file": "tests/fixtures/express/routes/users.ts",
-          "line": 27,
-          "column": 50,
+          "line": 9,
+          "column": 10,
           "byte_range": {
-            "start": 670,
-            "end": 769
+            "start": 184,
+            "end": 197
           }
         }
       },
       "span": {
         "file": "tests/fixtures/express/routes/users.ts",
-        "line": 27,
-        "column": 50,
+        "line": 9,
+        "column": 10,
         "byte_range": {
-          "start": 670,
-          "end": 769
+          "start": 184,
+          "end": 197
         }
       },
-      "confidence": "medium",
-      "notes": [
-        "tenant reference"
-      ]
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0019",
+      "route_id": "route_0016",
+      "evidence_type": "tenant_check",
+      "mechanism": "tenant_guard",
+      "symbol": {
+        "name": "requireTenant",
+        "span": {
+          "file": "tests/fixtures/express/routes/users.ts",
+          "line": 9,
+          "column": 10,
+          "byte_range": {
+            "start": 184,
+            "end": 197
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/express/routes/users.ts",
+        "line": 9,
+        "column": 10,
+        "byte_range": {
+          "start": 184,
+          "end": 197
+        }
+      },
+      "confidence": "high",
+      "notes": []
     }
   ],
   "mutations": [],
@@ -1521,16 +1594,18 @@
     },
     {
       "route_id": "route_0007",
-      "class": "unauthenticated",
+      "class": "authn_only",
       "risk": "low",
       "rationale": [
-        "No authorization evidence was detected."
+        "1 strong authorization evidence item(s) support authn_only coverage."
       ],
       "reviewer_questions": [],
       "uncertainty_reasons": [],
       "extensions": {
         "authmap.coverage": {
-          "evidence_ids": [],
+          "evidence_ids": [
+            "evidence_0009"
+          ],
           "link_ids": [],
           "mutation_ids": [],
           "sensitivity_reasons": [],
@@ -1564,7 +1639,7 @@
       "class": "admin_guarded",
       "risk": "low",
       "rationale": [
-        "2 strong authorization evidence item(s) support admin_guarded coverage.",
+        "1 strong authorization evidence item(s) support admin_guarded coverage.",
         "Sensitive route modifier(s): admin_path."
       ],
       "reviewer_questions": [
@@ -1574,7 +1649,6 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0009",
             "evidence_0010"
           ],
           "link_ids": [],
@@ -1616,7 +1690,7 @@
       "class": "authn_only",
       "risk": "review_required",
       "rationale": [
-        "1 strong authorization evidence item(s) support authn_only coverage.",
+        "2 strong authorization evidence item(s) support authn_only coverage.",
         "Sensitive route modifier(s): path_param, user_path."
       ],
       "reviewer_questions": [
@@ -1626,7 +1700,8 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0011"
+            "evidence_0011",
+            "evidence_0012"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -1653,7 +1728,7 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0012"
+            "evidence_0013"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -1670,7 +1745,7 @@
       "class": "authn_only",
       "risk": "review_required",
       "rationale": [
-        "1 strong authorization evidence item(s) support authn_only coverage.",
+        "2 strong authorization evidence item(s) support authn_only coverage.",
         "Sensitive route modifier(s): path_param, unsafe_method, user_path."
       ],
       "reviewer_questions": [
@@ -1681,7 +1756,8 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0013"
+            "evidence_0014",
+            "evidence_0015"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -1710,7 +1786,7 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0014"
+            "evidence_0016"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -1739,8 +1815,8 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0015",
-            "evidence_0016"
+            "evidence_0017",
+            "evidence_0018"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -1757,7 +1833,7 @@
       "class": "tenant_guarded",
       "risk": "low",
       "rationale": [
-        "2 strong authorization evidence item(s) support tenant_guarded coverage.",
+        "1 strong authorization evidence item(s) support tenant_guarded coverage.",
         "Sensitive route modifier(s): path_param, tenant_path."
       ],
       "reviewer_questions": [
@@ -1768,8 +1844,7 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0017",
-            "evidence_0018"
+            "evidence_0019"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -1793,8 +1868,8 @@
         "line": 63,
         "column": 1,
         "byte_range": {
-          "start": 1586,
-          "end": 1623
+          "start": 1599,
+          "end": 1636
         }
       },
       "message": "Express mounted router cycle was ignored"
@@ -1809,8 +1884,8 @@
         "line": 70,
         "column": 9,
         "byte_range": {
-          "start": 1809,
-          "end": 1822
+          "start": 1822,
+          "end": 1835
         }
       },
       "message": "Express mount prefix is dynamic and could not be resolved"
@@ -1841,8 +1916,8 @@
         "line": 71,
         "column": 1,
         "byte_range": {
-          "start": 1838,
-          "end": 1872
+          "start": 1851,
+          "end": 1885
         }
       },
       "message": "Express mounted router could not be resolved statically"
