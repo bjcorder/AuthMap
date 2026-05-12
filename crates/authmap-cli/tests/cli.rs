@@ -299,6 +299,43 @@ fn rules_suggest_help_shows_limit_overrides() {
 }
 
 #[test]
+fn ci_workflow_defines_cross_platform_rust_matrix_and_install_smoke() {
+    let root = repo_root();
+    let workflow = fs::read_to_string(root.join(".github/workflows/rust.yml"))
+        .expect("rust workflow should exist");
+
+    for runner in [
+        "blacksmith-4vcpu-ubuntu-2404",
+        "blacksmith-6vcpu-macos-latest",
+        "blacksmith-4vcpu-windows-2025",
+    ] {
+        assert!(workflow.contains(runner), "missing runner {runner}");
+    }
+    for rust in ["\"1.95\"", "stable"] {
+        assert!(workflow.contains(rust), "missing Rust toolchain {rust}");
+    }
+    assert!(workflow.contains("permissions:"));
+    assert!(workflow.contains("contents: read"));
+    assert!(workflow.contains("toolchain: ${{ matrix.rust }}"));
+    assert!(workflow.contains("components: rustfmt"));
+    assert!(workflow.contains("actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830"));
+    assert!(workflow.contains("~/.cargo/registry"));
+    assert!(workflow.contains("~/.cargo/git"));
+    assert!(!workflow.contains("target/"));
+    assert!(workflow.contains("cargo fmt --all -- --check"));
+    assert!(workflow.contains("cargo check --workspace --locked"));
+    assert!(workflow.contains("cargo test --workspace --all-targets --locked"));
+    assert!(workflow.contains("cargo install --path crates/authmap-cli --locked"));
+    assert!(workflow.contains("& $authmap --help"));
+    assert!(workflow.contains("--format json --output $json"));
+    assert!(workflow.contains("--format markdown --output $markdown"));
+    assert!(workflow.contains("baseline create tests/fixtures/negative/frontend_only"));
+    assert!(workflow.contains("diff --base $baseline --head $json"));
+    assert!(workflow.contains("RUST_BACKTRACE: \"1\""));
+    assert!(workflow.contains("CARGO_TERM_COLOR: always"));
+}
+
+#[test]
 fn action_metadata_defines_expected_wrapper_contract() {
     let root = repo_root();
     let action = fs::read_to_string(root.join("action.yml")).expect("action.yml should exist");
