@@ -58,4 +58,3 @@ export async function rawDeleteSessions(userId: string) {
 export async function rawQueryReadOnly() {
   return prisma.$queryRaw`select * from users`;
 }
-

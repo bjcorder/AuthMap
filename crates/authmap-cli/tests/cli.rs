@@ -415,6 +415,25 @@ fn init_force_overwrites_existing_config() {
 }
 
 #[test]
+fn init_force_refuses_non_regular_output() {
+    let temp = TestDir::new("init-force-directory");
+    let config = temp.path().join("authmap.yml");
+    fs::create_dir_all(&config).expect("directory output should be created");
+
+    let output = authmap(&[
+        "init",
+        "--yes",
+        "--force",
+        "--output",
+        config.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 14);
+    assert!(config.is_dir());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("failed to write init config"));
+}
+
+#[test]
 fn init_refuses_symlink_output_even_with_force() {
     let temp = TestDir::new("init-symlink");
     let target = temp.path().join("target.yml");

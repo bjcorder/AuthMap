@@ -7,6 +7,10 @@ cargo test --workspace
 ```
 
 Fixtures are intentionally small source snippets. They are scanned statically and never require live services, package installation, databases, or framework startup.
+Large-repository budget behavior is covered with generated temporary projects in
+the Rust tests instead of committed giant fixtures. Skipped-file auditability is
+bounded by the discovery collection cap so limit tests remain deterministic
+without turning omitted-file listing into another unbounded workload.
 
 ## Layout
 

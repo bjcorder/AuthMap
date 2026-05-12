@@ -329,6 +329,7 @@ fn run_init(output: &Path, yes: bool, force: bool) -> Result<ExitCode, CliError>
             return Ok(ExitCode::SUCCESS);
         }
     }
+    let overwrite = output.exists();
 
     let include_examples = if yes {
         true
@@ -343,12 +344,50 @@ fn run_init(output: &Path, yes: bool, force: bool) -> Result<ExitCode, CliError>
             source,
         })?;
     }
-    fs::write(output, starter_config(include_examples)).map_err(|source| CliError::InitWrite {
-        path: output.to_path_buf(),
-        source,
-    })?;
+    write_init_config(output, &starter_config(include_examples), overwrite)?;
     println!("Created {}.", output.display());
     Ok(ExitCode::SUCCESS)
+}
+
+fn write_init_config(output: &Path, contents: &str, overwrite: bool) -> Result<(), CliError> {
+    if overwrite {
+        let metadata = output
+            .symlink_metadata()
+            .map_err(|source| CliError::InitWrite {
+                path: output.to_path_buf(),
+                source,
+            })?;
+        if metadata.file_type().is_symlink() {
+            return Err(CliError::InitSymlink(output.to_path_buf()));
+        }
+        if !metadata.is_file() {
+            return Err(CliError::InitWrite {
+                path: output.to_path_buf(),
+                source: io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    "refusing to overwrite non-regular file",
+                ),
+            });
+        }
+        fs::remove_file(output).map_err(|source| CliError::InitWrite {
+            path: output.to_path_buf(),
+            source,
+        })?;
+    }
+
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(output)
+        .map_err(|source| CliError::InitWrite {
+            path: output.to_path_buf(),
+            source,
+        })?;
+    file.write_all(contents.as_bytes())
+        .map_err(|source| CliError::InitWrite {
+            path: output.to_path_buf(),
+            source,
+        })
 }
 
 fn prompt_yes_no(prompt: &str, default: bool) -> Result<bool, CliError> {

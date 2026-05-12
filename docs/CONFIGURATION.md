@@ -33,6 +33,13 @@ from included source files; later files are represented as skipped partial input
 `limits.max_runtime_ms` is a cooperative wall-clock budget checked between scan
 phases. It does not cancel an in-flight parser call.
 
+Discovery also stops walking after collecting a bounded sample proportional to
+`max_files`. AuthMap keeps deterministic ordering for the collected sample and
+retains skipped-file entries for a bounded set of omitted supported files, but it
+does not try to enumerate every omitted file in very large repositories. This is
+intentional: full omitted-file audit logs would make the file limit itself a
+memory risk.
+
 The CLI can override scan limits without editing `authmap.yml`:
 
 ```sh
@@ -40,9 +47,9 @@ authmap scan . --max-files 10000 --max-total-bytes 134217728
 authmap rules suggest . --max-file-size-bytes 1048576 --max-runtime-ms 60000
 ```
 
-Memory usage is bounded indirectly by `max_files`, `max_file_size_bytes`, and
-`max_total_bytes`. The defaults are intended for typical CI runners; lower them
-for constrained environments.
+Memory usage is bounded indirectly by `max_files`, `max_file_size_bytes`,
+`max_total_bytes`, and the discovery collection cap. The defaults are intended
+for typical CI runners; lower them for constrained environments.
 
 ## Authorization Rules
 

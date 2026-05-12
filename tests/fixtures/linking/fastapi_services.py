@@ -9,4 +9,3 @@ def create_user(email: str):
     session.add(record)
     session.commit()
     return record
-

@@ -31,4 +31,3 @@ app.get("/express/read", (req: express.Request, res: express.Response) => {
 });
 
 export default app;
-

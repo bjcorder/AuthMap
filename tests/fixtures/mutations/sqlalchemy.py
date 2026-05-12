@@ -47,4 +47,3 @@ def raw_delete(session: Session, user_id: str):
 
 def read_only(session: Session, user_id: str):
     return session.execute(text("select * from users where id = :user_id"), {"user_id": user_id})
-

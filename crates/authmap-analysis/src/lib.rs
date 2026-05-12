@@ -182,7 +182,7 @@ impl ReachabilityLinker for BuiltInReachabilityLinker {
             };
             let handler_node = match route.framework {
                 Framework::Express => express_handler_node(parsed, handler),
-                Framework::FastApi => fastapi_decorated_function_node(parsed, &handler.name),
+                Framework::FastApi => fastapi_handler_function_node(parsed, &handler.name),
                 _ => None,
             };
             let Some(handler_node) = handler_node else {
@@ -1105,13 +1105,16 @@ fn extract_python_mutations(parsed: &ParsedFile, root: Node<'_>) -> Vec<Mutation
 fn extract_python_function_mutations(parsed: &ParsedFile, function: Node<'_>) -> Vec<Mutation> {
     let mut mutations = Vec::new();
     let mut model_by_var = BTreeMap::<String, String>::new();
-    collect_python_model_bindings(parsed, function, &mut model_by_var);
+    let session_symbols = collect_python_session_symbols(parsed, function);
+    collect_python_model_bindings(parsed, function, &session_symbols, &mut model_by_var);
 
     let mut stack = vec![function];
     while let Some(node) = stack.pop() {
         match node.kind() {
             "call" => {
-                if let Some(mutation) = python_call_mutation(parsed, node, &model_by_var) {
+                if let Some(mutation) =
+                    python_call_mutation(parsed, node, &model_by_var, &session_symbols)
+                {
                     mutations.push(mutation);
                 }
             }
@@ -1132,13 +1135,14 @@ fn extract_python_function_mutations(parsed: &ParsedFile, function: Node<'_>) ->
 fn collect_python_model_bindings(
     parsed: &ParsedFile,
     function: Node<'_>,
+    session_symbols: &BTreeSet<String>,
     model_by_var: &mut BTreeMap<String, String>,
 ) {
     let mut stack = vec![function];
     while let Some(node) = stack.pop() {
         if node.kind() == "assignment"
             && let Some((left, right)) = assignment_sides(parsed, node)
-            && let Some(model) = python_model_binding_from_expression(&right)
+            && let Some(model) = python_model_binding_from_expression(&right, session_symbols)
         {
             model_by_var.insert(left, model);
         }
@@ -1147,11 +1151,49 @@ fn collect_python_model_bindings(
     }
 }
 
-fn python_model_binding_from_expression(text: &str) -> Option<String> {
+fn collect_python_session_symbols(parsed: &ParsedFile, function: Node<'_>) -> BTreeSet<String> {
+    let mut symbols = BTreeSet::new();
+    let Some(parameters) = function.child_by_field_name("parameters") else {
+        return symbols;
+    };
+    let Some(parameters_text) = parsed.text_for(parameters) else {
+        return symbols;
+    };
+
+    for parameter in parameters_text
+        .trim()
+        .trim_start_matches('(')
+        .trim_end_matches(')')
+        .split(',')
+    {
+        let parameter = parameter.trim();
+        let before_default = parameter
+            .split_once('=')
+            .map_or(parameter, |(left, _)| left);
+        let Some((name, annotation)) = before_default.split_once(':') else {
+            continue;
+        };
+        if annotation
+            .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
+            .any(|part| part == "Session")
+        {
+            let symbol = clean_symbol(name.trim_start_matches('*'));
+            if !symbol.is_empty() {
+                symbols.insert(symbol);
+            }
+        }
+    }
+    symbols
+}
+
+fn python_model_binding_from_expression(
+    text: &str,
+    session_symbols: &BTreeSet<String>,
+) -> Option<String> {
     let trimmed = text.trim();
-    if let Some(args) = trimmed
-        .strip_prefix("session.get(")
-        .and_then(|value| value.split_once(')').map(|(args, _)| args))
+    if let Some((receiver, rest)) = trimmed.split_once(".get(")
+        && is_sqlalchemy_session_receiver(&terminal_symbol_name(receiver), session_symbols)
+        && let Some(args) = rest.split_once(')').map(|(args, _)| args)
     {
         return args
             .split(',')
@@ -1188,6 +1230,7 @@ fn python_call_mutation(
     parsed: &ParsedFile,
     call: Node<'_>,
     model_by_var: &BTreeMap<String, String>,
+    session_symbols: &BTreeSet<String>,
 ) -> Option<Mutation> {
     let function = call.child_by_field_name("function")?;
     let function_text = parsed.text_for(function).unwrap_or_default();
@@ -1195,7 +1238,7 @@ fn python_call_mutation(
     if let Some(mutation) = django_call_mutation(parsed, call, function_text, model_by_var) {
         return Some(mutation);
     }
-    sqlalchemy_call_mutation(parsed, call, function_text, model_by_var)
+    sqlalchemy_call_mutation(parsed, call, function_text, model_by_var, session_symbols)
 }
 
 fn sqlalchemy_call_mutation(
@@ -1203,9 +1246,13 @@ fn sqlalchemy_call_mutation(
     call: Node<'_>,
     function_text: &str,
     model_by_var: &BTreeMap<String, String>,
+    session_symbols: &BTreeSet<String>,
 ) -> Option<Mutation> {
+    let receiver = receiver_symbol(function_text)?;
     match function_text {
-        text if text.ends_with(".add") => {
+        text if text.ends_with(".add")
+            && is_sqlalchemy_session_receiver(&receiver, session_symbols) =>
+        {
             let resource = call_argument_nodes(call)
                 .first()
                 .and_then(|arg| parsed.text_for(*arg))
@@ -1214,7 +1261,7 @@ fn sqlalchemy_call_mutation(
                         .get(text.trim())
                         .map(|binding| binding_model(binding))
                         .or_else(|| {
-                            python_model_binding_from_expression(text)
+                            python_model_binding_from_expression(text, session_symbols)
                                 .map(|binding| binding_model(&binding))
                         })
                 });
@@ -1231,14 +1278,20 @@ fn sqlalchemy_call_mutation(
                 confidence,
             ))
         }
-        text if text.ends_with(".add_all") => Some(orm_mutation(
-            MutationOperation::Create,
-            "sqlalchemy",
-            None,
-            parsed.span_for(call),
-            Confidence::Low,
-        )),
-        text if text.ends_with(".delete") => {
+        text if text.ends_with(".add_all")
+            && is_sqlalchemy_session_receiver(&receiver, session_symbols) =>
+        {
+            Some(orm_mutation(
+                MutationOperation::Create,
+                "sqlalchemy",
+                None,
+                parsed.span_for(call),
+                Confidence::Low,
+            ))
+        }
+        text if text.ends_with(".delete")
+            && is_sqlalchemy_session_receiver(&receiver, session_symbols) =>
+        {
             let resource = call_argument_nodes(call)
                 .first()
                 .and_then(|arg| parsed.text_for(*arg))
@@ -1255,9 +1308,30 @@ fn sqlalchemy_call_mutation(
                 Confidence::Medium,
             ))
         }
-        text if text.ends_with(".execute") => sqlalchemy_execute_mutation(parsed, call),
+        text if text.ends_with(".execute")
+            && is_sqlalchemy_session_receiver(&receiver, session_symbols) =>
+        {
+            sqlalchemy_execute_mutation(parsed, call)
+        }
         _ => None,
     }
+}
+
+fn receiver_symbol(function_text: &str) -> Option<String> {
+    function_text
+        .rsplit_once('.')
+        .map(|(receiver, _)| terminal_symbol_name(receiver))
+        .filter(|receiver| !receiver.is_empty())
+}
+
+fn is_sqlalchemy_session_receiver(receiver: &str, session_symbols: &BTreeSet<String>) -> bool {
+    if session_symbols.contains(receiver) {
+        return true;
+    }
+    let lower = receiver.to_ascii_lowercase();
+    matches!(lower.as_str(), "session" | "db" | "db_session")
+        || lower.ends_with("session")
+        || lower.contains("_session")
 }
 
 fn sqlalchemy_execute_mutation(parsed: &ParsedFile, call: Node<'_>) -> Option<Mutation> {
@@ -1342,7 +1416,7 @@ fn django_call_mutation(
             return None;
         };
         let binding = model_by_var.get(var.trim())?;
-        if !matches!(binding_library(binding), Some("django_orm" | "model")) {
+        if binding_library(binding) != Some("django_orm") {
             return None;
         }
         let model = binding_model(binding);
@@ -1580,6 +1654,8 @@ fn looks_like_model_name(value: &str) -> bool {
 struct ReachabilityIndex<'a> {
     functions: BTreeMap<(String, String), FunctionDef<'a>>,
     imports: BTreeMap<(String, String), ImportTarget>,
+    default_exports: BTreeMap<String, String>,
+    parsed_by_file: BTreeMap<String, &'a ParsedFile>,
 }
 
 #[derive(Clone, Debug)]
@@ -1608,6 +1684,11 @@ impl<'a> ReachabilityIndex<'a> {
         let mut index = Self {
             functions: BTreeMap::new(),
             imports: BTreeMap::new(),
+            default_exports: BTreeMap::new(),
+            parsed_by_file: parsed_files
+                .iter()
+                .map(|parsed| (parsed.source.path.clone(), parsed))
+                .collect(),
         };
 
         for parsed in parsed_files {
@@ -1623,6 +1704,7 @@ impl<'a> ReachabilityIndex<'a> {
                 | authmap_core::Language::TypeScript
                 | authmap_core::Language::TypeScriptReact => {
                     collect_js_imports(parsed, &js_modules, &mut index.imports);
+                    collect_js_default_exports(parsed, &mut index.default_exports);
                 }
                 authmap_core::Language::Unknown => {}
             }
@@ -1660,7 +1742,10 @@ impl<'a> ReachabilityIndex<'a> {
             });
         }
         if let Some(target) = self.imports.get(&(source_file.to_string(), name)) {
-            let target_name = target.name.clone()?;
+            let target_name = target
+                .name
+                .clone()
+                .or_else(|| self.default_exports.get(&target.file).cloned())?;
             return self
                 .functions
                 .get(&(target.file.clone(), target_name))
@@ -1682,10 +1767,14 @@ fn link_route_handler_mutations(
     index: &ReachabilityIndex<'_>,
 ) -> Vec<ReachabilityLink> {
     let mut links = Vec::new();
-    for mutation in mutations
-        .iter()
-        .filter(|mutation| mutation_inside_node(&parsed.source.path, handler_node, mutation))
-    {
+    for mutation in mutations.iter().filter(|mutation| {
+        mutation_inside_node_excluding_nested_scopes(
+            parsed,
+            &parsed.source.path,
+            handler_node,
+            mutation,
+        )
+    }) {
         links.push(reachability_link(
             route,
             Some(mutation),
@@ -1704,8 +1793,18 @@ fn link_route_handler_mutations(
             continue;
         }
         if let Some(resolved) = index.resolve_call(&parsed.source.path, function_text) {
+            let resolved_parsed = index
+                .parsed_by_file
+                .get(&resolved.def.file)
+                .copied()
+                .unwrap_or(parsed);
             for mutation in mutations.iter().filter(|mutation| {
-                mutation_inside_node(&resolved.def.file, resolved.def.node, mutation)
+                mutation_inside_node_excluding_nested_scopes(
+                    resolved_parsed,
+                    &resolved.def.file,
+                    resolved.def.node,
+                    mutation,
+                )
             }) {
                 let note = if resolved.confidence == Confidence::High {
                     format!(
@@ -1791,7 +1890,11 @@ fn service_call_candidates<'tree>(parsed: &ParsedFile, node: Node<'tree>) -> Vec
             calls.push(current);
         }
         let mut cursor = current.walk();
-        stack.extend(current.children(&mut cursor));
+        stack.extend(
+            current
+                .children(&mut cursor)
+                .filter(|child| !is_nested_scope_node(*child)),
+        );
     }
     calls
         .into_iter()
@@ -1890,6 +1993,58 @@ fn mutation_inside_node(file: &str, node: Node<'_>, mutation: &Mutation) -> bool
     span.byte_range.as_ref().is_some_and(|range| {
         range.start >= node.start_byte() as u64 && range.end <= node.end_byte() as u64
     })
+}
+
+fn mutation_inside_node_excluding_nested_scopes(
+    parsed: &ParsedFile,
+    file: &str,
+    node: Node<'_>,
+    mutation: &Mutation,
+) -> bool {
+    if !mutation_inside_node(file, node, mutation) {
+        return false;
+    }
+    mutation
+        .span
+        .as_ref()
+        .is_none_or(|span| !span_is_inside_nested_scope(parsed, node, span))
+}
+
+fn span_is_inside_nested_scope(parsed: &ParsedFile, root: Node<'_>, span: &Span) -> bool {
+    let Some(range) = span.byte_range.as_ref() else {
+        return false;
+    };
+    let mut stack = Vec::new();
+    let mut cursor = root.walk();
+    stack.extend(root.children(&mut cursor));
+    while let Some(current) = stack.pop() {
+        if is_nested_scope_node(current)
+            && range.start >= current.start_byte() as u64
+            && range.end <= current.end_byte() as u64
+        {
+            return true;
+        }
+        let mut cursor = current.walk();
+        stack.extend(current.children(&mut cursor));
+    }
+    let _ = parsed;
+    false
+}
+
+fn is_nested_scope_node(node: Node<'_>) -> bool {
+    matches!(
+        node.kind(),
+        "function_definition"
+            | "class_definition"
+            | "lambda"
+            | "function_declaration"
+            | "method_definition"
+            | "arrow_function"
+            | "function"
+            | "function_expression"
+            | "class"
+            | "class_declaration"
+    )
 }
 
 fn collect_function_defs<'tree>(
@@ -2038,6 +2193,36 @@ fn collect_js_imports(
         let trimmed = line.trim().trim_end_matches(';');
         collect_js_es_import(parsed, module_index, imports, trimmed);
         collect_js_require_import(parsed, module_index, imports, trimmed);
+    }
+}
+
+fn collect_js_default_exports(parsed: &ParsedFile, default_exports: &mut BTreeMap<String, String>) {
+    for line in parsed.text.lines() {
+        let trimmed = line.trim().trim_end_matches(';');
+        if let Some(rest) = trimmed.strip_prefix("export default ") {
+            let rest = rest.trim_start_matches("async ").trim();
+            if let Some(name) = rest
+                .strip_prefix("function ")
+                .and_then(|value| value.split_once('(').map(|(name, _)| name.trim()))
+                .filter(|name| !name.is_empty())
+            {
+                default_exports.insert(parsed.source.path.clone(), name.to_string());
+                return;
+            }
+            let name = clean_symbol(rest);
+            if !name.is_empty() {
+                default_exports.insert(parsed.source.path.clone(), name);
+                return;
+            }
+        }
+        if let Some(name) = trimmed
+            .strip_prefix("module.exports = ")
+            .map(clean_symbol)
+            .filter(|name| !name.is_empty())
+        {
+            default_exports.insert(parsed.source.path.clone(), name);
+            return;
+        }
     }
 }
 
@@ -2739,6 +2924,24 @@ fn fastapi_decorated_function_node<'tree>(
                 }
             }
         }
+        if node.kind() == "function_definition"
+            && function_name(parsed, node).as_deref() == Some(handler_name)
+        {
+            return Some(node);
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    None
+}
+
+fn fastapi_handler_function_node<'tree>(
+    parsed: &'tree ParsedFile,
+    handler_name: &str,
+) -> Option<Node<'tree>> {
+    let root = parsed.root_node()?;
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
         if node.kind() == "function_definition"
             && function_name(parsed, node).as_deref() == Some(handler_name)
         {
@@ -4222,6 +4425,103 @@ sensitivity:
                 "{path} should retain uncertainty link support"
             );
         }
+    }
+
+    #[test]
+    fn reachability_ignores_uncalled_nested_handler_mutations() {
+        let temp = TestDir::new("nested-handler-mutation");
+        write_file(
+            &temp.path().join("app.py"),
+            r#"
+from fastapi import Depends, FastAPI
+from sqlalchemy.orm import Session
+
+app = FastAPI()
+
+class User:
+    pass
+
+def require_user():
+    return {"id": "user_1"}
+
+@app.post("/noop")
+def noop(session: Session, user=Depends(require_user)):
+    def unused_delete():
+        session.delete(User())
+    return {"ok": True}
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+        let document = run_scan(&plan).expect("scan should succeed");
+        let route = route_by_path(&document, "/noop");
+        let coverage = coverage_for_route(&document, &route.id);
+        let support = coverage
+            .extensions
+            .get("authmap.coverage")
+            .expect("coverage support should exist");
+
+        assert!(document.mutations.iter().any(|mutation| {
+            mutation.library.as_deref() == Some("sqlalchemy")
+                && mutation.operation == MutationOperation::Delete
+        }));
+        assert!(
+            !document.links.iter().any(|link| link.route_id == route.id),
+            "unused nested function mutation should not be linked to route"
+        );
+        assert_eq!(support["mutation_ids"], serde_json::json!([]));
+        assert!(
+            support["sensitivity_reasons"]
+                .as_array()
+                .is_some_and(|items| !items.iter().any(|item| item == "linked_mutation"))
+        );
+    }
+
+    #[test]
+    fn reachability_resolves_typescript_default_imported_service_mutations() {
+        let temp = TestDir::new("default-import-service");
+        write_file(
+            &temp.path().join("app.ts"),
+            r#"
+import express from "express";
+import createSession from "./service";
+
+const app = express();
+
+function requireAuth(req, res, next) {
+  next();
+}
+
+app.post("/sessions", requireAuth, async (req, res) => {
+  await createSession(req.body.userId);
+  res.json({ ok: true });
+});
+"#,
+        );
+        write_file(
+            &temp.path().join("service.ts"),
+            r#"
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
+
+export default async function createSession(userId: string) {
+  return prisma.session.create({
+    data: { userId },
+  });
+}
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        assert_eq!(document.mutations.len(), 1);
+        assert_mutation_link(
+            &document,
+            "/sessions",
+            "prisma",
+            Some("session"),
+            Confidence::Medium,
+        );
     }
 
     #[test]

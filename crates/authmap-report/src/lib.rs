@@ -2046,6 +2046,7 @@ mod tests {
         assert!(diagnostics_index < skipped_index);
         assert!(markdown.contains("parser.source_parse_recovered"));
         assert!(markdown.contains("discovery.file_too_large"));
+        assert!(markdown.contains("discovery.file_limit_reached"));
         assert!(markdown.contains("dynamic dispatch was detected"));
     }
 
@@ -2134,6 +2135,17 @@ mod tests {
             skipped: Some(SkipReason {
                 code: diagnostic_codes::DISCOVERY_FILE_TOO_LARGE.to_string(),
                 message: "file exceeds max_file_size_bytes".to_string(),
+            }),
+        });
+        document.source_files.push(SourceFile {
+            path: "src/omitted_sample.py".to_string(),
+            language: authmap_core::Language::Python,
+            size_bytes: 100,
+            sha256: None,
+            project_hints: Vec::new(),
+            skipped: Some(SkipReason {
+                code: diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED.to_string(),
+                message: "file was omitted because configured max_files is 1".to_string(),
             }),
         });
         document.routes.push(Route {

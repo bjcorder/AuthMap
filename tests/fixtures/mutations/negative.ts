@@ -11,4 +11,3 @@ export async function readUsers() {
   const text = "delete from users";
   return prisma.user.findMany();
 }
-

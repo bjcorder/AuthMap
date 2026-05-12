@@ -32,4 +32,3 @@ def delete_account(account_id: int):
 def delete_instance(account_id: int):
     account = Account.objects.get(id=account_id)
     account.delete()
-

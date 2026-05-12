@@ -1,15 +1,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 
-use authmap_config::ScanPlan;
+use authmap_config::{ScanLimits, ScanPlan};
 use authmap_core::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, Language, ProjectHint, Recoverability,
     SkipReason, SourceFile, diagnostic_codes,
 };
 use ignore::overrides::{Override, OverrideBuilder};
-use ignore::{DirEntry, WalkBuilder, WalkState};
+use ignore::{DirEntry, WalkBuilder};
 use thiserror::Error;
 
 const HARD_EXCLUDED_DIRS: &[&str] = &[
@@ -60,6 +59,7 @@ pub struct DiscoveryResult {
 pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryError> {
     let mut all_paths = Vec::new();
     let mut target_roots = Vec::new();
+    let mut collection_capped = false;
 
     for target in &plan.targets {
         let metadata =
@@ -91,7 +91,9 @@ pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryErr
         })?;
 
         target_roots.push(target.clone());
-        all_paths.extend(walk_target(target));
+        let (walked_paths, capped) = walk_target(target, &plan.config.limits);
+        collection_capped |= capped;
+        all_paths.extend(walked_paths);
     }
 
     all_paths.sort();
@@ -100,6 +102,16 @@ pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryErr
     let matchers = PatternMatchers::new(&plan.targets, &plan.config.include, &plan.config.exclude)?;
 
     let mut diagnostics = Vec::new();
+    if collection_capped {
+        diagnostics.push(diagnostic_with_severity(
+            diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED,
+            incomplete_scan_severity(plan.config.mode),
+            format!(
+                "discovery stopped after collecting a bounded sample of source and hint paths for limits.max_files={}",
+                plan.config.limits.max_files
+            ),
+        ));
+    }
     let mut candidates = Vec::new();
     let mut hint_paths = Vec::new();
     for path in all_paths {
@@ -153,15 +165,22 @@ pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryErr
         ));
     }
 
-    candidates.truncate(plan.config.limits.max_files);
     let mut candidate_records = Vec::new();
     let mut total_included_bytes = 0_u64;
-    for path in candidates {
+    for (index, path) in candidates.into_iter().enumerate() {
         let metadata = fs::metadata(&path).map_err(|source| DiscoveryError::Metadata {
             path: path.clone(),
             source,
         })?;
-        let skipped = if metadata.len() > plan.config.limits.max_file_size_bytes {
+        let skipped = if index >= plan.config.limits.max_files {
+            Some(SkipReason {
+                code: diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED.to_string(),
+                message: format!(
+                    "file was omitted because configured max_files is {}",
+                    plan.config.limits.max_files
+                ),
+            })
+        } else if metadata.len() > plan.config.limits.max_file_size_bytes {
             Some(SkipReason {
                 code: diagnostic_codes::DISCOVERY_FILE_TOO_LARGE.to_string(),
                 message: format!(
@@ -226,35 +245,40 @@ pub fn discover_sources(plan: &ScanPlan) -> Result<DiscoveryResult, DiscoveryErr
     Ok(DiscoveryResult { files, diagnostics })
 }
 
-fn walk_target(target: &Path) -> Vec<PathBuf> {
-    let paths = Arc::new(Mutex::new(Vec::<PathBuf>::new()));
+fn walk_target(target: &Path, limits: &ScanLimits) -> (Vec<PathBuf>, bool) {
+    let mut paths = Vec::<PathBuf>::new();
+    let collection_cap = discovery_collection_cap(limits);
     let mut builder = WalkBuilder::new(target);
     builder
         .hidden(false)
         .git_ignore(true)
         .git_exclude(true)
         .parents(true);
+    builder.sort_by_file_path(|left, right| left.cmp(right));
+    builder.filter_entry(|entry| !is_hard_excluded_dir(entry));
 
-    let paths_for_worker = Arc::clone(&paths);
-    builder.build_parallel().run(|| {
-        let paths = Arc::clone(&paths_for_worker);
-        Box::new(move |entry| {
-            if let Ok(entry) = entry {
-                if is_hard_excluded_dir(&entry) {
-                    return WalkState::Skip;
-                }
-                if is_regular_file(&entry) && is_source_or_hint_path(entry.path()) {
-                    paths
-                        .lock()
-                        .expect("discovery path mutex poisoned")
-                        .push(entry.path().to_path_buf());
-                }
+    let mut capped = false;
+    for entry in builder.build() {
+        let Ok(entry) = entry else {
+            continue;
+        };
+        if is_regular_file(&entry) && is_source_or_hint_path(entry.path()) {
+            if paths.len() >= collection_cap {
+                capped = true;
+                break;
             }
-            WalkState::Continue
-        })
-    });
+            paths.push(entry.path().to_path_buf());
+        }
+    }
 
-    paths.lock().expect("discovery path mutex poisoned").clone()
+    (paths, capped)
+}
+
+fn discovery_collection_cap(limits: &ScanLimits) -> usize {
+    limits
+        .max_files
+        .saturating_mul(2)
+        .max(limits.max_files.saturating_add(1))
 }
 
 fn is_regular_file(entry: &DirEntry) -> bool {
@@ -871,9 +895,50 @@ mod tests {
 
         let result = discover_sources(&plan).expect("discovery should succeed");
 
-        assert_eq!(names(&result), vec!["a.ts", "b.ts"]);
+        assert_eq!(names(&result), vec!["a.ts", "b.ts", "c.ts"]);
+        assert!(result.files[0].skipped.is_none());
+        assert!(result.files[1].skipped.is_none());
+        assert_eq!(
+            result.files[2]
+                .skipped
+                .as_ref()
+                .expect("omitted sample should be represented as skipped")
+                .code,
+            diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED
+        );
         assert!(result.diagnostics.iter().any(|diagnostic| {
             diagnostic.code == diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED
+        }));
+    }
+
+    #[test]
+    fn collection_cap_stops_before_exhaustive_walk_and_reports_bounded_sample() {
+        let temp = TestDir::new("collection-cap");
+        for name in ["a.ts", "b.ts", "c.ts", "d.ts", "e.ts"] {
+            write_file(&temp.path().join(name), "export const value = 1;\n");
+        }
+        let mut plan = plan(temp.path());
+        plan.config.limits.max_files = 1;
+
+        let first = discover_sources(&plan).expect("discovery should succeed");
+        let second = discover_sources(&plan).expect("discovery should be deterministic");
+
+        assert_eq!(names(&first), vec!["a.ts", "b.ts"]);
+        assert_eq!(names(&first), names(&second));
+        assert!(first.files[0].skipped.is_none());
+        assert_eq!(
+            first.files[1]
+                .skipped
+                .as_ref()
+                .expect("bounded omitted sample should be skipped")
+                .code,
+            diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED
+        );
+        assert!(first.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED
+                && diagnostic
+                    .message
+                    .contains("bounded sample of source and hint paths")
         }));
     }
 
@@ -951,7 +1016,16 @@ mod tests {
 
         let result = discover_sources(&plan).expect("discovery should succeed");
 
-        assert_eq!(names(&result), vec!["a.ts"]);
+        assert_eq!(names(&result), vec!["a.ts", "b.ts"]);
+        assert!(result.files[0].skipped.is_none());
+        assert_eq!(
+            result.files[1]
+                .skipped
+                .as_ref()
+                .expect("omitted sample should be represented as skipped")
+                .code,
+            diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED
+        );
         assert!(result.diagnostics.iter().any(|diagnostic| {
             diagnostic.code == diagnostic_codes::DISCOVERY_FILE_LIMIT_REACHED
                 && diagnostic.severity == DiagnosticSeverity::Error

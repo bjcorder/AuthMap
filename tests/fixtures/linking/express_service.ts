@@ -7,4 +7,3 @@ export async function createSession(userId: string) {
     data: { userId },
   });
 }
-

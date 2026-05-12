@@ -32,4 +32,3 @@ def fastapi_dynamic(user=Depends(require_user)):
 @app.get("/fastapi/read")
 def fastapi_read():
     return {"ok": True}
-
