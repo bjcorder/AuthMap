@@ -2353,6 +2353,7 @@ fn resolve_js_module(
 }
 
 fn normalize_module_path(current_dir: &str, module: &str, separator: &str) -> String {
+    let is_absolute = current_dir.starts_with(separator);
     let mut parts = current_dir
         .split(separator)
         .filter(|part| !part.is_empty())
@@ -2367,7 +2368,12 @@ fn normalize_module_path(current_dir: &str, module: &str, separator: &str) -> St
             _ => parts.push(part.to_string()),
         }
     }
-    parts.join(separator)
+    let joined = parts.join(separator);
+    if is_absolute {
+        format!("{separator}{joined}")
+    } else {
+        joined
+    }
 }
 
 fn strip_js_extension(path: &str) -> Option<&str> {
@@ -3659,8 +3665,8 @@ mod tests {
     use authmap_testkit::fixture_path;
 
     use super::{
-        classify_coverage, normalize_adapter_evidence, route_id_remaps, run_scan,
-        run_scan_with_started_at, suggest_rules, suggest_rules_with_started_at,
+        classify_coverage, normalize_adapter_evidence, normalize_module_path, route_id_remaps,
+        run_scan, run_scan_with_started_at, suggest_rules, suggest_rules_with_started_at,
     };
 
     #[test]
@@ -4521,6 +4527,18 @@ export default async function createSession(userId: string) {
             "prisma",
             Some("session"),
             Confidence::Medium,
+        );
+    }
+
+    #[test]
+    fn js_module_normalization_preserves_posix_absolute_roots() {
+        assert_eq!(
+            normalize_module_path("/tmp/authmap/project/routes", "./service", "/"),
+            "/tmp/authmap/project/routes/service"
+        );
+        assert_eq!(
+            normalize_module_path("/tmp/authmap/project/routes", "../service", "/"),
+            "/tmp/authmap/project/service"
         );
     }
 
