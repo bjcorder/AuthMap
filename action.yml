@@ -27,7 +27,7 @@ inputs:
     required: false
     default: ""
   output-directory:
-    description: Directory where AuthMap report artifacts are written.
+    description: Workspace-relative directory where generated AuthMap reports are written. The workspace root is rejected.
     required: false
     default: .authmap
   upload-artifact:
@@ -86,13 +86,12 @@ runs:
       run: '"$GITHUB_ACTION_PATH/.github/actions/authmap/run.sh"'
 
     - name: Upload AuthMap reports
-      if: ${{ always() && inputs.upload-artifact == 'true' && steps.run-authmap.outputs.output-directory != '' && (steps.run-authmap.outputs.exit-code == '0' || steps.run-authmap.outputs.exit-code == '20') }}
+      if: ${{ always() && inputs.upload-artifact == 'true' && steps.run-authmap.outputs.artifact-paths != '' && (steps.run-authmap.outputs.exit-code == '0' || steps.run-authmap.outputs.exit-code == '20') }}
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ${{ inputs.artifact-name }}
-        path: ${{ steps.run-authmap.outputs.output-directory }}
+        path: ${{ steps.run-authmap.outputs.artifact-paths }}
         if-no-files-found: error
-        include-hidden-files: true
 
     - name: Upload AuthMap SARIF
       if: ${{ always() && inputs.upload-sarif == 'true' && steps.run-authmap.outputs.sarif-path != '' && (steps.run-authmap.outputs.exit-code == '0' || steps.run-authmap.outputs.exit-code == '20') }}

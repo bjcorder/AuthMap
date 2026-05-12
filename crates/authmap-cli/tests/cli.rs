@@ -383,6 +383,12 @@ fn action_metadata_defines_expected_wrapper_contract() {
     assert!(script.contains("--fail-on"));
     assert!(script.contains("AUTHMAP_DEFER_EXIT"));
     assert!(script.contains("exit-code"));
+    assert!(script.contains("validate_relative_path"));
+    assert!(script.contains("artifact-paths"));
+    assert!(script.contains("<<"));
+    assert!(action.contains("steps.run-authmap.outputs.artifact-paths"));
+    assert!(action.contains("path: ${{ steps.run-authmap.outputs.artifact-paths }}"));
+    assert!(!action.contains("include-hidden-files: true"));
 }
 
 #[test]
@@ -393,21 +399,38 @@ fn action_runner_generates_reports_outputs_and_step_summary() {
 
     let temp = TestDir::new("action-runner");
     let root = repo_root();
+    let workspace = temp.path().join("workspace");
+    let project = workspace.join("project");
     let github_output = temp.path().join("github-output.txt");
     let step_summary = temp.path().join("summary.md");
-    let output_dir = temp.path().join("reports");
-    let baseline_path = temp.path().join("baseline.json");
+    let output_dir = workspace.join("reports");
+    let baseline_path = workspace.join("baseline.json");
+    write_file(
+        &project.join("app.py"),
+        r#"
+from fastapi import FastAPI, Depends
+
+app = FastAPI()
+
+def require_user():
+    return {"id": "user_1"}
+
+@app.get("/accounts")
+def read_accounts(user=Depends(require_user)):
+    return []
+"#,
+    );
 
     let baseline = authmap_in_dir(
         &[
             "scan",
-            "tests/fixtures/negative/frontend_only",
+            "project",
             "--format",
             "json",
             "--output",
             baseline_path.to_str().expect("path should be UTF-8"),
         ],
-        &root,
+        &workspace,
     );
     assert_exit(&baseline, 0);
 
@@ -415,16 +438,16 @@ fn action_runner_generates_reports_outputs_and_step_summary() {
         .arg(root.join(".github/actions/authmap/run.sh"))
         .current_dir(&root)
         .env("GITHUB_ACTION_PATH", &root)
-        .env("GITHUB_WORKSPACE", &root)
+        .env("GITHUB_WORKSPACE", &workspace)
         .env("GITHUB_OUTPUT", &github_output)
         .env("GITHUB_STEP_SUMMARY", &step_summary)
         .env("INPUT_MODE", "advisory")
         .env("INPUT_OUTPUT", "markdown,json,sarif")
-        .env("INPUT_TARGET", "tests/fixtures/negative/frontend_only")
+        .env("INPUT_TARGET", "project")
         .env("INPUT_CONFIG", "")
-        .env("INPUT_BASELINE", &baseline_path)
+        .env("INPUT_BASELINE", "baseline.json")
         .env("INPUT_FAIL_ON", "")
-        .env("INPUT_OUTPUT_DIRECTORY", &output_dir)
+        .env("INPUT_OUTPUT_DIRECTORY", "reports")
         .env("INPUT_UPLOAD_SARIF", "false")
         .output()
         .expect("action runner should execute");
@@ -456,15 +479,116 @@ fn action_runner_generates_reports_outputs_and_step_summary() {
     assert!(summary.contains("# AuthMap Report"));
     assert!(summary.contains("# AuthMap Drift Report"));
     let outputs = fs::read_to_string(github_output).expect("GitHub outputs should be written");
-    assert!(outputs.contains(&format!("json-path={}", json_path.display())));
-    assert!(outputs.contains(&format!("markdown-path={}", markdown_path.display())));
-    assert!(outputs.contains(&format!("sarif-path={}", sarif_path.display())));
-    assert!(outputs.contains(&format!("diff-json-path={}", diff_json_path.display())));
-    assert!(outputs.contains(&format!(
-        "diff-markdown-path={}",
-        diff_markdown_path.display()
-    )));
-    assert!(outputs.contains("exit-code=0"));
+    assert_multiline_output(&outputs, "json-path", &json_path.display().to_string());
+    assert_multiline_output(
+        &outputs,
+        "markdown-path",
+        &markdown_path.display().to_string(),
+    );
+    assert_multiline_output(&outputs, "sarif-path", &sarif_path.display().to_string());
+    assert_multiline_output(
+        &outputs,
+        "diff-json-path",
+        &diff_json_path.display().to_string(),
+    );
+    assert_multiline_output(
+        &outputs,
+        "diff-markdown-path",
+        &diff_markdown_path.display().to_string(),
+    );
+    assert_multiline_output(&outputs, "exit-code", "0");
+    let artifact_paths =
+        multiline_output_value(&outputs, "artifact-paths").expect("artifact paths should be set");
+    let artifact_lines = artifact_paths.lines().collect::<Vec<_>>();
+    assert_eq!(artifact_lines.len(), 5);
+    for path in [
+        &markdown_path,
+        &json_path,
+        &sarif_path,
+        &diff_json_path,
+        &diff_markdown_path,
+    ] {
+        assert!(
+            artifact_lines.contains(&path.display().to_string().as_str()),
+            "artifact paths should include {}",
+            path.display()
+        );
+    }
+    assert!(!artifact_lines.contains(&output_dir.display().to_string().as_str()));
+}
+
+#[test]
+fn action_runner_rejects_unsafe_workspace_relative_paths() {
+    if cfg!(windows) {
+        return;
+    }
+
+    let cases = [
+        ("INPUT_TARGET", "../outside", "target"),
+        ("INPUT_CONFIG", "/tmp/authmap.yml", "config"),
+        ("INPUT_OUTPUT_DIRECTORY", ".", "output-directory"),
+        ("INPUT_OUTPUT_DIRECTORY", "reports/", "output-directory"),
+        ("INPUT_BASELINE", "baselines\nforged=1", "baseline"),
+    ];
+
+    for (name, value, label) in cases {
+        let output = run_action_validation_case(name, value);
+        assert_exit(&output, 2);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains(label),
+            "stderr should mention {label}; got:\n{stderr}"
+        );
+    }
+}
+
+fn run_action_validation_case(name: &str, value: &str) -> Output {
+    let temp = TestDir::new("action-invalid-path");
+    let root = repo_root();
+    let workspace = temp.path().join("workspace");
+    write_file(
+        &workspace.join("project").join("app.py"),
+        "print('hello')\n",
+    );
+    let mut command = Command::new("bash");
+    command
+        .arg(root.join(".github/actions/authmap/run.sh"))
+        .current_dir(&root)
+        .env("GITHUB_ACTION_PATH", &root)
+        .env("GITHUB_WORKSPACE", &workspace)
+        .env("GITHUB_OUTPUT", temp.path().join("github-output.txt"))
+        .env("GITHUB_STEP_SUMMARY", temp.path().join("summary.md"))
+        .env("INPUT_MODE", "advisory")
+        .env("INPUT_OUTPUT", "json")
+        .env("INPUT_TARGET", "project")
+        .env("INPUT_CONFIG", "")
+        .env("INPUT_BASELINE", "")
+        .env("INPUT_FAIL_ON", "")
+        .env("INPUT_OUTPUT_DIRECTORY", "reports")
+        .env("INPUT_UPLOAD_SARIF", "false")
+        .env(name, value);
+    command.output().expect("action runner should execute")
+}
+
+fn assert_multiline_output(outputs: &str, name: &str, expected: &str) {
+    let value =
+        multiline_output_value(outputs, name).unwrap_or_else(|| panic!("missing output {name}"));
+    assert_eq!(value, expected);
+}
+
+fn multiline_output_value(outputs: &str, name: &str) -> Option<String> {
+    let marker = format!("{name}<<");
+    let lines = outputs.lines().collect::<Vec<_>>();
+    let start = lines.iter().position(|line| line.starts_with(&marker))?;
+    let delimiter = lines[start].strip_prefix(&marker)?;
+    let mut value = Vec::new();
+    for line in lines.iter().skip(start + 1) {
+        if *line == delimiter {
+            return Some(value.join("\n"));
+        }
+        value.push((*line).to_string());
+    }
+    None
 }
 
 #[test]
@@ -558,7 +682,10 @@ fn diff_map_files_emit_deterministic_json_markdown_and_enforce_policy() {
             .expect("changes should be an array")
             .iter()
             .any(|change| change["kind"] == "coverage_changed"
-                && change["before"]["direction"] == "downgrade")
+                && change["direction"] == "downgrade"
+                && change["reviewer_questions"].is_array()
+                && change["sensitivity_reasons"].is_array()
+                && change["link_ids"].is_array())
     );
 
     let output = authmap(&[
@@ -576,6 +703,8 @@ fn diff_map_files_emit_deterministic_json_markdown_and_enforce_policy() {
     let markdown = fs::read_to_string(&markdown_path).expect("diff Markdown should exist");
     assert!(markdown.contains("# AuthMap Drift Report"));
     assert!(markdown.contains("added_high_risk_route"));
+    assert!(markdown.contains("Fail Category"));
+    assert!(markdown.contains("Blocking"));
 
     let output = authmap(&[
         "diff",
@@ -682,6 +811,162 @@ def create_admin():
             .iter()
             .any(|change| change["kind"] == "added_route")
     );
+    let checkout = fs::read_to_string(temp.path().join("app.py")).expect("checkout should remain");
+    assert!(checkout.contains("@app.post(\"/admin\")"));
+    assert!(!temp.path().join("base").exists());
+    assert!(!temp.path().join("head").exists());
+}
+
+#[test]
+fn diff_git_range_loads_relative_config_from_each_ref() {
+    if Command::new("git").arg("--version").output().is_err() {
+        return;
+    }
+
+    let temp = TestDir::new("diff-git-range-ref-config");
+    write_file(
+        &temp.path().join("app.py"),
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts():
+    return []
+"#,
+    );
+    write_file(&temp.path().join("authmap.yml"), "exclude:\n  - app.py\n");
+    init_git_repo(temp.path());
+    git_commit_all(temp.path(), "base");
+
+    write_file(
+        &temp.path().join("app.py"),
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts():
+    return []
+
+@app.post("/admin")
+def create_admin():
+    return {"ok": True}
+"#,
+    );
+    write_file(&temp.path().join("authmap.yml"), "exclude: []\n");
+    git_commit_all(temp.path(), "head");
+
+    let output = authmap_in_dir(
+        &[
+            "diff",
+            "HEAD~1...HEAD",
+            "--target",
+            ".",
+            "--config",
+            "authmap.yml",
+            "--format",
+            "json",
+        ],
+        temp.path(),
+    );
+    assert_exit(&output, 0);
+    let report: Value =
+        serde_json::from_slice(&output.stdout).expect("git range diff should emit JSON");
+    assert_eq!(report["metadata"]["config"]["source"], "per_ref");
+    assert_eq!(report["metadata"]["config"]["path"], "authmap.yml");
+    assert_eq!(report["summary"]["added_routes"], 2);
+}
+
+#[test]
+fn diff_git_range_reports_external_absolute_config_metadata() {
+    if Command::new("git").arg("--version").output().is_err() {
+        return;
+    }
+
+    let temp = TestDir::new("diff-git-range-external-config");
+    write_file(
+        &temp.path().join("app.py"),
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts():
+    return []
+"#,
+    );
+    init_git_repo(temp.path());
+    git_commit_all(temp.path(), "base");
+    write_file(
+        &temp.path().join("app.py"),
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts():
+    return []
+
+@app.post("/admin")
+def create_admin():
+    return {"ok": True}
+"#,
+    );
+    git_commit_all(temp.path(), "head");
+
+    let config = temp.path().join("external-authmap.yml");
+    write_file(
+        &config,
+        "drift:\n  fail_on: [added_review_required_route]\n",
+    );
+    let config_arg = config.to_str().expect("path should be UTF-8");
+    let output = authmap_in_dir(
+        &[
+            "diff",
+            "HEAD~1...HEAD",
+            "--config",
+            config_arg,
+            "--format",
+            "json",
+        ],
+        temp.path(),
+    );
+    assert_exit(&output, 0);
+    let report: Value =
+        serde_json::from_slice(&output.stdout).expect("git range diff should emit JSON");
+    assert_eq!(report["metadata"]["config"]["source"], "external");
+    assert_eq!(report["metadata"]["config"]["path"], config_arg);
+}
+
+fn init_git_repo(path: &Path) {
+    for args in [
+        vec!["init"],
+        vec!["config", "user.email", "authmap@example.test"],
+        vec!["config", "user.name", "AuthMap Test"],
+    ] {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(path)
+            .output()
+            .expect("git should run");
+        assert_exit(&output, 0);
+    }
+}
+
+fn git_commit_all(path: &Path, message: &str) {
+    for args in [vec!["add", "."], vec!["commit", "-m", message]] {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(path)
+            .output()
+            .expect("git should run");
+        assert_exit(&output, 0);
+    }
 }
 
 #[test]

@@ -5,7 +5,8 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use authmap_analysis::{
-    DriftChange, DriftChangeKind, DriftChangeSeverity, DriftReport, RuleSuggestionReport,
+    DriftChange, DriftChangeKind, DriftChangeSeverity, DriftComparison, DriftReport,
+    RuleSuggestionReport,
 };
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticSeverity, Evidence,
@@ -820,6 +821,14 @@ pub fn render_drift_markdown(report: &DriftReport) -> String {
                 .collect::<Vec<_>>()
         )
     );
+    let _ = writeln!(
+        output,
+        "- Config source: {}",
+        escape_inline(&report.metadata.config.source)
+    );
+    if let Some(path) = &report.metadata.config.path {
+        let _ = writeln!(output, "- Config path: {}", escape_inline(path));
+    }
     let _ = writeln!(output);
 
     let _ = writeln!(output, "## Summary");
@@ -873,7 +882,16 @@ pub fn render_drift_markdown(report: &DriftReport) -> String {
         .collect::<Vec<_>>();
     render_table(
         &mut output,
-        &["ID", "Severity", "Kind", "Route", "Message"],
+        &[
+            "ID",
+            "Severity",
+            "Kind",
+            "Route",
+            "Direction",
+            "Fail Category",
+            "Blocking",
+            "Message",
+        ],
         &rows,
     );
     let _ = writeln!(output);
@@ -886,6 +904,19 @@ fn drift_change_row(change: &DriftChange) -> Vec<String> {
         escape_table(drift_severity_label(change.severity)),
         escape_table(drift_kind_label(change.kind)),
         escape_table(&change.route_key),
+        escape_table(change.direction.map_or("none", drift_comparison_label)),
+        escape_table(
+            &change
+                .fail_category
+                .as_ref()
+                .map(enum_value)
+                .unwrap_or_else(|| "none".to_string()),
+        ),
+        if change.enforcement_blocking {
+            "yes".to_string()
+        } else {
+            "no".to_string()
+        },
         escape_table(&change.message),
     ]
 }
@@ -906,6 +937,14 @@ fn drift_severity_label(severity: DriftChangeSeverity) -> &'static str {
         DriftChangeSeverity::Note => "note",
         DriftChangeSeverity::Warning => "warning",
         DriftChangeSeverity::Error => "error",
+    }
+}
+
+fn drift_comparison_label(comparison: DriftComparison) -> &'static str {
+    match comparison {
+        DriftComparison::Upgrade => "upgrade",
+        DriftComparison::Downgrade => "downgrade",
+        DriftComparison::Changed => "changed",
     }
 }
 
@@ -1975,7 +2014,11 @@ fn coverage_result(
             )
         },
         "partialFingerprints": {
-            "authmapRouteId": route.id
+            "authmapStable": sarif_stable_fingerprint(rule_id, route),
+            "authmapRuleId": rule_id,
+            "authmapFramework": framework_label(route.framework),
+            "authmapMethod": route.method,
+            "authmapPath": route.path
         },
         "properties": {
             "authmap.kind": "coverage",
@@ -2000,6 +2043,27 @@ fn coverage_result(
     }
 
     result
+}
+
+fn sarif_stable_fingerprint(rule_id: &str, route: &authmap_core::Route) -> String {
+    let handler_name = route
+        .handler
+        .as_ref()
+        .map_or("", |handler| handler.name.as_str());
+    let handler_file = route
+        .handler
+        .as_ref()
+        .and_then(|handler| handler.span.as_ref())
+        .map_or("", |span| span.file.as_str());
+    format!(
+        "{}|{}|{}|{}|{}|{}",
+        rule_id,
+        framework_label(route.framework),
+        route.method,
+        route.path,
+        handler_name,
+        handler_file
+    )
 }
 
 fn coverage_location<'a>(
@@ -2598,6 +2662,62 @@ mod tests {
                 .iter()
                 .any(|result| result["ruleId"] == diagnostic_codes::PARSER_SOURCE_PARSE_RECOVERED)
         );
+    }
+
+    #[test]
+    fn sarif_coverage_fingerprints_ignore_route_id_and_order() {
+        let original: Value = serde_json::from_str(
+            &SarifReporter
+                .render(&document_with_sarif_coverage_data())
+                .expect("SARIF should render"),
+        )
+        .expect("SARIF should be JSON");
+
+        let mut reordered = document_with_sarif_coverage_data();
+        reordered.routes.reverse();
+        let route = reordered
+            .routes
+            .iter_mut()
+            .find(|route| route.id == "route.authn_only")
+            .expect("authn-only route should exist");
+        route.id = "route.reordered_authn_only".to_string();
+        for coverage in &mut reordered.coverage {
+            if coverage.route_id == "route.authn_only" {
+                coverage.route_id = "route.reordered_authn_only".to_string();
+            }
+        }
+        for evidence in &mut reordered.evidence {
+            if evidence.route_id.as_deref() == Some("route.authn_only") {
+                evidence.route_id = Some("route.reordered_authn_only".to_string());
+            }
+        }
+
+        let changed: Value = serde_json::from_str(
+            &SarifReporter
+                .render(&reordered)
+                .expect("SARIF should render"),
+        )
+        .expect("SARIF should be JSON");
+        let original_result = sarif_result(&original, SARIF_AUTHN_ONLY_SENSITIVE);
+        let changed_result = sarif_result(&changed, SARIF_AUTHN_ONLY_SENSITIVE);
+
+        assert_eq!(
+            original_result["partialFingerprints"]["authmapStable"],
+            changed_result["partialFingerprints"]["authmapStable"]
+        );
+        assert_ne!(
+            original_result["properties"]["route_id"],
+            changed_result["properties"]["route_id"]
+        );
+    }
+
+    fn sarif_result<'a>(sarif: &'a Value, rule_id: &str) -> &'a Value {
+        sarif["runs"][0]["results"]
+            .as_array()
+            .expect("SARIF results should be an array")
+            .iter()
+            .find(|result| result["ruleId"] == rule_id)
+            .unwrap_or_else(|| panic!("missing SARIF result {rule_id}"))
     }
 
     fn assert_valid_sarif(sarif: &Value) {

@@ -173,7 +173,8 @@ normal AuthMap JSON document for later comparison. `authmap diff` supports
 map-file diffs with `--base` and `--head`, plus committed git ranges such as
 `main...HEAD` using `git archive` into temporary directories so the checkout is
 not mutated. Diff reports are available as Markdown or JSON; enforce mode exits
-`20` only when drift matches the effective `drift.fail_on` policy.
+`20` only when drift matches the effective `drift.fail_on` policy. Git range
+diffs require both `git` and `tar` on `PATH`.
 
 Discovery honors gitignore-style `include` and `exclude` entries in
 `authmap.yml`. Includes narrow the supported source-file set, excludes win over
@@ -191,7 +192,7 @@ report output directories.
 | 12 | Config file cannot be read, parsed, or validated |
 | 13 | Scan pipeline failed for another reason |
 | 14 | Report rendering or writing failed |
-| 20 | Enforce-mode diagnostic failure after the report was written |
+| 20 | Enforce-mode diagnostic or drift policy failure after the report was written |
 
 ## GitHub Action
 
@@ -208,7 +209,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: bjcorder/AuthMap@v0
+      - uses: Ozark-Security-Labs/AuthMap@v0
         with:
           mode: advisory
           output: markdown,json
@@ -225,7 +226,7 @@ permissions:
 
 steps:
   - uses: actions/checkout@v4
-  - uses: bjcorder/AuthMap@v0
+  - uses: Ozark-Security-Labs/AuthMap@v0
     with:
       mode: advisory
       output: markdown,json,sarif
@@ -233,12 +234,13 @@ steps:
 ```
 
 In enforce mode, AuthMap still writes requested reports first, then returns
-exit code `20` when enforce-blocking diagnostics are present:
+exit code `20` when enforce-blocking diagnostics or baseline drift policy
+matches are present:
 
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: bjcorder/AuthMap@v0
+  - uses: Ozark-Security-Labs/AuthMap@v0
     with:
       mode: enforce
       output: markdown,json
@@ -251,7 +253,7 @@ to the job summary, and honors `fail-on` in enforce mode:
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: bjcorder/AuthMap@v0
+  - uses: Ozark-Security-Labs/AuthMap@v0
     with:
       mode: enforce
       output: markdown,json

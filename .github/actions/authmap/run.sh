@@ -2,11 +2,11 @@
 set -uo pipefail
 
 error() {
-  echo "::error::$*"
+  echo "::error::$*" >&2
 }
 
 warn() {
-  echo "::warning::$*"
+  echo "::warning::$*" >&2
 }
 
 die() {
@@ -31,19 +31,67 @@ is_true() {
 
 workspace_path() {
   local value="$1"
-  if [[ "$value" = /* ]]; then
-    printf '%s' "$value"
-  else
-    printf '%s/%s' "$GITHUB_WORKSPACE" "$value"
+  printf '%s/%s' "$GITHUB_WORKSPACE" "$value"
+}
+
+validate_relative_path() {
+  local name="$1"
+  local value="$2"
+  local allow_dot="$3"
+  local normalized
+  normalized="${value//\\//}"
+
+  [[ -n "$normalized" ]] || die "$name must not be empty"
+  if printf '%s' "$value" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+    die "$name must not contain control characters"
   fi
+  case "$normalized" in
+    /*|[A-Za-z]:/*|//*)
+      die "$name must be relative to GITHUB_WORKSPACE"
+      ;;
+  esac
+  if [[ "$normalized" == "." ]]; then
+    [[ "$allow_dot" == "true" ]] || die "$name must not be the workspace root"
+    printf '%s' "$normalized"
+    return
+  fi
+  case "$normalized" in
+    *//*|*/)
+      die "$name must not contain empty, '.', or '..' path components"
+      ;;
+  esac
+  IFS='/' read -ra parts <<< "$normalized"
+  local part
+  for part in "${parts[@]}"; do
+    case "$part" in
+      ""|"."|"..")
+        die "$name must not contain empty, '.', or '..' path components"
+        ;;
+    esac
+  done
+  printf '%s' "$normalized"
 }
 
 append_output() {
   local name="$1"
   local value="$2"
   if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
-    printf '%s=%s\n' "$name" "$value" >> "$GITHUB_OUTPUT"
+    local delimiter="AUTHMAP_${name}_EOF_${RANDOM}_${RANDOM}"
+    while [[ "$value" == *"$delimiter"* ]]; do
+      delimiter="AUTHMAP_${name}_EOF_${RANDOM}_${RANDOM}"
+    done
+    {
+      printf '%s<<%s\n' "$name" "$delimiter"
+      printf '%s\n' "$value"
+      printf '%s\n' "$delimiter"
+    } >> "$GITHUB_OUTPUT"
   fi
+}
+
+add_artifact_path() {
+  local value="$1"
+  [[ -n "$value" ]] || return
+  artifact_paths+=("$value")
 }
 
 add_format() {
@@ -81,25 +129,27 @@ case "$(lower "$(trim "$defer_exit")")" in
 esac
 
 target_input="$(trim "${INPUT_TARGET:-.}")"
-[[ -n "$target_input" ]] || die "target must not be empty"
+target_input="$(validate_relative_path "target" "$target_input" true)" || exit $?
 target_path="$(workspace_path "$target_input")"
 
 config_input="$(trim "${INPUT_CONFIG:-}")"
 config_path=""
 if [[ -n "$config_input" ]]; then
+  config_input="$(validate_relative_path "config" "$config_input" false)" || exit $?
   config_path="$(workspace_path "$config_input")"
 fi
 
 baseline_input="$(trim "${INPUT_BASELINE:-}")"
 baseline_path=""
 if [[ -n "$baseline_input" ]]; then
+  baseline_input="$(validate_relative_path "baseline" "$baseline_input" false)" || exit $?
   baseline_path="$(workspace_path "$baseline_input")"
 fi
 
 fail_on_input="$(trim "${INPUT_FAIL_ON:-}")"
 
 output_dir_input="$(trim "${INPUT_OUTPUT_DIRECTORY:-.authmap}")"
-[[ -n "$output_dir_input" ]] || die "output-directory must not be empty"
+output_dir_input="$(validate_relative_path "output-directory" "$output_dir_input" false)" || exit $?
 output_dir="$(workspace_path "$output_dir_input")"
 mkdir -p "$output_dir"
 
@@ -131,6 +181,7 @@ markdown_path=""
 sarif_path=""
 diff_json_path=""
 diff_markdown_path=""
+artifact_paths=()
 final_status=0
 
 for format in "${formats[@]}"; do
@@ -169,9 +220,12 @@ for format in "${formats[@]}"; do
   if [[ "$status" -eq 20 ]]; then
     final_status=20
     warn "AuthMap enforce mode returned exit code 20 for ${format}; continuing to generate requested artifacts"
+    add_artifact_path "$output_path"
   elif [[ "$status" -ne 0 ]]; then
     final_status="$status"
     break
+  else
+    add_artifact_path "$output_path"
   fi
 done
 
@@ -217,9 +271,12 @@ if [[ -n "$baseline_path" && ( "$final_status" -eq 0 || "$final_status" -eq 20 )
     if [[ "$status" -eq 20 ]]; then
       final_status=20
       warn "AuthMap drift enforce mode returned exit code 20 for ${diff_format}; continuing to generate requested artifacts"
+      add_artifact_path "$diff_output_path"
     elif [[ "$status" -ne 0 ]]; then
       final_status="$status"
       break
+    else
+      add_artifact_path "$diff_output_path"
     fi
   done
 fi
@@ -246,6 +303,7 @@ append_output "sarif-path" "$sarif_path"
 append_output "diff-json-path" "$diff_json_path"
 append_output "diff-markdown-path" "$diff_markdown_path"
 append_output "output-directory" "$output_dir"
+append_output "artifact-paths" "$(printf '%s\n' "${artifact_paths[@]}")"
 append_output "exit-code" "$final_status"
 
 if is_true "$defer_exit"; then

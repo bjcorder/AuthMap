@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use authmap_config::DriftFailCategory;
 use authmap_core::{
-    AuthMapDocument, Coverage, CoverageClass, Diagnostic, Evidence, Framework, Mutation, RiskLevel,
-    SCHEMA_VERSION, ScanMode, Span,
+    AuthMapDocument, Coverage, CoverageClass, Diagnostic, Evidence, Framework, Mutation,
+    ReachabilityLink, RiskLevel, SCHEMA_VERSION, ScanMode, Span,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -33,6 +33,7 @@ pub struct DriftMetadata {
     pub mode: ScanMode,
     pub base: DriftInputMetadata,
     pub head: DriftInputMetadata,
+    pub config: DriftConfigMetadata,
     pub fail_on: Vec<DriftFailCategory>,
 }
 
@@ -41,6 +42,35 @@ pub struct DriftInputMetadata {
     pub label: String,
     pub schema_version: String,
     pub target_roots: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct DriftConfigMetadata {
+    pub source: String,
+    pub path: Option<String>,
+}
+
+impl DriftConfigMetadata {
+    pub fn none() -> Self {
+        Self {
+            source: "none".to_string(),
+            path: None,
+        }
+    }
+
+    pub fn per_ref(path: impl Into<String>) -> Self {
+        Self {
+            source: "per_ref".to_string(),
+            path: Some(path.into()),
+        }
+    }
+
+    pub fn external(path: impl Into<String>) -> Self {
+        Self {
+            source: "external".to_string(),
+            path: Some(path.into()),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
@@ -64,10 +94,16 @@ pub struct DriftChange {
     pub base_route_id: Option<String>,
     pub head_route_id: Option<String>,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub direction: Option<DriftComparison>,
     pub before: Value,
     pub after: Value,
     pub evidence_ids: Vec<String>,
+    pub weak_evidence_ids: Vec<String>,
     pub mutation_ids: Vec<String>,
+    pub link_ids: Vec<String>,
+    pub sensitivity_reasons: Vec<String>,
+    pub reviewer_questions: Vec<String>,
     pub fail_category: Option<DriftFailCategory>,
     pub enforcement_blocking: bool,
 }
@@ -91,7 +127,8 @@ pub enum DriftChangeSeverity {
     Error,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DriftComparison {
     Upgrade,
     Downgrade,
@@ -105,6 +142,26 @@ pub fn analyze_drift(
     fail_on: &[DriftFailCategory],
     base_label: impl Into<String>,
     head_label: impl Into<String>,
+) -> DriftReport {
+    analyze_drift_with_config(
+        base,
+        head,
+        mode,
+        fail_on,
+        base_label,
+        head_label,
+        DriftConfigMetadata::none(),
+    )
+}
+
+pub fn analyze_drift_with_config(
+    base: &AuthMapDocument,
+    head: &AuthMapDocument,
+    mode: ScanMode,
+    fail_on: &[DriftFailCategory],
+    base_label: impl Into<String>,
+    head_label: impl Into<String>,
+    config: DriftConfigMetadata,
 ) -> DriftReport {
     let fail_on = sorted_fail_categories(fail_on);
     let base_index = DriftIndex::new(base);
@@ -156,6 +213,7 @@ pub fn analyze_drift(
             mode,
             base: input_metadata(base, base_label),
             head: input_metadata(head, head_label),
+            config,
             fail_on,
         },
         summary,
@@ -170,6 +228,7 @@ struct DriftIndex<'a> {
     coverage_by_route: BTreeMap<&'a str, &'a Coverage>,
     evidence_by_route: BTreeMap<&'a str, Vec<&'a Evidence>>,
     mutations_by_route: BTreeMap<&'a str, Vec<&'a Mutation>>,
+    links_by_route: BTreeMap<&'a str, Vec<&'a ReachabilityLink>>,
 }
 
 impl<'a> DriftIndex<'a> {
@@ -217,7 +276,12 @@ impl<'a> DriftIndex<'a> {
         }
 
         let mut mutations_by_route = BTreeMap::<&str, Vec<&Mutation>>::new();
+        let mut links_by_route = BTreeMap::<&str, Vec<&ReachabilityLink>>::new();
         for link in &document.links {
+            links_by_route
+                .entry(link.route_id.as_str())
+                .or_default()
+                .push(link);
             if let Some(evidence_id) = &link.evidence_id
                 && let Some(evidence) = evidence_by_id.get(evidence_id.as_str())
             {
@@ -246,12 +310,17 @@ impl<'a> DriftIndex<'a> {
                 .sort_by(|left, right| mutation_signature(left).cmp(&mutation_signature(right)));
             mutations.dedup_by(|left, right| left.id == right.id);
         }
+        for links in links_by_route.values_mut() {
+            links.sort_by(|left, right| left.id.cmp(&right.id));
+            links.dedup_by(|left, right| left.id == right.id);
+        }
 
         Self {
             routes,
             coverage_by_route,
             evidence_by_route,
             mutations_by_route,
+            links_by_route,
         }
     }
 }
@@ -277,10 +346,15 @@ fn compare_route_pair(
             base_route_id: Some(base_route.id.clone()),
             head_route_id: Some(head_route.id.clone()),
             message: format!("Handler changed for {}", route_label(head_route)),
+            direction: None,
             before: json!({ "handler": base_handler }),
             after: json!({ "handler": head_handler }),
             evidence_ids: Vec::new(),
+            weak_evidence_ids: Vec::new(),
             mutation_ids: Vec::new(),
+            link_ids: Vec::new(),
+            sensitivity_reasons: sensitivity_reasons(head_route, head_index),
+            reviewer_questions: reviewer_questions(head_route, head_index),
             fail_category: None,
             enforcement_blocking: false,
         });
@@ -300,10 +374,15 @@ fn compare_route_pair(
                 "Authorization evidence changed for {}",
                 route_label(head_route)
             ),
+            direction: None,
             before: json!({ "evidence": base_evidence }),
             after: json!({ "evidence": head_evidence }),
             evidence_ids: evidence_ids(head_route, head_index),
+            weak_evidence_ids: weak_evidence_ids(head_route, head_index),
             mutation_ids: Vec::new(),
+            link_ids: link_ids(head_route, head_index),
+            sensitivity_reasons: sensitivity_reasons(head_route, head_index),
+            reviewer_questions: reviewer_questions(head_route, head_index),
             fail_category: None,
             enforcement_blocking: false,
         });
@@ -333,16 +412,15 @@ fn compare_route_pair(
                 coverage_class_label(head_coverage.class),
                 risk_label(head_coverage.risk)
             ),
-            before: json!({
-                "coverage": coverage_value(base_coverage),
-                "direction": drift_comparison_label(comparison),
-            }),
-            after: json!({
-                "coverage": coverage_value(head_coverage),
-                "direction": drift_comparison_label(comparison),
-            }),
+            direction: Some(comparison),
+            before: coverage_value(base_coverage),
+            after: coverage_value(head_coverage),
             evidence_ids: evidence_ids(head_route, head_index),
+            weak_evidence_ids: weak_evidence_ids(head_route, head_index),
             mutation_ids: mutation_ids(head_route, head_index),
+            link_ids: link_ids(head_route, head_index),
+            sensitivity_reasons: sensitivity_reasons(head_route, head_index),
+            reviewer_questions: reviewer_questions(head_route, head_index),
             fail_category,
             enforcement_blocking: blocking,
         });
@@ -364,10 +442,15 @@ fn compare_route_pair(
                 "New linked mutation for {}: {mutation}",
                 route_label(head_route)
             ),
+            direction: None,
             before: json!({ "linked_mutation": null }),
             after: json!({ "linked_mutation": mutation }),
             evidence_ids: evidence_ids(head_route, head_index),
+            weak_evidence_ids: weak_evidence_ids(head_route, head_index),
             mutation_ids: mutation_ids(head_route, head_index),
+            link_ids: link_ids(head_route, head_index),
+            sensitivity_reasons: sensitivity_reasons(head_route, head_index),
+            reviewer_questions: reviewer_questions(head_route, head_index),
             fail_category,
             enforcement_blocking: blocking,
         });
@@ -395,10 +478,15 @@ fn added_route_change(
         base_route_id: None,
         head_route_id: Some(route.id.clone()),
         message: format!("Added route {}", route_label(route)),
+        direction: None,
         before: Value::Null,
         after: route_value(route, coverage),
         evidence_ids: evidence_ids(route, index),
+        weak_evidence_ids: weak_evidence_ids(route, index),
         mutation_ids: mutation_ids(route, index),
+        link_ids: link_ids(route, index),
+        sensitivity_reasons: sensitivity_reasons(route, index),
+        reviewer_questions: reviewer_questions(route, index),
         fail_category,
         enforcement_blocking: blocking,
     }
@@ -414,10 +502,15 @@ fn removed_route_change(route: &authmap_core::Route, index: &DriftIndex<'_>) -> 
         base_route_id: Some(route.id.clone()),
         head_route_id: None,
         message: format!("Removed route {}", route_label(route)),
+        direction: None,
         before: route_value(route, coverage),
         after: Value::Null,
         evidence_ids: evidence_ids(route, index),
+        weak_evidence_ids: weak_evidence_ids(route, index),
         mutation_ids: mutation_ids(route, index),
+        link_ids: link_ids(route, index),
+        sensitivity_reasons: sensitivity_reasons(route, index),
+        reviewer_questions: reviewer_questions(route, index),
         fail_category: None,
         enforcement_blocking: false,
     }
@@ -506,14 +599,6 @@ fn compare_coverage(base: &Coverage, head: &Coverage) -> DriftComparison {
     }
 }
 
-fn drift_comparison_label(comparison: DriftComparison) -> &'static str {
-    match comparison {
-        DriftComparison::Upgrade => "upgrade",
-        DriftComparison::Downgrade => "downgrade",
-        DriftComparison::Changed => "changed",
-    }
-}
-
 fn stable_route_key(route: &authmap_core::Route) -> String {
     format!(
         "{} {} {}",
@@ -566,6 +651,30 @@ fn evidence_ids(route: &authmap_core::Route, index: &DriftIndex<'_>) -> Vec<Stri
         .unwrap_or_default()
 }
 
+fn weak_evidence_ids(route: &authmap_core::Route, index: &DriftIndex<'_>) -> Vec<String> {
+    if let Some(coverage) = index.coverage_by_route.get(route.id.as_str()) {
+        let ids = coverage_support_strings(coverage, "weak_evidence_ids");
+        if !ids.is_empty() {
+            return ids;
+        }
+    }
+    index
+        .evidence_by_route
+        .get(route.id.as_str())
+        .map(|items| {
+            sorted_strings(
+                items
+                    .iter()
+                    .filter(|item| {
+                        item.confidence == authmap_core::Confidence::Low
+                            || item.evidence_type == authmap_core::EvidenceType::UnknownDynamicCheck
+                    })
+                    .map(|item| item.id.clone()),
+            )
+        })
+        .unwrap_or_default()
+}
+
 fn mutation_signatures(route: &authmap_core::Route, index: &DriftIndex<'_>) -> BTreeSet<String> {
     index
         .mutations_by_route
@@ -582,6 +691,55 @@ fn mutation_ids(route: &authmap_core::Route, index: &DriftIndex<'_>) -> Vec<Stri
         .get(route.id.as_str())
         .map(|items| sorted_strings(items.iter().map(|item| item.id.clone())))
         .unwrap_or_default()
+}
+
+fn link_ids(route: &authmap_core::Route, index: &DriftIndex<'_>) -> Vec<String> {
+    if let Some(coverage) = index.coverage_by_route.get(route.id.as_str()) {
+        let ids = coverage_support_strings(coverage, "link_ids");
+        if !ids.is_empty() {
+            return ids;
+        }
+    }
+    index
+        .links_by_route
+        .get(route.id.as_str())
+        .map(|items| sorted_strings(items.iter().map(|item| item.id.clone())))
+        .unwrap_or_default()
+}
+
+fn sensitivity_reasons(route: &authmap_core::Route, index: &DriftIndex<'_>) -> Vec<String> {
+    index
+        .coverage_by_route
+        .get(route.id.as_str())
+        .map(|coverage| coverage_support_strings(coverage, "sensitivity_reasons"))
+        .unwrap_or_default()
+}
+
+fn reviewer_questions(route: &authmap_core::Route, index: &DriftIndex<'_>) -> Vec<String> {
+    index
+        .coverage_by_route
+        .get(route.id.as_str())
+        .map(|coverage| sorted_strings(coverage.reviewer_questions.iter().cloned()))
+        .unwrap_or_default()
+}
+
+fn coverage_support_strings(coverage: &Coverage, key: &str) -> Vec<String> {
+    let mut values = coverage
+        .extensions
+        .get("authmap.coverage")
+        .and_then(|value| value.get(key))
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    values.sort();
+    values.dedup();
+    values
 }
 
 fn sorted_strings(items: impl Iterator<Item = String>) -> Vec<String> {

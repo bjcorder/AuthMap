@@ -2,9 +2,8 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command as ProcessCommand, ExitCode, Stdio};
-use std::time::{SystemTime, UNIX_EPOCH};
 
-use authmap_analysis::{analyze_drift, run_scan, suggest_rules};
+use authmap_analysis::{DriftConfigMetadata, analyze_drift_with_config, run_scan, suggest_rules};
 use authmap_config::{DriftFailCategory, ScanConfig, ScanPlan, load_config};
 use authmap_core::{AuthMapDocument, SCHEMA_VERSION, ScanMode, diagnostic_codes};
 use authmap_report::{
@@ -399,49 +398,80 @@ fn run_diff(args: DiffArgs) -> Result<ExitCode, CliError> {
         ));
     }
 
-    let (config_path, mut config) = load_config(args.config.clone()).map_err(CliError::Config)?;
-    if let Some(mode) = args.mode {
-        config.mode = mode.into();
-    }
-    let fail_on = if let Some(fail_on) = args.fail_on.as_deref() {
-        parse_fail_on(fail_on)?
-    } else {
-        config.drift.fail_on.clone()
-    };
-
-    let (base_document, head_document, base_label, head_label) =
+    let (base_document, head_document, base_label, head_label, report_mode, fail_on, config_meta) =
         if let (Some(base), Some(head)) = (&args.base, &args.head) {
+            let (_config_path, mut config) =
+                load_config(args.config.clone()).map_err(CliError::Config)?;
+            if let Some(mode) = args.mode {
+                config.mode = mode.into();
+            }
+            let fail_on = if let Some(fail_on) = args.fail_on.as_deref() {
+                parse_fail_on(fail_on)?
+            } else {
+                config.drift.fail_on.clone()
+            };
+            let config_meta = args
+                .config
+                .as_ref()
+                .map(|path| DriftConfigMetadata::external(path.display().to_string()))
+                .unwrap_or_else(DriftConfigMetadata::none);
             (
                 read_authmap_document(base)?,
                 read_authmap_document(head)?,
                 base.display().to_string(),
                 head.display().to_string(),
+                config.mode,
+                fail_on,
+                config_meta,
             )
         } else if let Some(range) = &args.range {
             validate_git_range_target(&args.target)?;
             let (base_ref, head_ref) = parse_git_range(range)?;
-            let temp = TempDir::new("authmap-diff")?;
+            let temp = tempfile::Builder::new()
+                .prefix("authmap-diff-")
+                .tempdir()
+                .map_err(|source| CliError::TempDir {
+                    path: std::env::temp_dir(),
+                    source,
+                })?;
             let base_dir = temp.path().join("base");
             let head_dir = temp.path().join("head");
             extract_git_ref(&base_ref, &base_dir)?;
             extract_git_ref(&head_ref, &head_dir)?;
-            let mut base_config = config.clone();
-            let mut head_config = config.clone();
-            base_config.mode = config.mode;
-            head_config.mode = config.mode;
+            let (base_config_path, mut base_config, head_config_path, mut head_config, config_meta) =
+                load_git_diff_configs(args.config.clone(), &base_dir, &head_dir)?;
+            if let Some(mode) = args.mode {
+                let mode = ScanMode::from(mode);
+                base_config.mode = mode;
+                head_config.mode = mode;
+            }
+            let report_mode = head_config.mode;
+            let fail_on = if let Some(fail_on) = args.fail_on.as_deref() {
+                parse_fail_on(fail_on)?
+            } else {
+                head_config.drift.fail_on.clone()
+            };
             let base_document = run_scan(&ScanPlan::new(
                 vec![base_dir.join(&args.target)],
-                config_path.clone(),
+                base_config_path,
                 base_config,
             ))
             .map_err(CliError::Scan)?;
             let head_document = run_scan(&ScanPlan::new(
                 vec![head_dir.join(&args.target)],
-                config_path,
+                head_config_path,
                 head_config,
             ))
             .map_err(CliError::Scan)?;
-            (base_document, head_document, base_ref, head_ref)
+            (
+                base_document,
+                head_document,
+                base_ref,
+                head_ref,
+                report_mode,
+                fail_on,
+                config_meta,
+            )
         } else {
             return Err(CliError::InvalidDiffInput(
                 "pass --base and --head map files, or a BASE...HEAD range".to_string(),
@@ -451,13 +481,14 @@ fn run_diff(args: DiffArgs) -> Result<ExitCode, CliError> {
     ensure_supported_document(&base_document, &base_label)?;
     ensure_supported_document(&head_document, &head_label)?;
 
-    let report = analyze_drift(
+    let report = analyze_drift_with_config(
         &base_document,
         &head_document,
-        config.mode,
+        report_mode,
         &fail_on,
         base_label,
         head_label,
+        config_meta,
     );
     let rendered = match args.format {
         DiffOutputFormat::Markdown => render_drift_markdown(&report),
@@ -488,6 +519,68 @@ fn validate_git_range_target(target: &Path) -> Result<(), CliError> {
         ));
     }
     Ok(())
+}
+
+fn validate_archive_relative_path(path: &Path, label: &str) -> Result<(), CliError> {
+    if path.is_absolute()
+        || path
+            .components()
+            .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)))
+    {
+        return Err(CliError::InvalidDiffInput(format!(
+            "git range {label} must be relative to the archived refs"
+        )));
+    }
+    Ok(())
+}
+
+fn load_git_diff_configs(
+    config: Option<PathBuf>,
+    base_dir: &Path,
+    head_dir: &Path,
+) -> Result<
+    (
+        Option<PathBuf>,
+        ScanConfig,
+        Option<PathBuf>,
+        ScanConfig,
+        DriftConfigMetadata,
+    ),
+    CliError,
+> {
+    let Some(config) = config else {
+        return Ok((
+            None,
+            ScanConfig::default(),
+            None,
+            ScanConfig::default(),
+            DriftConfigMetadata::none(),
+        ));
+    };
+
+    if config.is_absolute() {
+        let (config_path, loaded) = load_config(Some(config.clone())).map_err(CliError::Config)?;
+        return Ok((
+            config_path.clone(),
+            loaded.clone(),
+            config_path,
+            loaded,
+            DriftConfigMetadata::external(config.display().to_string()),
+        ));
+    }
+
+    validate_archive_relative_path(&config, "config")?;
+    let (base_config_path, base_config) =
+        load_config(Some(base_dir.join(&config))).map_err(CliError::Config)?;
+    let (head_config_path, head_config) =
+        load_config(Some(head_dir.join(&config))).map_err(CliError::Config)?;
+    Ok((
+        base_config_path,
+        base_config,
+        head_config_path,
+        head_config,
+        DriftConfigMetadata::per_ref(config.display().to_string()),
+    ))
 }
 
 fn parse_fail_on(value: &str) -> Result<Vec<DriftFailCategory>, CliError> {
@@ -589,34 +682,6 @@ fn extract_git_ref(ref_name: &str, destination: &Path) -> Result<(), CliError> {
         )));
     }
     Ok(())
-}
-
-struct TempDir {
-    path: PathBuf,
-}
-
-impl TempDir {
-    fn new(prefix: &str) -> Result<Self, CliError> {
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |duration| duration.as_nanos());
-        let path = std::env::temp_dir().join(format!("{prefix}-{}-{nonce}", std::process::id()));
-        fs::create_dir_all(&path).map_err(|source| CliError::TempDir {
-            path: path.clone(),
-            source,
-        })?;
-        Ok(Self { path })
-    }
-
-    fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.path);
-    }
 }
 
 fn run_rules_suggest(

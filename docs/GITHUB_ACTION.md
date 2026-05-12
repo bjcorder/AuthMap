@@ -26,14 +26,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: bjcorder/AuthMap@v0
+      - uses: Ozark-Security-Labs/AuthMap@v0
         with:
           mode: advisory
           output: markdown,json
 ```
 
 By default, generated reports are written to `.authmap` and uploaded as the
-`authmap-results` artifact.
+`authmap-results` artifact. The artifact upload is limited to the report files
+generated during this action run, not the entire output directory.
 
 ## Baseline Drift Review
 
@@ -55,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: bjcorder/AuthMap@v0
+      - uses: Ozark-Security-Labs/AuthMap@v0
         with:
           mode: enforce
           output: markdown,json
@@ -83,7 +84,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: bjcorder/AuthMap@v0
+      - uses: Ozark-Security-Labs/AuthMap@v0
         with:
           mode: advisory
           output: markdown,json,sarif
@@ -103,9 +104,9 @@ the generated SARIF file as an artifact instead.
 | `output` | `markdown,json` | Comma-separated report formats. Supported values are `markdown`, `json`, and `sarif`. |
 | `target` | `.` | Target path to scan, relative to the checked-out repository workspace. |
 | `config` | empty | Optional `authmap.yml` path, relative to the checked-out repository workspace. |
-| `baseline` | empty | Optional AuthMap JSON baseline path. When set, the action generates a current JSON map, runs `authmap diff --base ... --head ...`, and appends drift Markdown to the job summary. |
+| `baseline` | empty | Optional AuthMap JSON baseline path, relative to the checked-out repository workspace. When set, the action generates a current JSON map, runs `authmap diff --base ... --head ...`, and appends drift Markdown to the job summary. |
 | `fail-on` | empty | Optional comma-separated drift categories that override `drift.fail_on` for baseline diffs. |
-| `output-directory` | `.authmap` | Directory where generated reports are written. |
+| `output-directory` | `.authmap` | Workspace-relative directory where generated reports are written. The workspace root itself is rejected. |
 | `upload-artifact` | `true` | Upload generated reports with `actions/upload-artifact`. |
 | `artifact-name` | `authmap-results` | Name for the uploaded report artifact. |
 | `upload-sarif` | `false` | Upload SARIF to GitHub code scanning. Requires `security-events: write`. |
@@ -133,7 +134,10 @@ baseline, enforce mode also returns `20` when drift matches the effective
 `fail-on` policy. Other CLI errors, such as invalid inputs, unreadable targets,
 or missing baselines, fail with the CLI exit code.
 
-Baseline paths are resolved under `$GITHUB_WORKSPACE` unless absolute. The
-baseline must be an existing AuthMap JSON document; create one with
+Path-like action inputs (`target`, `config`, `baseline`, and
+`output-directory`) are workspace-relative only. Absolute paths, parent
+directory components, empty path components, control characters, and
+`output-directory: .` are rejected before AuthMap runs. The baseline must be an
+existing AuthMap JSON document; create one with
 `authmap baseline create . --output authmap.baseline.json` and commit or
 restore it before the action runs.

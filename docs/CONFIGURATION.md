@@ -72,7 +72,9 @@ authmap diff main...HEAD --target . --format json --output authmap.diff.json
 
 Diff reports use their own report contract, not the canonical AuthMap map
 schema. JSON output has `report_type: "authmap.diff"` with deterministic
-summary and change IDs; Markdown output is intended for reviewer summaries.
+summary and change IDs; Markdown output is intended for reviewer summaries. Git
+range diffs scan committed refs via `git archive` and require both `git` and
+`tar` on `PATH`.
 
 `drift.fail_on` controls which drift categories return exit code `20` in
 enforce mode. Advisory mode never fails because of drift. The default enforce
