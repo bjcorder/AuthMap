@@ -83,7 +83,7 @@ runs:
         INPUT_OUTPUT_DIRECTORY: ${{ inputs.output-directory }}
         INPUT_UPLOAD_SARIF: ${{ inputs.upload-sarif }}
         AUTHMAP_DEFER_EXIT: "true"
-      run: '"$GITHUB_ACTION_PATH/.github/actions/authmap/run.sh"'
+      run: bash "$GITHUB_ACTION_PATH/.github/actions/authmap/run.sh"
 
     - name: Upload AuthMap reports
       if: ${{ always() && inputs.upload-artifact == 'true' && steps.run-authmap.outputs.artifact-paths != '' && (steps.run-authmap.outputs.exit-code == '0' || steps.run-authmap.outputs.exit-code == '20') }}

@@ -42,6 +42,11 @@ validate_relative_path() {
   normalized="${value//\\//}"
 
   [[ -n "$normalized" ]] || die "$name must not be empty"
+  case "$value" in
+    *$'\n'*|*$'\r'*|*$'\t'*)
+      die "$name must not contain control characters"
+      ;;
+  esac
   if printf '%s' "$value" | LC_ALL=C grep -q '[[:cntrl:]]'; then
     die "$name must not contain control characters"
   fi
@@ -97,11 +102,13 @@ add_artifact_path() {
 add_format() {
   local format="$1"
   local existing
-  for existing in "${formats[@]}"; do
-    if [[ "$existing" == "$format" ]]; then
-      return
-    fi
-  done
+  if [[ "${#formats[@]}" -gt 0 ]]; then
+    for existing in "${formats[@]}"; do
+      if [[ "$existing" == "$format" ]]; then
+        return
+      fi
+    done
+  fi
   formats+=("$format")
 }
 
