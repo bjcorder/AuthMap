@@ -22,6 +22,8 @@ The JSON schema is strict: misspelled core fields are rejected.
 
 Diagnostic categories, severity semantics, and exit-code behavior are documented
 in [`docs/DIAGNOSTICS.md`](DIAGNOSTICS.md).
+Project configuration is documented in
+[`docs/CONFIGURATION.md`](CONFIGURATION.md).
 
 ## Locations And Relationships
 
@@ -94,6 +96,35 @@ authorization:
 Rule matching supports exact symbol names and case-insensitive substring
 matches. Rules emit canonical evidence entries and keep the core output schema
 unchanged.
+
+## Project Sensitivity Rules
+
+Projects can label sensitive route families and linked mutation resources in
+`authmap.yml` without changing the JSON schema:
+
+```yaml
+sensitivity:
+  routes:
+    - name: account routes
+      labels: [account_data]
+      match:
+        contains: [/accounts]
+      methods: [GET, PATCH, DELETE]
+      reviewer_questions:
+        - Should account routes require ownership or permission checks?
+  resources:
+    - name: invoice mutations
+      labels: [financial]
+      match:
+        exact: [Invoice]
+      reviewer_questions:
+        - Should invoice writes require finance approval?
+```
+
+Route labels are emitted as `config_route:<label>` and resource labels as
+`config_resource:<label>` in
+`coverage.extensions["authmap.coverage"].sensitivity_reasons`. These labels
+prioritize review and reviewer questions; they do not assert vulnerabilities.
 
 ## Extensions
 

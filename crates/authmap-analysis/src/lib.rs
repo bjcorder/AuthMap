@@ -2,7 +2,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 
 use authmap_adapters::{AdapterContext, AdapterRegistry};
-use authmap_config::{AuthorizationRule, ScanConfig, ScanPlan};
+use authmap_config::{
+    AuthorizationRule, AuthorizationRuleMatch, ResourceSensitivityRule, RouteSensitivityRule,
+    ScanConfig, ScanPlan,
+};
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, Evidence, EvidenceType,
     Framework, Mutation, ReachabilityLink, RiskLevel, ScanMetadata, Span, SymbolRef,
@@ -127,6 +130,7 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
         &document.evidence,
         &document.mutations,
         &document.links,
+        &plan.config,
     );
     document.diagnostics.sort_by(|left, right| {
         left.category
@@ -749,11 +753,12 @@ fn classify_coverage(
     evidence: &[Evidence],
     mutations: &[Mutation],
     links: &[ReachabilityLink],
+    config: &ScanConfig,
 ) -> Vec<Coverage> {
-    let index = CoverageIndex::new(evidence, mutations, links);
+    let index = CoverageIndex::new(evidence, mutations, links, config);
     routes
         .iter()
-        .map(|route| classify_route(route, &index.route_facts(route.id.as_str())))
+        .map(|route| classify_route(route, &index.route_facts(route)))
         .collect()
 }
 
@@ -762,6 +767,8 @@ struct CoverageRouteFacts<'a> {
     evidence: Vec<&'a Evidence>,
     linked_mutations: Vec<&'a Mutation>,
     links: Vec<&'a ReachabilityLink>,
+    configured_sensitivity_reasons: Vec<String>,
+    configured_reviewer_questions: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -769,6 +776,7 @@ struct CoverageIndex<'a> {
     evidence_by_route: BTreeMap<&'a str, Vec<&'a Evidence>>,
     mutations_by_id: BTreeMap<&'a str, &'a Mutation>,
     links_by_route: BTreeMap<&'a str, Vec<&'a ReachabilityLink>>,
+    config: &'a ScanConfig,
 }
 
 impl<'a> CoverageIndex<'a> {
@@ -776,6 +784,7 @@ impl<'a> CoverageIndex<'a> {
         evidence: &'a [Evidence],
         mutations: &'a [Mutation],
         links: &'a [ReachabilityLink],
+        config: &'a ScanConfig,
     ) -> Self {
         let mut evidence_by_route = BTreeMap::<&str, Vec<&Evidence>>::new();
         for item in evidence {
@@ -820,18 +829,19 @@ impl<'a> CoverageIndex<'a> {
             evidence_by_route,
             mutations_by_id,
             links_by_route,
+            config,
         }
     }
 
-    fn route_facts(&self, route_id: &str) -> CoverageRouteFacts<'a> {
+    fn route_facts(&self, route: &authmap_core::Route) -> CoverageRouteFacts<'a> {
         let evidence = self
             .evidence_by_route
-            .get(route_id)
+            .get(route.id.as_str())
             .cloned()
             .unwrap_or_default();
         let links = self
             .links_by_route
-            .get(route_id)
+            .get(route.id.as_str())
             .cloned()
             .unwrap_or_default();
         let mut linked_mutations = links
@@ -844,11 +854,15 @@ impl<'a> CoverageIndex<'a> {
             .collect::<Vec<_>>();
         linked_mutations.sort_by(|left, right| left.id.cmp(&right.id));
         linked_mutations.dedup_by(|left, right| left.id == right.id);
+        let (configured_sensitivity_reasons, configured_reviewer_questions) =
+            configured_sensitivity(route, &linked_mutations, self.config);
 
         CoverageRouteFacts {
             evidence,
             linked_mutations,
             links,
+            configured_sensitivity_reasons,
+            configured_reviewer_questions,
         }
     }
 }
@@ -869,7 +883,11 @@ fn classify_route(route: &authmap_core::Route, facts: &CoverageRouteFacts<'_>) -
                 || item.evidence_type == EvidenceType::UnknownDynamicCheck
         })
         .collect::<Vec<_>>();
-    let sensitivity = sensitivity_reasons(route, !facts.linked_mutations.is_empty());
+    let sensitivity = sensitivity_reasons(
+        route,
+        !facts.linked_mutations.is_empty(),
+        &facts.configured_sensitivity_reasons,
+    );
     let sensitive = !sensitivity.is_empty();
     let has_linked_mutations = !facts.linked_mutations.is_empty();
 
@@ -883,7 +901,13 @@ fn classify_route(route: &authmap_core::Route, facts: &CoverageRouteFacts<'_>) -
         sensitive,
         has_linked_mutations,
     );
-    let mut reviewer_questions = reviewer_questions(route, class, sensitive, has_linked_mutations);
+    let mut reviewer_questions = reviewer_questions(
+        route,
+        class,
+        sensitive,
+        has_linked_mutations,
+        &facts.configured_reviewer_questions,
+    );
     if risk == RiskLevel::High && reviewer_questions.is_empty() {
         reviewer_questions
             .push("Should this route have server-side authorization evidence?".to_string());
@@ -972,7 +996,11 @@ fn has_type(evidence: &[&Evidence], evidence_type: EvidenceType) -> bool {
         .any(|item| item.evidence_type == evidence_type)
 }
 
-fn sensitivity_reasons(route: &authmap_core::Route, has_linked_mutations: bool) -> Vec<String> {
+fn sensitivity_reasons(
+    route: &authmap_core::Route,
+    has_linked_mutations: bool,
+    configured_reasons: &[String],
+) -> Vec<String> {
     let mut reasons = Vec::new();
     let lower_path = route.path.to_ascii_lowercase();
     if unsafe_method(route) {
@@ -999,9 +1027,77 @@ fn sensitivity_reasons(route: &authmap_core::Route, has_linked_mutations: bool) 
     if has_linked_mutations {
         reasons.push("linked_mutation".to_string());
     }
+    reasons.extend(configured_reasons.iter().cloned());
     reasons.sort();
     reasons.dedup();
     reasons
+}
+
+fn configured_sensitivity(
+    route: &authmap_core::Route,
+    linked_mutations: &[&Mutation],
+    config: &ScanConfig,
+) -> (Vec<String>, Vec<String>) {
+    let mut reasons = Vec::new();
+    let mut reviewer_questions = Vec::new();
+
+    for rule in &config.sensitivity.routes {
+        if route_sensitivity_matches(rule, route) {
+            reasons.extend(
+                rule.labels
+                    .iter()
+                    .map(|label| format!("config_route:{label}")),
+            );
+            reviewer_questions.extend(rule.reviewer_questions.iter().cloned());
+        }
+    }
+
+    for mutation in linked_mutations {
+        for rule in &config.sensitivity.resources {
+            if resource_sensitivity_matches(rule, mutation) {
+                reasons.extend(
+                    rule.labels
+                        .iter()
+                        .map(|label| format!("config_resource:{label}")),
+                );
+                reviewer_questions.extend(rule.reviewer_questions.iter().cloned());
+            }
+        }
+    }
+
+    reasons.sort();
+    reasons.dedup();
+    reviewer_questions.sort();
+    reviewer_questions.dedup();
+    (reasons, reviewer_questions)
+}
+
+fn route_sensitivity_matches(rule: &RouteSensitivityRule, route: &authmap_core::Route) -> bool {
+    if !rule.methods.is_empty()
+        && !rule
+            .methods
+            .iter()
+            .any(|method| method.eq_ignore_ascii_case(&route.method))
+    {
+        return false;
+    }
+    matcher_matches(&rule.matcher, &route.path)
+}
+
+fn resource_sensitivity_matches(rule: &ResourceSensitivityRule, mutation: &Mutation) -> bool {
+    mutation
+        .resource
+        .as_deref()
+        .is_some_and(|resource| matcher_matches(&rule.matcher, resource))
+}
+
+fn matcher_matches(matcher: &AuthorizationRuleMatch, value: &str) -> bool {
+    let lower_value = value.to_ascii_lowercase();
+    matcher.exact.iter().any(|item| item == value)
+        || matcher
+            .contains
+            .iter()
+            .any(|item| lower_value.contains(&item.to_ascii_lowercase()))
 }
 
 fn unsafe_method(route: &authmap_core::Route) -> bool {
@@ -1016,6 +1112,7 @@ fn reviewer_questions(
     class: CoverageClass,
     sensitive: bool,
     has_linked_mutations: bool,
+    configured_questions: &[String],
 ) -> Vec<String> {
     let mut questions = Vec::new();
     let lower_path = route.path.to_ascii_lowercase();
@@ -1048,6 +1145,7 @@ fn reviewer_questions(
     if class == CoverageClass::UnknownOrDynamic {
         questions.push("Can the dynamic authorization path be confirmed?".to_string());
     }
+    questions.extend(configured_questions.iter().cloned());
     questions.sort();
     questions.dedup();
     questions
@@ -1282,7 +1380,7 @@ mod tests {
             ),
         ];
 
-        let coverage = classify_coverage(&routes, &evidence, &[], &[]);
+        let coverage = classify_coverage(&routes, &evidence, &[], &[], &ScanConfig::default());
 
         assert_coverage(
             &coverage,
@@ -1374,7 +1472,7 @@ mod tests {
             ),
         ];
 
-        let coverage = classify_coverage(&routes, &evidence, &[], &[]);
+        let coverage = classify_coverage(&routes, &evidence, &[], &[], &ScanConfig::default());
 
         assert_coverage(
             &coverage,
@@ -1451,7 +1549,13 @@ mod tests {
             },
         ];
 
-        let coverage = classify_coverage(&routes, &evidence, &mutations, &links);
+        let coverage = classify_coverage(
+            &routes,
+            &evidence,
+            &mutations,
+            &links,
+            &ScanConfig::default(),
+        );
         let item = coverage
             .iter()
             .find(|coverage| coverage.route_id == "route_mutation")
@@ -1491,6 +1595,164 @@ mod tests {
             serde_json::json!(["mutation_0001"])
         );
         assert_eq!(support["link_ids"], serde_json::json!(["link_0002"]));
+    }
+
+    #[test]
+    fn configured_route_sensitivity_affects_risk_and_questions() {
+        let routes = vec![route("route_reports", "GET", "/internal/reports")];
+        let config: ScanConfig = serde_yaml::from_str(
+            r#"
+sensitivity:
+  routes:
+    - name: internal reports
+      labels: [business_critical]
+      match:
+        contains: [/internal/reports]
+      methods: [GET]
+      reviewer_questions:
+        - Should reports require a permission guard?
+"#,
+        )
+        .expect("config should parse");
+
+        let coverage = classify_coverage(&routes, &[], &[], &[], &config);
+        let item = coverage
+            .iter()
+            .find(|coverage| coverage.route_id == "route_reports")
+            .expect("route should be classified");
+
+        assert_eq!(item.class, CoverageClass::Unauthenticated);
+        assert_eq!(item.risk, RiskLevel::Medium);
+        assert!(
+            item.reviewer_questions
+                .iter()
+                .any(|question| { question == "Should reports require a permission guard?" })
+        );
+        let support = item
+            .extensions
+            .get("authmap.coverage")
+            .expect("coverage support extension should exist");
+        assert_eq!(
+            support["sensitivity_reasons"],
+            serde_json::json!(["config_route:business_critical"])
+        );
+    }
+
+    #[test]
+    fn configured_resource_sensitivity_uses_existing_mutation_links() {
+        let routes = vec![route("route_invoice_job", "GET", "/jobs/invoice-sync")];
+        let mutations = vec![Mutation {
+            id: "mutation_0001".to_string(),
+            operation: MutationOperation::Update,
+            library: Some("sqlalchemy".to_string()),
+            resource: Some("Invoice".to_string()),
+            span: None,
+            confidence: Confidence::High,
+            notes: Vec::new(),
+            extensions: authmap_core::ExtensionMap::new(),
+        }];
+        let links = vec![ReachabilityLink {
+            id: "link_0001".to_string(),
+            route_id: "route_invoice_job".to_string(),
+            mutation_id: Some("mutation_0001".to_string()),
+            evidence_id: None,
+            confidence: Confidence::Medium,
+            notes: Vec::new(),
+            extensions: authmap_core::ExtensionMap::new(),
+        }];
+        let config: ScanConfig = serde_yaml::from_str(
+            r#"
+sensitivity:
+  resources:
+    - name: invoices
+      labels: [financial]
+      match:
+        exact: [Invoice]
+      reviewer_questions:
+        - Should invoice writes require finance approval?
+"#,
+        )
+        .expect("config should parse");
+
+        let coverage = classify_coverage(&routes, &[], &mutations, &links, &config);
+        let item = coverage
+            .iter()
+            .find(|coverage| coverage.route_id == "route_invoice_job")
+            .expect("route should be classified");
+
+        assert_eq!(item.class, CoverageClass::Unauthenticated);
+        assert_eq!(item.risk, RiskLevel::High);
+        assert_eq!(
+            item.reviewer_questions,
+            vec![
+                "Should invoice writes require finance approval?".to_string(),
+                "Should linked data mutations have resource-specific authorization evidence?"
+                    .to_string(),
+            ]
+        );
+        let support = item
+            .extensions
+            .get("authmap.coverage")
+            .expect("coverage support extension should exist");
+        assert_eq!(
+            support["sensitivity_reasons"],
+            serde_json::json!(["config_resource:financial", "linked_mutation"])
+        );
+        assert_eq!(
+            support["mutation_ids"],
+            serde_json::json!(["mutation_0001"])
+        );
+        assert_eq!(support["link_ids"], serde_json::json!(["link_0001"]));
+    }
+
+    #[test]
+    fn configured_reviewer_questions_are_deterministic_and_deduplicated() {
+        let routes = vec![route("route_sensitive", "GET", "/admin/reports")];
+        let config: ScanConfig = serde_yaml::from_str(
+            r#"
+sensitivity:
+  routes:
+    - name: admin reports
+      labels: [admin_report]
+      match:
+        contains: [/admin]
+      reviewer_questions:
+        - Should this route require report-admin permission?
+    - name: report paths
+      labels: [admin_report]
+      match:
+        contains: [reports]
+      reviewer_questions:
+        - Should this route require report-admin permission?
+"#,
+        )
+        .expect("config should parse");
+
+        let first = classify_coverage(&routes, &[], &[], &[], &config);
+        let second = classify_coverage(&routes, &[], &[], &[], &config);
+
+        assert_eq!(first, second);
+        let item = first
+            .iter()
+            .find(|coverage| coverage.route_id == "route_sensitive")
+            .expect("route should be classified");
+        assert_eq!(
+            item.reviewer_questions
+                .iter()
+                .filter(|question| {
+                    question.as_str() == "Should this route require report-admin permission?"
+                })
+                .count(),
+            1
+        );
+        let support = item
+            .extensions
+            .get("authmap.coverage")
+            .expect("coverage support extension should exist");
+        assert_eq!(
+            support["sensitivity_reasons"],
+            serde_json::json!(["admin_path", "config_route:admin_report"])
+        );
     }
 
     #[test]

@@ -51,6 +51,8 @@ The canonical JSON contract is documented in [docs/SCHEMA.md](docs/SCHEMA.md)
 and defined by [schemas/authmap.schema.json](schemas/authmap.schema.json).
 Diagnostic categories, stable codes, and CI exit behavior are documented in
 [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md).
+Project configuration, custom authorization rules, and sensitivity labels are
+documented in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 ## Example report shape
 

@@ -619,6 +619,7 @@ mod tests {
                 exclude: Vec::new(),
                 limits: ScanLimits::default(),
                 authorization: authmap_config::AuthorizationConfig::default(),
+                sensitivity: authmap_config::SensitivityConfig::default(),
             },
         )
     }

@@ -1,6 +1,7 @@
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
@@ -39,6 +40,25 @@ fn authmap(args: &[&str]) -> Output {
         .args(args)
         .output()
         .expect("authmap binary should run")
+}
+
+fn authmap_with_stdin(args: &[&str], stdin: &str) -> Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_authmap"))
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("authmap binary should run");
+    child
+        .stdin
+        .as_mut()
+        .expect("stdin should be available")
+        .write_all(stdin.as_bytes())
+        .expect("stdin should be written");
+    child
+        .wait_with_output()
+        .expect("authmap binary should finish")
 }
 
 fn write_file(path: &Path, contents: &str) {
@@ -99,6 +119,102 @@ fn scan_help_works() {
     assert!(stdout.contains("--output"));
     assert!(stdout.contains("--config"));
     assert!(stdout.contains("--mode"));
+}
+
+#[test]
+fn init_yes_creates_valid_starter_config() {
+    let temp = TestDir::new("init-yes");
+    let config = temp.path().join("authmap.yml");
+
+    let output = authmap(&[
+        "init",
+        "--yes",
+        "--output",
+        config.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 0);
+    let (_, loaded) =
+        authmap_config::load_config(Some(config.clone())).expect("starter config should load");
+    assert_eq!(loaded.mode, authmap_core::ScanMode::Advisory);
+    let text = fs::read_to_string(config).expect("starter config should exist");
+    assert!(text.contains("authorization:"));
+    assert!(text.contains("sensitivity:"));
+    assert!(text.contains("Starter examples:"));
+}
+
+#[test]
+fn init_refuses_existing_config_without_force() {
+    let temp = TestDir::new("init-no-force");
+    let config = temp.path().join("authmap.yml");
+    write_file(&config, "mode: enforce\n");
+
+    let output = authmap(&[
+        "init",
+        "--yes",
+        "--output",
+        config.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 15);
+    assert_eq!(
+        fs::read_to_string(config).expect("config should exist"),
+        "mode: enforce\n"
+    );
+}
+
+#[test]
+fn init_force_overwrites_existing_config() {
+    let temp = TestDir::new("init-force");
+    let config = temp.path().join("authmap.yml");
+    write_file(&config, "mode: enforce\n");
+
+    let output = authmap(&[
+        "init",
+        "--yes",
+        "--force",
+        "--output",
+        config.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 0);
+    let text = fs::read_to_string(config).expect("config should exist");
+    assert!(text.contains("mode: advisory"));
+    assert!(text.contains("Starter examples:"));
+}
+
+#[test]
+fn init_interactive_overwrite_confirmation_handles_no_and_yes() {
+    let temp = TestDir::new("init-interactive");
+    let config = temp.path().join("authmap.yml");
+    write_file(&config, "mode: enforce\n");
+
+    let output = authmap_with_stdin(
+        &[
+            "init",
+            "--output",
+            config.to_str().expect("path should be UTF-8"),
+        ],
+        "n\n",
+    );
+    assert_exit(&output, 0);
+    assert_eq!(
+        fs::read_to_string(&config).expect("config should exist"),
+        "mode: enforce\n"
+    );
+
+    let output = authmap_with_stdin(
+        &[
+            "init",
+            "--output",
+            config.to_str().expect("path should be UTF-8"),
+        ],
+        "y\nn\n",
+    );
+    assert_exit(&output, 0);
+    let text = fs::read_to_string(config).expect("config should exist");
+    assert!(text.contains("mode: advisory"));
+    assert!(!text.contains("Starter examples:"));
 }
 
 #[test]
@@ -424,6 +540,77 @@ authorization:
             .iter()
             .any(|evidence| evidence["evidence_type"] == "permission_check"
                 && evidence["mechanism"] == "billing_plan_guard")
+    );
+}
+
+#[test]
+fn config_sensitivity_rules_are_loaded_by_scan() {
+    let temp = TestDir::new("sensitivity-config");
+    let project = temp.path().join("project");
+    let config = temp.path().join("authmap.yml");
+    let output_path = temp.path().join("authmap.json");
+    write_file(
+        &project.join("app.js"),
+        r#"
+const express = require("express");
+const app = express();
+
+app.get("/reports", function listReports(req, res) {
+  res.json([]);
+});
+
+module.exports = app;
+"#,
+    );
+    write_file(
+        &config,
+        r#"
+sensitivity:
+  routes:
+    - name: reports
+      labels: [business_critical]
+      match:
+        exact: [/reports]
+      methods: [GET]
+      reviewer_questions:
+        - Should reports require a permission guard?
+"#,
+    );
+
+    let output = authmap(&[
+        "scan",
+        project.to_str().expect("path should be UTF-8"),
+        "--config",
+        config.to_str().expect("path should be UTF-8"),
+        "--output",
+        output_path.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 0);
+    let document: Value =
+        serde_json::from_str(&fs::read_to_string(output_path).expect("output should exist"))
+            .expect("output should be valid JSON");
+    assert_valid_authmap_document(&document);
+    let coverage = document["coverage"]
+        .as_array()
+        .expect("coverage should be an array")
+        .iter()
+        .find(|coverage| coverage["route_id"] == "route_0001")
+        .expect("route should have coverage");
+    assert_eq!(coverage["risk"], "medium");
+    assert!(
+        coverage["reviewer_questions"]
+            .as_array()
+            .expect("reviewer questions should be an array")
+            .iter()
+            .any(|question| question == "Should reports require a permission guard?")
+    );
+    assert!(
+        coverage["extensions"]["authmap.coverage"]["sensitivity_reasons"]
+            .as_array()
+            .expect("sensitivity reasons should be an array")
+            .iter()
+            .any(|reason| reason == "config_route:business_critical")
     );
 }
 

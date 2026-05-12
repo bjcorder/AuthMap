@@ -1,4 +1,6 @@
-use std::path::PathBuf;
+use std::fs;
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use authmap_analysis::run_scan;
@@ -21,7 +23,14 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    Init,
+    Init {
+        #[arg(long, default_value = "authmap.yml")]
+        output: PathBuf,
+        #[arg(long)]
+        yes: bool,
+        #[arg(long)]
+        force: bool,
+    },
     Scan {
         #[arg(default_value = ".")]
         target: PathBuf,
@@ -95,7 +104,7 @@ fn main() -> ExitCode {
 fn run() -> Result<ExitCode, CliError> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Init => Err(CliError::NotImplemented("authmap init")),
+        Command::Init { output, yes, force } => run_init(&output, yes, force),
         Command::Scan {
             target,
             format,
@@ -139,6 +148,131 @@ fn run() -> Result<ExitCode, CliError> {
     }
 }
 
+fn run_init(output: &Path, yes: bool, force: bool) -> Result<ExitCode, CliError> {
+    if output.exists() && !force {
+        if yes {
+            return Err(CliError::InitExists(output.to_path_buf()));
+        }
+        if !prompt_yes_no(
+            &format!("{} already exists. Overwrite it? [y/N]", output.display()),
+            false,
+        )? {
+            println!("Left {} unchanged.", output.display());
+            return Ok(ExitCode::SUCCESS);
+        }
+    }
+
+    let include_examples = if yes {
+        true
+    } else {
+        prompt_yes_no("Include commented starter examples? [Y/n]", true)?
+    };
+    if let Some(parent) = output.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent).map_err(|source| CliError::InitWrite {
+            path: parent.to_path_buf(),
+            source,
+        })?;
+    }
+    fs::write(output, starter_config(include_examples)).map_err(|source| CliError::InitWrite {
+        path: output.to_path_buf(),
+        source,
+    })?;
+    println!("Created {}.", output.display());
+    Ok(ExitCode::SUCCESS)
+}
+
+fn prompt_yes_no(prompt: &str, default: bool) -> Result<bool, CliError> {
+    print!("{prompt} ");
+    io::stdout().flush().map_err(CliError::InitIo)?;
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .map_err(CliError::InitIo)?;
+    match input.trim().to_ascii_lowercase().as_str() {
+        "" => Ok(default),
+        "y" | "yes" => Ok(true),
+        "n" | "no" => Ok(false),
+        _ => Ok(default),
+    }
+}
+
+fn starter_config(include_examples: bool) -> String {
+    let mut config = r#"# AuthMap project configuration.
+# See docs/CONFIGURATION.md for the full format.
+
+mode: advisory
+
+# Limit scanning to project-owned source files when needed.
+include: []
+exclude: []
+
+limits:
+  max_files: 50000
+  max_file_size_bytes: 2097152
+
+authorization:
+  rules: []
+
+sensitivity:
+  routes: []
+  resources: []
+"#
+    .to_string();
+
+    if include_examples {
+        config.push_str(
+            r#"
+# Starter examples:
+#
+# authorization:
+#   rules:
+#     - name: FastAPI auth dependency
+#       evidence_type: authn
+#       mechanism: fastapi_dependency
+#       match:
+#         exact: [require_user]
+#         contains: [current_user]
+#     - name: Express role middleware
+#       evidence_type: role_check
+#       mechanism: express_middleware
+#       match:
+#         exact: [requireRole]
+#         contains: [role]
+#     - name: custom permission guard
+#       evidence_type: permission_check
+#       mechanism: custom_permission_guard
+#       confidence: high
+#       match:
+#         exact: [requireBillingPermission]
+#         contains: [permission]
+#       notes:
+#         - Project-specific permission helper.
+#
+# sensitivity:
+#   routes:
+#     - name: account routes
+#       labels: [account_data]
+#       match:
+#         contains: [/accounts]
+#       methods: [GET, POST, PATCH, DELETE]
+#       reviewer_questions:
+#         - Should account routes require ownership or permission checks?
+#   resources:
+#     - name: invoice mutations
+#       labels: [financial]
+#       match:
+#         exact: [Invoice]
+#       reviewer_questions:
+#         - Should invoice writes require finance approval?
+"#,
+        );
+    }
+
+    config
+}
+
 #[derive(Debug, Error)]
 enum CliError {
     #[error(transparent)]
@@ -147,6 +281,15 @@ enum CliError {
     Scan(#[from] authmap_analysis::ScanError),
     #[error(transparent)]
     Report(#[from] authmap_report::ReportError),
+    #[error("refusing to overwrite existing config {0}; pass --force to replace it")]
+    InitExists(PathBuf),
+    #[error("failed to read init prompt response: {0}")]
+    InitIo(std::io::Error),
+    #[error("failed to write init config {path}: {source}")]
+    InitWrite {
+        path: PathBuf,
+        source: std::io::Error,
+    },
     #[error("{0} is scaffolded but not implemented yet")]
     NotImplemented(&'static str),
     #[error("{0} is scaffolded but not implemented yet: {1}")]
@@ -162,6 +305,8 @@ impl CliError {
             CliError::Scan(error) if error.is_empty_target() => 11,
             CliError::Scan(_) => 13,
             CliError::Report(_) => 14,
+            CliError::InitExists(_) => 15,
+            CliError::InitIo(_) | CliError::InitWrite { .. } => 14,
             CliError::NotImplemented(_) | CliError::NotImplementedWithArg(_, _) => 13,
         }
     }
@@ -194,6 +339,10 @@ impl CliError {
                 diagnostic_codes::REPORT_RENDER_FAILED
             }
             CliError::Report(authmap_report::ReportError::Write { .. }) => {
+                diagnostic_codes::REPORT_WRITE_FAILED
+            }
+            CliError::InitExists(_) => diagnostic_codes::CONFIG_VALIDATION_FAILED,
+            CliError::InitIo(_) | CliError::InitWrite { .. } => {
                 diagnostic_codes::REPORT_WRITE_FAILED
             }
             CliError::NotImplemented(_) | CliError::NotImplementedWithArg(_, _) => {

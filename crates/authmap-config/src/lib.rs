@@ -12,6 +12,7 @@ pub struct ScanConfig {
     pub exclude: Vec<String>,
     pub limits: ScanLimits,
     pub authorization: AuthorizationConfig,
+    pub sensitivity: SensitivityConfig,
 }
 
 impl Default for ScanConfig {
@@ -22,6 +23,7 @@ impl Default for ScanConfig {
             exclude: Vec::new(),
             limits: ScanLimits::default(),
             authorization: AuthorizationConfig::default(),
+            sensitivity: SensitivityConfig::default(),
         }
     }
 }
@@ -51,6 +53,41 @@ pub struct AuthorizationRule {
 pub struct AuthorizationRuleMatch {
     pub exact: Vec<String>,
     pub contains: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct SensitivityConfig {
+    pub routes: Vec<RouteSensitivityRule>,
+    pub resources: Vec<ResourceSensitivityRule>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RouteSensitivityRule {
+    pub name: String,
+    pub labels: Vec<String>,
+    #[serde(rename = "match")]
+    pub matcher: AuthorizationRuleMatch,
+    #[serde(default)]
+    pub methods: Vec<String>,
+    #[serde(default)]
+    pub reviewer_questions: Vec<String>,
+    #[serde(default)]
+    pub notes: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResourceSensitivityRule {
+    pub name: String,
+    pub labels: Vec<String>,
+    #[serde(rename = "match")]
+    pub matcher: AuthorizationRuleMatch,
+    #[serde(default)]
+    pub reviewer_questions: Vec<String>,
+    #[serde(default)]
+    pub notes: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -117,49 +154,166 @@ impl ScanConfig {
                 message: "limits.max_file_size_bytes must be greater than zero".to_string(),
             });
         }
-        for rule in &self.authorization.rules {
+        for (index, rule) in self.authorization.rules.iter().enumerate() {
             if rule.name.trim().is_empty() {
                 return Err(ConfigError::Validate {
                     path: path.to_path_buf(),
-                    message: "authorization.rules[].name must not be empty".to_string(),
+                    message: format!("authorization.rules[{index}].name must not be empty"),
                 });
             }
             if rule.mechanism.trim().is_empty() {
                 return Err(ConfigError::Validate {
                     path: path.to_path_buf(),
-                    message: format!(
-                        "authorization rule {:?} mechanism must not be empty",
-                        rule.name
-                    ),
+                    message: format!("authorization.rules[{index}].mechanism must not be empty"),
                 });
             }
-            if rule.matcher.exact.is_empty() && rule.matcher.contains.is_empty() {
-                return Err(ConfigError::Validate {
-                    path: path.to_path_buf(),
-                    message: format!(
-                        "authorization rule {:?} must include match.exact or match.contains",
-                        rule.name
-                    ),
-                });
+            validate_matcher(
+                path,
+                &format!("authorization.rules[{index}].match"),
+                &rule.matcher,
+            )?;
+        }
+        for (index, rule) in self.sensitivity.routes.iter().enumerate() {
+            validate_name(
+                path,
+                &format!("sensitivity.routes[{index}].name"),
+                &rule.name,
+            )?;
+            validate_nonempty_list(
+                path,
+                &format!("sensitivity.routes[{index}].labels"),
+                &rule.labels,
+            )?;
+            validate_matcher(
+                path,
+                &format!("sensitivity.routes[{index}].match"),
+                &rule.matcher,
+            )?;
+            validate_optional_list(
+                path,
+                &format!("sensitivity.routes[{index}].reviewer_questions"),
+                &rule.reviewer_questions,
+            )?;
+            validate_optional_list(
+                path,
+                &format!("sensitivity.routes[{index}].notes"),
+                &rule.notes,
+            )?;
+            for method in &rule.methods {
+                if method.trim().is_empty() {
+                    return Err(ConfigError::Validate {
+                        path: path.to_path_buf(),
+                        message: format!(
+                            "sensitivity.routes[{index}].methods entries must not be empty"
+                        ),
+                    });
+                }
+                let upper = method.to_ascii_uppercase();
+                if !matches!(
+                    upper.as_str(),
+                    "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" | "ANY"
+                ) {
+                    return Err(ConfigError::Validate {
+                        path: path.to_path_buf(),
+                        message: format!(
+                            "sensitivity.routes[{index}].methods contains unsupported HTTP method {method:?}"
+                        ),
+                    });
+                }
             }
-            if rule
-                .matcher
-                .exact
-                .iter()
-                .chain(rule.matcher.contains.iter())
-                .any(|item| item.trim().is_empty())
-            {
-                return Err(ConfigError::Validate {
-                    path: path.to_path_buf(),
-                    message: format!(
-                        "authorization rule {:?} match entries must not be empty",
-                        rule.name
-                    ),
-                });
-            }
+        }
+        for (index, rule) in self.sensitivity.resources.iter().enumerate() {
+            validate_name(
+                path,
+                &format!("sensitivity.resources[{index}].name"),
+                &rule.name,
+            )?;
+            validate_nonempty_list(
+                path,
+                &format!("sensitivity.resources[{index}].labels"),
+                &rule.labels,
+            )?;
+            validate_matcher(
+                path,
+                &format!("sensitivity.resources[{index}].match"),
+                &rule.matcher,
+            )?;
+            validate_optional_list(
+                path,
+                &format!("sensitivity.resources[{index}].reviewer_questions"),
+                &rule.reviewer_questions,
+            )?;
+            validate_optional_list(
+                path,
+                &format!("sensitivity.resources[{index}].notes"),
+                &rule.notes,
+            )?;
         }
         Ok(())
     }
+}
+
+fn validate_name(path: &std::path::Path, field: &str, value: &str) -> Result<(), ConfigError> {
+    if value.trim().is_empty() {
+        return Err(ConfigError::Validate {
+            path: path.to_path_buf(),
+            message: format!("{field} must not be empty"),
+        });
+    }
+    Ok(())
+}
+
+fn validate_nonempty_list(
+    path: &std::path::Path,
+    field: &str,
+    values: &[String],
+) -> Result<(), ConfigError> {
+    if values.is_empty() {
+        return Err(ConfigError::Validate {
+            path: path.to_path_buf(),
+            message: format!("{field} must not be empty"),
+        });
+    }
+    validate_optional_list(path, field, values)
+}
+
+fn validate_optional_list(
+    path: &std::path::Path,
+    field: &str,
+    values: &[String],
+) -> Result<(), ConfigError> {
+    if values.iter().any(|item| item.trim().is_empty()) {
+        return Err(ConfigError::Validate {
+            path: path.to_path_buf(),
+            message: format!("{field} entries must not be empty"),
+        });
+    }
+    Ok(())
+}
+
+fn validate_matcher(
+    path: &std::path::Path,
+    field: &str,
+    matcher: &AuthorizationRuleMatch,
+) -> Result<(), ConfigError> {
+    if matcher.exact.is_empty() && matcher.contains.is_empty() {
+        return Err(ConfigError::Validate {
+            path: path.to_path_buf(),
+            message: format!("{field} must include exact or contains"),
+        });
+    }
+    if matcher
+        .exact
+        .iter()
+        .chain(matcher.contains.iter())
+        .any(|item| item.trim().is_empty())
+    {
+        return Err(ConfigError::Validate {
+            path: path.to_path_buf(),
+            message: format!("{field} entries must not be empty"),
+        });
+    }
+    Ok(())
 }
 
 #[derive(Debug, Error)]
@@ -192,6 +346,7 @@ mod tests {
         assert_eq!(config.exclude, Vec::<String>::new());
         assert_eq!(config.limits, ScanLimits::default());
         assert_eq!(config.authorization, AuthorizationConfig::default());
+        assert_eq!(config.sensitivity, SensitivityConfig::default());
     }
 
     #[test]
@@ -285,6 +440,163 @@ authorization:
         let error = load_config(Some(temp.clone())).expect_err("empty matchers should be invalid");
         let _ = std::fs::remove_file(temp);
 
-        assert!(error.to_string().contains("match.exact or match.contains"));
+        assert!(
+            error
+                .to_string()
+                .contains("authorization.rules[0].match must include exact or contains")
+        );
+    }
+
+    #[test]
+    fn rich_sensitivity_rules_parse_and_validate() {
+        let temp = std::env::temp_dir().join("authmap-config-rich-sensitivity.yml");
+        std::fs::write(
+            &temp,
+            r#"
+sensitivity:
+  routes:
+    - name: account routes
+      labels: [account_data, pii]
+      match:
+        contains: [/accounts]
+      methods: [GET, PATCH]
+      reviewer_questions:
+        - Should account routes require ownership checks?
+      notes:
+        - project-specific sensitive route
+  resources:
+    - name: invoice writes
+      labels: [financial]
+      match:
+        exact: [Invoice]
+      reviewer_questions:
+        - Should invoice writes require finance approval?
+"#,
+        )
+        .expect("test config should be written");
+
+        let (_, config) = load_config(Some(temp.clone())).expect("sensitivity config should load");
+        let _ = std::fs::remove_file(temp);
+
+        assert_eq!(config.sensitivity.routes[0].name, "account routes");
+        assert_eq!(
+            config.sensitivity.routes[0].labels,
+            vec!["account_data", "pii"]
+        );
+        assert_eq!(config.sensitivity.routes[0].methods, vec!["GET", "PATCH"]);
+        assert_eq!(config.sensitivity.resources[0].labels, vec!["financial"]);
+    }
+
+    #[test]
+    fn sensitivity_rules_reject_empty_names_labels_and_matchers() {
+        for (name, body, expected) in [
+            (
+                "empty-name",
+                r#"
+sensitivity:
+  routes:
+    - name: ""
+      labels: [sensitive]
+      match:
+        exact: [/accounts]
+"#,
+                "sensitivity.routes[0].name must not be empty",
+            ),
+            (
+                "empty-labels",
+                r#"
+sensitivity:
+  routes:
+    - name: accounts
+      labels: []
+      match:
+        exact: [/accounts]
+"#,
+                "sensitivity.routes[0].labels must not be empty",
+            ),
+            (
+                "empty-matcher",
+                r#"
+sensitivity:
+  resources:
+    - name: invoices
+      labels: [financial]
+      match: {}
+"#,
+                "sensitivity.resources[0].match must include exact or contains",
+            ),
+        ] {
+            let temp = std::env::temp_dir().join(format!("authmap-config-{name}.yml"));
+            std::fs::write(&temp, body).expect("test config should be written");
+
+            let error = load_config(Some(temp.clone())).expect_err("config should be invalid");
+            let _ = std::fs::remove_file(temp);
+
+            assert!(
+                error.to_string().contains(expected),
+                "expected {expected:?}, got {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn sensitivity_rules_reject_empty_questions_and_invalid_methods() {
+        for (name, body, expected) in [
+            (
+                "empty-question",
+                r#"
+sensitivity:
+  routes:
+    - name: accounts
+      labels: [sensitive]
+      match:
+        exact: [/accounts]
+      reviewer_questions: [""]
+"#,
+                "sensitivity.routes[0].reviewer_questions entries must not be empty",
+            ),
+            (
+                "invalid-method",
+                r#"
+sensitivity:
+  routes:
+    - name: accounts
+      labels: [sensitive]
+      match:
+        exact: [/accounts]
+      methods: [FETCH]
+"#,
+                "sensitivity.routes[0].methods contains unsupported HTTP method",
+            ),
+        ] {
+            let temp = std::env::temp_dir().join(format!("authmap-config-{name}.yml"));
+            std::fs::write(&temp, body).expect("test config should be written");
+
+            let error = load_config(Some(temp.clone())).expect_err("config should be invalid");
+            let _ = std::fs::remove_file(temp);
+
+            assert!(
+                error.to_string().contains(expected),
+                "expected {expected:?}, got {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_sensitivity_rule_fields_are_rejected() {
+        let error = serde_yaml::from_str::<ScanConfig>(
+            r#"
+sensitivity:
+  routes:
+    - name: accounts
+      labels: [sensitive]
+      unknown: true
+      match:
+        exact: [/accounts]
+"#,
+        )
+        .expect_err("unknown rule fields should be rejected");
+
+        assert!(error.to_string().contains("unknown field"));
     }
 }
