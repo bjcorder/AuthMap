@@ -185,11 +185,15 @@ report output directories.
 | 14 | Report rendering or writing failed |
 | 20 | Enforce-mode diagnostic failure after the report was written |
 
-## GitHub Action sketch
+## GitHub Action
 
 ```yaml
 name: AuthMap
-on: [pull_request]
+on:
+  pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   authmap:
@@ -199,8 +203,41 @@ jobs:
       - uses: bjcorder/AuthMap@v0
         with:
           mode: advisory
-          output: markdown,sarif
+          output: markdown,json
 ```
+
+The action writes Markdown output to the job summary and uploads generated
+reports as an artifact by default. SARIF upload is optional and requires
+`security-events: write`:
+
+```yaml
+permissions:
+  contents: read
+  security-events: write
+
+steps:
+  - uses: actions/checkout@v4
+  - uses: bjcorder/AuthMap@v0
+    with:
+      mode: advisory
+      output: markdown,json,sarif
+      upload-sarif: "true"
+```
+
+In enforce mode, AuthMap still writes requested reports first, then returns
+exit code `20` when enforce-blocking diagnostics are present:
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - uses: bjcorder/AuthMap@v0
+    with:
+      mode: enforce
+      output: markdown,json
+```
+
+See [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md) for all inputs, outputs, and
+permission details.
 
 ## Relationship to adjacent projects
 

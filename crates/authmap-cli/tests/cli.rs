@@ -121,6 +121,10 @@ fn assert_valid_sarif(document: &Value) {
     }
 }
 
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
 fn explain_document_json() -> &'static str {
     r#"
 {
@@ -241,6 +245,114 @@ fn rules_suggest_help_shows_limit_overrides() {
     assert!(stdout.contains("--max-file-size-bytes"));
     assert!(stdout.contains("--max-total-bytes"));
     assert!(stdout.contains("--max-runtime-ms"));
+}
+
+#[test]
+fn action_metadata_defines_expected_wrapper_contract() {
+    let root = repo_root();
+    let action = fs::read_to_string(root.join("action.yml")).expect("action.yml should exist");
+    let script = fs::read_to_string(root.join(".github/actions/authmap/run.sh"))
+        .expect("action runner should exist");
+
+    for input in [
+        "mode:",
+        "output:",
+        "target:",
+        "config:",
+        "baseline:",
+        "output-directory:",
+        "upload-artifact:",
+        "artifact-name:",
+        "upload-sarif:",
+        "sarif-category:",
+    ] {
+        assert!(action.contains(input), "missing action input {input}");
+    }
+    for output in [
+        "json-path:",
+        "markdown-path:",
+        "sarif-path:",
+        "output-directory:",
+    ] {
+        assert!(action.contains(output), "missing action output {output}");
+    }
+    assert!(action.contains("using: composite"));
+    assert!(action.contains(".github/actions/authmap/run.sh"));
+    assert!(action.contains("AUTHMAP_DEFER_EXIT"));
+    assert!(action.contains("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"));
+    assert!(
+        action
+            .contains("github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e")
+    );
+    assert!(action.contains("Propagate AuthMap exit code"));
+    assert!(script.contains("cargo run --locked"));
+    assert!(script.contains("GITHUB_STEP_SUMMARY"));
+    assert!(script.contains("baseline input is reserved"));
+    assert!(script.contains("AUTHMAP_DEFER_EXIT"));
+    assert!(script.contains("exit-code"));
+}
+
+#[test]
+fn action_runner_generates_reports_outputs_and_step_summary() {
+    if cfg!(windows) {
+        return;
+    }
+
+    let temp = TestDir::new("action-runner");
+    let root = repo_root();
+    let github_output = temp.path().join("github-output.txt");
+    let step_summary = temp.path().join("summary.md");
+    let output_dir = temp.path().join("reports");
+
+    let output = Command::new("bash")
+        .arg(root.join(".github/actions/authmap/run.sh"))
+        .current_dir(&root)
+        .env("GITHUB_ACTION_PATH", &root)
+        .env("GITHUB_WORKSPACE", &root)
+        .env("GITHUB_OUTPUT", &github_output)
+        .env("GITHUB_STEP_SUMMARY", &step_summary)
+        .env("INPUT_MODE", "advisory")
+        .env("INPUT_OUTPUT", "markdown,json,sarif")
+        .env("INPUT_TARGET", "tests/fixtures/negative/frontend_only")
+        .env("INPUT_CONFIG", "")
+        .env("INPUT_BASELINE", "authmap.baseline.json")
+        .env("INPUT_OUTPUT_DIRECTORY", &output_dir)
+        .env("INPUT_UPLOAD_SARIF", "false")
+        .output()
+        .expect("action runner should execute");
+
+    assert_exit(&output, 0);
+    let markdown_path = output_dir.join("authmap.md");
+    let json_path = output_dir.join("authmap.json");
+    let sarif_path = output_dir.join("authmap.sarif");
+    assert!(markdown_path.exists());
+    assert!(json_path.exists());
+    assert!(sarif_path.exists());
+
+    let json: Value = serde_json::from_str(
+        &fs::read_to_string(&json_path).expect("JSON report should be readable"),
+    )
+    .expect("JSON report should parse");
+    assert_valid_authmap_document(&json);
+    let sarif: Value = serde_json::from_str(
+        &fs::read_to_string(&sarif_path).expect("SARIF report should be readable"),
+    )
+    .expect("SARIF report should parse");
+    assert_valid_sarif(&sarif);
+
+    let summary = fs::read_to_string(step_summary).expect("summary should be written");
+    assert!(summary.contains("# AuthMap Report"));
+    let outputs = fs::read_to_string(github_output).expect("GitHub outputs should be written");
+    assert!(outputs.contains(&format!("json-path={}", json_path.display())));
+    assert!(outputs.contains(&format!("markdown-path={}", markdown_path.display())));
+    assert!(outputs.contains(&format!("sarif-path={}", sarif_path.display())));
+    assert!(outputs.contains("exit-code=0"));
+    let combined_output = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(combined_output.contains("baseline input is reserved"));
 }
 
 #[test]

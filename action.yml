@@ -1,0 +1,98 @@
+name: AuthMap
+description: Run AuthMap authorization coverage mapping in GitHub Actions.
+
+inputs:
+  mode:
+    description: AuthMap scan mode. Use advisory for review-only output or enforce to return exit code 20 for enforce-blocking diagnostics.
+    required: false
+    default: advisory
+  output:
+    description: Comma-separated report formats to generate. Supported values are markdown, json, and sarif.
+    required: false
+    default: markdown,json
+  target:
+    description: Target path to scan, relative to the checked-out repository workspace.
+    required: false
+    default: .
+  config:
+    description: Optional AuthMap configuration path, relative to the checked-out repository workspace.
+    required: false
+    default: ""
+  baseline:
+    description: Reserved baseline path for future baseline/diff support. Currently accepted but ignored with a warning.
+    required: false
+    default: ""
+  output-directory:
+    description: Directory where AuthMap report artifacts are written.
+    required: false
+    default: .authmap
+  upload-artifact:
+    description: Upload generated AuthMap reports as a workflow artifact.
+    required: false
+    default: "true"
+  artifact-name:
+    description: Name for the uploaded AuthMap report artifact.
+    required: false
+    default: authmap-results
+  upload-sarif:
+    description: Upload generated SARIF to GitHub code scanning. Requires security-events write permission.
+    required: false
+    default: "false"
+  sarif-category:
+    description: Category name for GitHub code scanning SARIF upload.
+    required: false
+    default: authmap
+
+outputs:
+  json-path:
+    description: Absolute path to the generated JSON report, when generated.
+    value: ${{ steps.run-authmap.outputs.json-path }}
+  markdown-path:
+    description: Absolute path to the generated Markdown report, when generated.
+    value: ${{ steps.run-authmap.outputs.markdown-path }}
+  sarif-path:
+    description: Absolute path to the generated SARIF report, when generated.
+    value: ${{ steps.run-authmap.outputs.sarif-path }}
+  output-directory:
+    description: Absolute path to the directory containing generated AuthMap reports.
+    value: ${{ steps.run-authmap.outputs.output-directory }}
+
+runs:
+  using: composite
+  steps:
+    - id: run-authmap
+      name: Run AuthMap
+      shell: bash
+      env:
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_OUTPUT: ${{ inputs.output }}
+        INPUT_TARGET: ${{ inputs.target }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_BASELINE: ${{ inputs.baseline }}
+        INPUT_OUTPUT_DIRECTORY: ${{ inputs.output-directory }}
+        INPUT_UPLOAD_SARIF: ${{ inputs.upload-sarif }}
+        AUTHMAP_DEFER_EXIT: "true"
+      run: '"$GITHUB_ACTION_PATH/.github/actions/authmap/run.sh"'
+
+    - name: Upload AuthMap reports
+      if: ${{ always() && inputs.upload-artifact == 'true' && steps.run-authmap.outputs.output-directory != '' && (steps.run-authmap.outputs.exit-code == '0' || steps.run-authmap.outputs.exit-code == '20') }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ steps.run-authmap.outputs.output-directory }}
+        if-no-files-found: error
+        include-hidden-files: true
+
+    - name: Upload AuthMap SARIF
+      if: ${{ always() && inputs.upload-sarif == 'true' && steps.run-authmap.outputs.sarif-path != '' && (steps.run-authmap.outputs.exit-code == '0' || steps.run-authmap.outputs.exit-code == '20') }}
+      uses: github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e
+      with:
+        sarif_file: ${{ steps.run-authmap.outputs.sarif-path }}
+        category: ${{ inputs.sarif-category }}
+
+    - name: Propagate AuthMap exit code
+      if: ${{ steps.run-authmap.outputs.exit-code != '' && steps.run-authmap.outputs.exit-code != '0' }}
+      shell: bash
+      run: |
+        code="${{ steps.run-authmap.outputs.exit-code }}"
+        exit "$code"
