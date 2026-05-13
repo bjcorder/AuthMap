@@ -13,6 +13,7 @@ pub struct ScanConfig {
     pub limits: ScanLimits,
     pub authorization: AuthorizationConfig,
     pub sensitivity: SensitivityConfig,
+    pub drift: DriftConfig,
 }
 
 impl Default for ScanConfig {
@@ -24,6 +25,7 @@ impl Default for ScanConfig {
             limits: ScanLimits::default(),
             authorization: AuthorizationConfig::default(),
             sensitivity: SensitivityConfig::default(),
+            drift: DriftConfig::default(),
         }
     }
 }
@@ -60,6 +62,37 @@ pub struct AuthorizationRuleMatch {
 pub struct SensitivityConfig {
     pub routes: Vec<RouteSensitivityRule>,
     pub resources: Vec<ResourceSensitivityRule>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct DriftConfig {
+    pub fail_on: Vec<DriftFailCategory>,
+}
+
+impl Default for DriftConfig {
+    fn default() -> Self {
+        Self {
+            fail_on: default_drift_fail_on(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DriftFailCategory {
+    AddedHighRiskRoute,
+    AddedReviewRequiredRoute,
+    AuthDowngrade,
+    NewLinkedMutation,
+}
+
+pub fn default_drift_fail_on() -> Vec<DriftFailCategory> {
+    vec![
+        DriftFailCategory::AddedHighRiskRoute,
+        DriftFailCategory::AuthDowngrade,
+        DriftFailCategory::NewLinkedMutation,
+    ]
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -363,6 +396,7 @@ mod tests {
         assert_eq!(config.limits, ScanLimits::default());
         assert_eq!(config.authorization, AuthorizationConfig::default());
         assert_eq!(config.sensitivity, SensitivityConfig::default());
+        assert_eq!(config.drift, DriftConfig::default());
     }
 
     #[test]
@@ -395,6 +429,44 @@ limits:
             .expect_err("unknown fields should be rejected");
 
         assert!(error.to_string().contains("unknown field"));
+    }
+
+    #[test]
+    fn drift_fail_on_uses_defaults_and_parses_overrides() {
+        let default_config: ScanConfig =
+            serde_yaml::from_str("").expect("default config should parse");
+        assert_eq!(default_config.drift.fail_on, default_drift_fail_on());
+
+        let config: ScanConfig = serde_yaml::from_str(
+            r#"
+drift:
+  fail_on:
+    - added_review_required_route
+    - auth_downgrade
+"#,
+        )
+        .expect("drift config should parse");
+
+        assert_eq!(
+            config.drift.fail_on,
+            vec![
+                DriftFailCategory::AddedReviewRequiredRoute,
+                DriftFailCategory::AuthDowngrade,
+            ]
+        );
+    }
+
+    #[test]
+    fn drift_fail_on_rejects_unknown_categories() {
+        let error = serde_yaml::from_str::<ScanConfig>(
+            r#"
+drift:
+  fail_on: [unknown_drift]
+"#,
+        )
+        .expect_err("unknown drift category should fail");
+
+        assert!(error.to_string().contains("unknown_drift"));
     }
 
     #[test]

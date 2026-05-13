@@ -20,6 +20,12 @@ limits:
   max_file_size_bytes: 2097152
   max_total_bytes: 268435456
   max_runtime_ms: 120000
+
+drift:
+  fail_on:
+    - added_high_risk_route
+    - auth_downgrade
+    - new_linked_mutation
 ```
 
 `mode` may be `advisory` or `enforce`. CLI `--mode` overrides the config value.
@@ -50,6 +56,49 @@ authmap rules suggest . --max-file-size-bytes 1048576 --max-runtime-ms 60000
 Memory usage is bounded indirectly by `max_files`, `max_file_size_bytes`,
 `max_total_bytes`, and the discovery collection cap. The defaults are intended
 for typical CI runners; lower them for constrained environments.
+
+## Drift Policy
+
+`authmap diff` compares two AuthMap JSON documents or two committed git refs and
+reports authorization drift. Baselines are ordinary schema-compatible AuthMap
+JSON documents:
+
+```sh
+authmap baseline create . --output authmap.baseline.json
+authmap scan . --format json --output authmap.json
+authmap diff --base authmap.baseline.json --head authmap.json --format markdown
+authmap diff main...HEAD --target . --format json --output authmap.diff.json
+```
+
+Diff reports use their own report contract, not the canonical AuthMap map
+schema. JSON output has `report_type: "authmap.diff"` with deterministic
+summary and change IDs; Markdown output is intended for reviewer summaries. Git
+range diffs scan committed refs via `git archive` and require both `git` and
+`tar` on `PATH`.
+
+`drift.fail_on` controls which drift categories return exit code `20` in
+enforce mode. Advisory mode never fails because of drift. The default enforce
+policy fails on `added_high_risk_route`, `auth_downgrade`, and
+`new_linked_mutation`.
+
+Supported categories are:
+
+- `added_high_risk_route`
+- `added_review_required_route`
+- `auth_downgrade`
+- `new_linked_mutation`
+
+For one-off reviews, the diff command can override config with
+`--fail-on a,b,c`:
+
+```sh
+authmap diff --base authmap.baseline.json --head authmap.json \
+  --mode enforce --fail-on added_high_risk_route,auth_downgrade
+```
+
+Git range diffs use `git archive` to scan committed refs in temporary
+directories without mutating the checkout. They do not include uncommitted
+working-tree changes.
 
 ## Authorization Rules
 

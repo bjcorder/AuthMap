@@ -18,6 +18,7 @@ jobs:
           test -s README.md
           test -s docs/PRODUCT_BRIEF.md
           test -s docs/ARCHITECTURE.md
+          test -s docs/GITHUB_ACTION.md
           test -s docs/ROADMAP.md
           test -s SECURITY.md
           test -s CONTRIBUTING.md

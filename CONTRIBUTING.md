@@ -28,3 +28,11 @@ Diagnostic categories and stable codes should follow
 The current repository contains the v0.1.0 foundation crates for the CLI,
 schema/IR, discovery, parsing, diagnostics, and reporting. Framework-specific
 adapter behavior and higher-level policy checks will land in later milestones.
+
+## CI expectations
+
+Pull requests run the Rust workspace on Linux, macOS, and Windows across the
+declared MSRV (`1.95`) and current stable Rust. The matrix runs locked
+workspace checks, the full test suite, and a clean `cargo install` smoke test
+for the `authmap` CLI. Documentation-only checks stay in the separate docs
+workflow.

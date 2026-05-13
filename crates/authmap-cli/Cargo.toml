@@ -20,6 +20,7 @@ authmap-report.workspace = true
 clap.workspace = true
 miette.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

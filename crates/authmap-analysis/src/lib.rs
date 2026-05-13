@@ -18,6 +18,14 @@ use serde::Serialize;
 use thiserror::Error;
 use tree_sitter::Node;
 
+mod drift;
+
+pub use drift::{
+    DriftChange, DriftChangeKind, DriftChangeSeverity, DriftComparison, DriftConfigMetadata,
+    DriftInputMetadata, DriftMetadata, DriftReport, DriftSummary, analyze_drift,
+    analyze_drift_with_config,
+};
+
 pub trait EvidenceExtractor: Send + Sync {
     fn extract_evidence(&self, input: &AnalysisInput<'_>) -> AnalysisFacts;
 }

@@ -127,9 +127,10 @@ AuthMap should classify coverage in reviewable terms:
 authmap init
 authmap scan --format markdown --output authmap.md
 authmap scan --format json --output authmap.json
-authmap diff main...HEAD
+authmap baseline create . --output authmap.baseline.json
+authmap diff --base authmap.baseline.json --head authmap.json
+authmap diff main...HEAD --target .
 authmap explain ROUTE_OR_FINDING_ID
-authmap baseline create
 authmap rules suggest
 ```
 
@@ -155,11 +156,25 @@ cargo test --workspace
 cargo install --path crates/authmap-cli
 ```
 
+SARIF output is intended for GitHub code scanning. It emits advisory
+authorization coverage alerts for routes that need review, plus scan
+diagnostics. Coverage alerts are warnings by default; AuthMap risk and
+classification details are included as SARIF result properties rather than
+asserted as confirmed vulnerabilities.
+
 `authmap scan` supports `--mode advisory|enforce`. In v0.1.0, enforce mode
 writes the requested report and exits `20` when the completed document contains
 any `error` or `fatal` diagnostic. Warnings remain non-blocking; incomplete
 discovery conditions such as file truncation or oversized supported files are
 promoted to error diagnostics in enforce mode.
+
+`authmap baseline create [target] --output authmap.baseline.json` writes a
+normal AuthMap JSON document for later comparison. `authmap diff` supports
+map-file diffs with `--base` and `--head`, plus committed git ranges such as
+`main...HEAD` using `git archive` into temporary directories so the checkout is
+not mutated. Diff reports are available as Markdown or JSON; enforce mode exits
+`20` only when drift matches the effective `drift.fail_on` policy. Git range
+diffs require both `git` and `tar` on `PATH`.
 
 Discovery honors gitignore-style `include` and `exclude` entries in
 `authmap.yml`. Includes narrow the supported source-file set, excludes win over
@@ -177,24 +192,77 @@ report output directories.
 | 12 | Config file cannot be read, parsed, or validated |
 | 13 | Scan pipeline failed for another reason |
 | 14 | Report rendering or writing failed |
-| 20 | Enforce-mode diagnostic failure after the report was written |
+| 20 | Enforce-mode diagnostic or drift policy failure after the report was written |
 
-## GitHub Action sketch
+## GitHub Action
 
 ```yaml
 name: AuthMap
-on: [pull_request]
+on:
+  pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   authmap:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: bjcorder/AuthMap@v0
+      - uses: Ozark-Security-Labs/AuthMap@v0
         with:
           mode: advisory
-          output: markdown,sarif
+          output: markdown,json
 ```
+
+The action writes Markdown output to the job summary and uploads generated
+reports as an artifact by default. SARIF upload is optional and requires
+`security-events: write`:
+
+```yaml
+permissions:
+  contents: read
+  security-events: write
+
+steps:
+  - uses: actions/checkout@v4
+  - uses: Ozark-Security-Labs/AuthMap@v0
+    with:
+      mode: advisory
+      output: markdown,json,sarif
+      upload-sarif: "true"
+```
+
+In enforce mode, AuthMap still writes requested reports first, then returns
+exit code `20` when enforce-blocking diagnostics or baseline drift policy
+matches are present:
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - uses: Ozark-Security-Labs/AuthMap@v0
+    with:
+      mode: enforce
+      output: markdown,json
+```
+
+To review drift against a baseline in CI, provide `baseline`. The action
+generates `authmap.diff.json` and `authmap.diff.md`, appends the drift Markdown
+to the job summary, and honors `fail-on` in enforce mode:
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - uses: Ozark-Security-Labs/AuthMap@v0
+    with:
+      mode: enforce
+      output: markdown,json
+      baseline: authmap.baseline.json
+      fail-on: added_high_risk_route,auth_downgrade,new_linked_mutation
+```
+
+See [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md) for all inputs, outputs, and
+permission details.
 
 ## Relationship to adjacent projects
 

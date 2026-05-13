@@ -14,13 +14,57 @@ jobs:
       fail-fast: false
       matrix:
         os: [blacksmith-4vcpu-ubuntu-2404, blacksmith-6vcpu-macos-latest, blacksmith-4vcpu-windows-2025]
+        rust: ["1.95", stable]
     runs-on: ${{ matrix.os }}
+    env:
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: "1"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt
+      - name: Cache cargo registry and git sources
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ runner.os }}-${{ matrix.rust }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-${{ matrix.rust }}-
       - name: Check formatting
+        if: matrix.os == 'blacksmith-4vcpu-ubuntu-2404' && matrix.rust == 'stable'
         run: cargo fmt --all -- --check
       - name: Check workspace
-        run: cargo check --workspace
+        run: cargo check --workspace --locked
       - name: Test workspace
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace --all-targets --locked
+      - name: Install and smoke test CLI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+
+          $installRoot = Join-Path $env:RUNNER_TEMP "authmap-install"
+          cargo install --path crates/authmap-cli --locked --root $installRoot --debug --force
+
+          $authmap = Join-Path $installRoot "bin/authmap"
+          if ($IsWindows) {
+            $authmap = "$authmap.exe"
+          }
+
+          & $authmap --help
+
+          $smokeRoot = Join-Path $env:RUNNER_TEMP "authmap-smoke"
+          New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null
+          $json = Join-Path $smokeRoot "authmap.json"
+          $markdown = Join-Path $smokeRoot "authmap.md"
+          $baseline = Join-Path $smokeRoot "authmap.baseline.json"
+          $diff = Join-Path $smokeRoot "authmap.diff.json"
+
+          & $authmap scan tests/fixtures/negative/frontend_only --format json --output $json
+          & $authmap scan tests/fixtures/negative/frontend_only --format markdown --output $markdown
+          & $authmap baseline create tests/fixtures/negative/frontend_only --output $baseline
+          & $authmap diff --base $baseline --head $json --format json --output $diff

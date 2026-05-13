@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde_json::Value;
+use serde_json::{Value, json};
 
 struct TestDir {
     path: PathBuf,
@@ -107,6 +107,24 @@ fn assert_valid_authmap_document(document: &Value) {
     }
 }
 
+fn assert_valid_sarif(document: &Value) {
+    let schema_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("tests/schemas/sarif-2.1.0.schema.json");
+    let schema_text = fs::read_to_string(&schema_path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", schema_path.display()));
+    let schema: Value = serde_json::from_str(&schema_text)
+        .unwrap_or_else(|error| panic!("schema should parse: {error}"));
+    let validator = jsonschema::validator_for(&schema).expect("schema should compile");
+    if let Err(error) = validator.validate(document) {
+        panic!("CLI SARIF output should validate against SARIF schema: {error}");
+    }
+}
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
 fn explain_document_json() -> &'static str {
     r#"
 {
@@ -168,6 +186,57 @@ fn ambiguous_explain_document_json() -> String {
     explain_document_json().replace("\"id\": \"evidence_0001\"", "\"id\": \"route_0001\"")
 }
 
+fn drift_head_document() -> Value {
+    let mut document: Value =
+        serde_json::from_str(explain_document_json()).expect("fixture JSON should parse");
+    document["coverage"][0]["class"] = json!("unauthenticated");
+    document["coverage"][0]["risk"] = json!("high");
+    document["coverage"][0]["rationale"] =
+        json!(["authentication evidence disappeared between baseline and head"]);
+    document["routes"]
+        .as_array_mut()
+        .expect("routes should be an array")
+        .push(json!({
+            "id": "route_0002",
+            "framework": "fast_api",
+            "method": "POST",
+            "path": "/admin",
+            "name": null,
+            "tags": [],
+            "middleware": [],
+            "handler": {
+                "name": "create_admin",
+                "span": {
+                    "file": "app.py",
+                    "line": 8,
+                    "column": 1,
+                    "byte_range": { "start": 120, "end": 160 }
+                }
+            },
+            "span": {
+                "file": "app.py",
+                "line": 7,
+                "column": 1,
+                "byte_range": { "start": 100, "end": 119 }
+            },
+            "source_evidence": [],
+            "confidence": "high",
+            "notes": []
+        }));
+    document["coverage"]
+        .as_array_mut()
+        .expect("coverage should be an array")
+        .push(json!({
+            "route_id": "route_0002",
+            "class": "unauthenticated",
+            "risk": "high",
+            "rationale": ["new sensitive route has no authorization evidence"],
+            "reviewer_questions": ["Should this route require explicit authorization?"],
+            "uncertainty_reasons": []
+        }));
+    document
+}
+
 fn write_rules_suggest_project(project: &Path) {
     write_file(
         &project.join("app.js"),
@@ -227,6 +296,677 @@ fn rules_suggest_help_shows_limit_overrides() {
     assert!(stdout.contains("--max-file-size-bytes"));
     assert!(stdout.contains("--max-total-bytes"));
     assert!(stdout.contains("--max-runtime-ms"));
+}
+
+#[test]
+fn ci_workflow_defines_cross_platform_rust_matrix_and_install_smoke() {
+    let root = repo_root();
+    let workflow = fs::read_to_string(root.join(".github/workflows/rust.yml"))
+        .expect("rust workflow should exist");
+
+    for runner in [
+        "blacksmith-4vcpu-ubuntu-2404",
+        "blacksmith-6vcpu-macos-latest",
+        "blacksmith-4vcpu-windows-2025",
+    ] {
+        assert!(workflow.contains(runner), "missing runner {runner}");
+    }
+    for rust in ["\"1.95\"", "stable"] {
+        assert!(workflow.contains(rust), "missing Rust toolchain {rust}");
+    }
+    assert!(workflow.contains("permissions:"));
+    assert!(workflow.contains("contents: read"));
+    assert!(workflow.contains("toolchain: ${{ matrix.rust }}"));
+    assert!(workflow.contains("components: rustfmt"));
+    assert!(workflow.contains("actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830"));
+    assert!(workflow.contains("~/.cargo/registry"));
+    assert!(workflow.contains("~/.cargo/git"));
+    assert!(!workflow.contains("target/"));
+    assert!(workflow.contains("cargo fmt --all -- --check"));
+    assert!(workflow.contains("cargo check --workspace --locked"));
+    assert!(workflow.contains("cargo test --workspace --all-targets --locked"));
+    assert!(workflow.contains("cargo install --path crates/authmap-cli --locked"));
+    assert!(workflow.contains("& $authmap --help"));
+    assert!(workflow.contains("--format json --output $json"));
+    assert!(workflow.contains("--format markdown --output $markdown"));
+    assert!(workflow.contains("baseline create tests/fixtures/negative/frontend_only"));
+    assert!(workflow.contains("diff --base $baseline --head $json"));
+    assert!(workflow.contains("RUST_BACKTRACE: \"1\""));
+    assert!(workflow.contains("CARGO_TERM_COLOR: always"));
+}
+
+#[test]
+fn action_metadata_defines_expected_wrapper_contract() {
+    let root = repo_root();
+    let action = fs::read_to_string(root.join("action.yml")).expect("action.yml should exist");
+    let script = fs::read_to_string(root.join(".github/actions/authmap/run.sh"))
+        .expect("action runner should exist");
+
+    for input in [
+        "mode:",
+        "output:",
+        "target:",
+        "config:",
+        "baseline:",
+        "fail-on:",
+        "output-directory:",
+        "upload-artifact:",
+        "artifact-name:",
+        "upload-sarif:",
+        "sarif-category:",
+    ] {
+        assert!(action.contains(input), "missing action input {input}");
+    }
+    for output in [
+        "json-path:",
+        "markdown-path:",
+        "sarif-path:",
+        "diff-json-path:",
+        "diff-markdown-path:",
+        "output-directory:",
+    ] {
+        assert!(action.contains(output), "missing action output {output}");
+    }
+    assert!(action.contains("using: composite"));
+    assert!(action.contains(".github/actions/authmap/run.sh"));
+    assert!(action.contains("AUTHMAP_DEFER_EXIT"));
+    assert!(action.contains("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"));
+    assert!(
+        action
+            .contains("github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e")
+    );
+    assert!(action.contains("Propagate AuthMap exit code"));
+    assert!(script.contains("cargo run --locked"));
+    assert!(script.contains("GITHUB_STEP_SUMMARY"));
+    assert!(script.contains("authmap.diff.json"));
+    assert!(script.contains("authmap.diff.md"));
+    assert!(script.contains("--fail-on"));
+    assert!(script.contains("AUTHMAP_DEFER_EXIT"));
+    assert!(script.contains("exit-code"));
+    assert!(script.contains("validate_relative_path"));
+    assert!(script.contains("artifact-paths"));
+    assert!(script.contains("<<"));
+    assert!(action.contains("steps.run-authmap.outputs.artifact-paths"));
+    assert!(action.contains("path: ${{ steps.run-authmap.outputs.artifact-paths }}"));
+    assert!(!action.contains("include-hidden-files: true"));
+}
+
+#[test]
+fn action_runner_generates_reports_outputs_and_step_summary() {
+    if cfg!(windows) {
+        return;
+    }
+
+    let temp = TestDir::new("action-runner");
+    let root = repo_root();
+    let workspace = temp.path().join("workspace");
+    let project = workspace.join("project");
+    let github_output = temp.path().join("github-output.txt");
+    let step_summary = temp.path().join("summary.md");
+    let output_dir = workspace.join("reports");
+    let baseline_path = workspace.join("baseline.json");
+    write_file(
+        &project.join("app.py"),
+        r#"
+from fastapi import FastAPI, Depends
+
+app = FastAPI()
+
+def require_user():
+    return {"id": "user_1"}
+
+@app.get("/accounts")
+def read_accounts(user=Depends(require_user)):
+    return []
+"#,
+    );
+
+    let baseline = authmap_in_dir(
+        &[
+            "scan",
+            "project",
+            "--format",
+            "json",
+            "--output",
+            baseline_path.to_str().expect("path should be UTF-8"),
+        ],
+        &workspace,
+    );
+    assert_exit(&baseline, 0);
+
+    let output = Command::new("bash")
+        .arg(root.join(".github/actions/authmap/run.sh"))
+        .current_dir(&root)
+        .env("GITHUB_ACTION_PATH", &root)
+        .env("GITHUB_WORKSPACE", &workspace)
+        .env("GITHUB_OUTPUT", &github_output)
+        .env("GITHUB_STEP_SUMMARY", &step_summary)
+        .env("INPUT_MODE", "advisory")
+        .env("INPUT_OUTPUT", "markdown,json,sarif")
+        .env("INPUT_TARGET", "project")
+        .env("INPUT_CONFIG", "")
+        .env("INPUT_BASELINE", "baseline.json")
+        .env("INPUT_FAIL_ON", "")
+        .env("INPUT_OUTPUT_DIRECTORY", "reports")
+        .env("INPUT_UPLOAD_SARIF", "false")
+        .output()
+        .expect("action runner should execute");
+
+    assert_exit(&output, 0);
+    let markdown_path = output_dir.join("authmap.md");
+    let json_path = output_dir.join("authmap.json");
+    let sarif_path = output_dir.join("authmap.sarif");
+    let diff_json_path = output_dir.join("authmap.diff.json");
+    let diff_markdown_path = output_dir.join("authmap.diff.md");
+    assert!(markdown_path.exists());
+    assert!(json_path.exists());
+    assert!(sarif_path.exists());
+    assert!(diff_json_path.exists());
+    assert!(diff_markdown_path.exists());
+
+    let json: Value = serde_json::from_str(
+        &fs::read_to_string(&json_path).expect("JSON report should be readable"),
+    )
+    .expect("JSON report should parse");
+    assert_valid_authmap_document(&json);
+    let sarif: Value = serde_json::from_str(
+        &fs::read_to_string(&sarif_path).expect("SARIF report should be readable"),
+    )
+    .expect("SARIF report should parse");
+    assert_valid_sarif(&sarif);
+
+    let summary = fs::read_to_string(step_summary).expect("summary should be written");
+    assert!(summary.contains("# AuthMap Report"));
+    assert!(summary.contains("# AuthMap Drift Report"));
+    let outputs = fs::read_to_string(github_output).expect("GitHub outputs should be written");
+    assert_multiline_output(&outputs, "json-path", &json_path.display().to_string());
+    assert_multiline_output(
+        &outputs,
+        "markdown-path",
+        &markdown_path.display().to_string(),
+    );
+    assert_multiline_output(&outputs, "sarif-path", &sarif_path.display().to_string());
+    assert_multiline_output(
+        &outputs,
+        "diff-json-path",
+        &diff_json_path.display().to_string(),
+    );
+    assert_multiline_output(
+        &outputs,
+        "diff-markdown-path",
+        &diff_markdown_path.display().to_string(),
+    );
+    assert_multiline_output(&outputs, "exit-code", "0");
+    let artifact_paths =
+        multiline_output_value(&outputs, "artifact-paths").expect("artifact paths should be set");
+    let artifact_lines = artifact_paths.lines().collect::<Vec<_>>();
+    assert_eq!(artifact_lines.len(), 5);
+    for path in [
+        &markdown_path,
+        &json_path,
+        &sarif_path,
+        &diff_json_path,
+        &diff_markdown_path,
+    ] {
+        assert!(
+            artifact_lines.contains(&path.display().to_string().as_str()),
+            "artifact paths should include {}",
+            path.display()
+        );
+    }
+    assert!(!artifact_lines.contains(&output_dir.display().to_string().as_str()));
+}
+
+#[test]
+fn action_runner_rejects_unsafe_workspace_relative_paths() {
+    if cfg!(windows) {
+        return;
+    }
+
+    let cases = [
+        ("INPUT_TARGET", "../outside", "target"),
+        ("INPUT_CONFIG", "/tmp/authmap.yml", "config"),
+        ("INPUT_OUTPUT_DIRECTORY", ".", "output-directory"),
+        ("INPUT_OUTPUT_DIRECTORY", "reports/", "output-directory"),
+        ("INPUT_BASELINE", "baselines\nforged=1", "baseline"),
+    ];
+
+    for (name, value, label) in cases {
+        let output = run_action_validation_case(name, value);
+        assert_exit(&output, 2);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains(label),
+            "stderr should mention {label}; got:\n{stderr}"
+        );
+    }
+}
+
+fn run_action_validation_case(name: &str, value: &str) -> Output {
+    let temp = TestDir::new("action-invalid-path");
+    let root = repo_root();
+    let workspace = temp.path().join("workspace");
+    write_file(
+        &workspace.join("project").join("app.py"),
+        "print('hello')\n",
+    );
+    let mut command = Command::new("bash");
+    command
+        .arg(root.join(".github/actions/authmap/run.sh"))
+        .current_dir(&root)
+        .env("GITHUB_ACTION_PATH", &root)
+        .env("GITHUB_WORKSPACE", &workspace)
+        .env("GITHUB_OUTPUT", temp.path().join("github-output.txt"))
+        .env("GITHUB_STEP_SUMMARY", temp.path().join("summary.md"))
+        .env("INPUT_MODE", "advisory")
+        .env("INPUT_OUTPUT", "json")
+        .env("INPUT_TARGET", "project")
+        .env("INPUT_CONFIG", "")
+        .env("INPUT_BASELINE", "")
+        .env("INPUT_FAIL_ON", "")
+        .env("INPUT_OUTPUT_DIRECTORY", "reports")
+        .env("INPUT_UPLOAD_SARIF", "false")
+        .env(name, value);
+    command.output().expect("action runner should execute")
+}
+
+fn assert_multiline_output(outputs: &str, name: &str, expected: &str) {
+    let value =
+        multiline_output_value(outputs, name).unwrap_or_else(|| panic!("missing output {name}"));
+    assert_eq!(value, expected);
+}
+
+fn multiline_output_value(outputs: &str, name: &str) -> Option<String> {
+    let marker = format!("{name}<<");
+    let lines = outputs.lines().collect::<Vec<_>>();
+    let start = lines.iter().position(|line| line.starts_with(&marker))?;
+    let delimiter = lines[start].strip_prefix(&marker)?;
+    let mut value = Vec::new();
+    for line in lines.iter().skip(start + 1) {
+        if *line == delimiter {
+            return Some(value.join("\n"));
+        }
+        value.push((*line).to_string());
+    }
+    None
+}
+
+#[test]
+fn baseline_create_writes_schema_compatible_authmap_json() {
+    let temp = TestDir::new("baseline-create");
+    let project = temp.path().join("project");
+    let output_path = temp.path().join("authmap.baseline.json");
+    write_file(
+        &project.join("app.py"),
+        r#"
+from fastapi import FastAPI, Depends
+
+app = FastAPI()
+
+def require_user():
+    return {"id": "user_1"}
+
+@app.get("/accounts")
+def read_accounts(user=Depends(require_user)):
+    return []
+"#,
+    );
+
+    let output = authmap(&[
+        "baseline",
+        "create",
+        project.to_str().expect("path should be UTF-8"),
+        "--output",
+        output_path.to_str().expect("path should be UTF-8"),
+    ]);
+
+    assert_exit(&output, 0);
+    let document: Value =
+        serde_json::from_str(&fs::read_to_string(output_path).expect("output should exist"))
+            .expect("baseline should be valid JSON");
+    assert_valid_authmap_document(&document);
+    assert_eq!(document["schema_version"], "0.1.0");
+    assert_eq!(document["metadata"]["mode"], "advisory");
+}
+
+#[test]
+fn diff_map_files_emit_deterministic_json_markdown_and_enforce_policy() {
+    let temp = TestDir::new("diff-map-files");
+    let base_path = temp.path().join("base.json");
+    let head_path = temp.path().join("head.json");
+    let json_path = temp.path().join("authmap.diff.json");
+    let markdown_path = temp.path().join("authmap.diff.md");
+    let base_document: Value =
+        serde_json::from_str(explain_document_json()).expect("fixture JSON should parse");
+    let head_document = drift_head_document();
+    assert_valid_authmap_document(&base_document);
+    assert_valid_authmap_document(&head_document);
+    write_file(
+        &base_path,
+        &serde_json::to_string_pretty(&base_document).expect("base should serialize"),
+    );
+    write_file(
+        &head_path,
+        &serde_json::to_string_pretty(&head_document).expect("head should serialize"),
+    );
+
+    let output = authmap(&[
+        "diff",
+        "--base",
+        base_path.to_str().expect("path should be UTF-8"),
+        "--head",
+        head_path.to_str().expect("path should be UTF-8"),
+        "--format",
+        "json",
+        "--output",
+        json_path.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&output, 0);
+    let report: Value =
+        serde_json::from_str(&fs::read_to_string(&json_path).expect("diff JSON should exist"))
+            .expect("diff JSON should parse");
+    assert_eq!(report["report_type"], "authmap.diff");
+    assert_eq!(report["summary"]["added_routes"], 1);
+    assert_eq!(report["summary"]["coverage_changes"], 1);
+    assert!(
+        report["changes"]
+            .as_array()
+            .expect("changes should be an array")
+            .iter()
+            .any(|change| change["kind"] == "added_route"
+                && change["fail_category"] == "added_high_risk_route")
+    );
+    assert!(
+        report["changes"]
+            .as_array()
+            .expect("changes should be an array")
+            .iter()
+            .any(|change| change["kind"] == "coverage_changed"
+                && change["direction"] == "downgrade"
+                && change["reviewer_questions"].is_array()
+                && change["sensitivity_reasons"].is_array()
+                && change["link_ids"].is_array())
+    );
+
+    let output = authmap(&[
+        "diff",
+        "--base",
+        base_path.to_str().expect("path should be UTF-8"),
+        "--head",
+        head_path.to_str().expect("path should be UTF-8"),
+        "--format",
+        "markdown",
+        "--output",
+        markdown_path.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&output, 0);
+    let markdown = fs::read_to_string(&markdown_path).expect("diff Markdown should exist");
+    assert!(markdown.contains("# AuthMap Drift Report"));
+    assert!(markdown.contains("added_high_risk_route"));
+    assert!(markdown.contains("Fail Category"));
+    assert!(markdown.contains("Blocking"));
+
+    let output = authmap(&[
+        "diff",
+        "--base",
+        base_path.to_str().expect("path should be UTF-8"),
+        "--head",
+        head_path.to_str().expect("path should be UTF-8"),
+        "--mode",
+        "enforce",
+        "--format",
+        "json",
+    ]);
+    assert_exit(&output, 20);
+
+    let output = authmap(&[
+        "diff",
+        "--base",
+        base_path.to_str().expect("path should be UTF-8"),
+        "--head",
+        head_path.to_str().expect("path should be UTF-8"),
+        "--mode",
+        "enforce",
+        "--fail-on",
+        "new_linked_mutation",
+        "--format",
+        "json",
+    ]);
+    assert_exit(&output, 0);
+}
+
+#[test]
+fn diff_git_range_scans_committed_refs_without_mutating_checkout() {
+    if Command::new("git").arg("--version").output().is_err() {
+        return;
+    }
+
+    let temp = TestDir::new("diff-git-range");
+    write_file(
+        &temp.path().join("app.py"),
+        r#"
+from fastapi import FastAPI, Depends
+
+app = FastAPI()
+
+def require_user():
+    return {"id": "user_1"}
+
+@app.get("/accounts")
+def read_accounts(user=Depends(require_user)):
+    return []
+"#,
+    );
+    for args in [
+        vec!["init"],
+        vec!["config", "user.email", "authmap@example.test"],
+        vec!["config", "user.name", "AuthMap Test"],
+        vec!["add", "."],
+        vec!["commit", "-m", "base"],
+    ] {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(temp.path())
+            .output()
+            .expect("git should run");
+        assert_exit(&output, 0);
+    }
+    write_file(
+        &temp.path().join("app.py"),
+        r#"
+from fastapi import FastAPI, Depends
+
+app = FastAPI()
+
+def require_user():
+    return {"id": "user_1"}
+
+@app.get("/accounts")
+def read_accounts(user=Depends(require_user)):
+    return []
+
+@app.post("/admin")
+def create_admin():
+    return {"ok": True}
+"#,
+    );
+    for args in [vec!["add", "."], vec!["commit", "-m", "head"]] {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(temp.path())
+            .output()
+            .expect("git should run");
+        assert_exit(&output, 0);
+    }
+
+    let output = authmap_in_dir(&["diff", "HEAD~1...HEAD", "--format", "json"], temp.path());
+    assert_exit(&output, 0);
+    let report: Value =
+        serde_json::from_slice(&output.stdout).expect("git range diff should emit JSON");
+    assert_eq!(report["report_type"], "authmap.diff");
+    assert!(
+        report["changes"]
+            .as_array()
+            .expect("changes should be an array")
+            .iter()
+            .any(|change| change["kind"] == "added_route")
+    );
+    let checkout = fs::read_to_string(temp.path().join("app.py")).expect("checkout should remain");
+    assert!(checkout.contains("@app.post(\"/admin\")"));
+    assert!(!temp.path().join("base").exists());
+    assert!(!temp.path().join("head").exists());
+}
+
+#[test]
+fn diff_git_range_loads_relative_config_from_each_ref() {
+    if Command::new("git").arg("--version").output().is_err() {
+        return;
+    }
+
+    let temp = TestDir::new("diff-git-range-ref-config");
+    write_file(
+        &temp.path().join("app.py"),
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts():
+    return []
+"#,
+    );
+    write_file(&temp.path().join("authmap.yml"), "exclude:\n  - app.py\n");
+    init_git_repo(temp.path());
+    git_commit_all(temp.path(), "base");
+
+    write_file(
+        &temp.path().join("app.py"),
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts():
+    return []
+
+@app.post("/admin")
+def create_admin():
+    return {"ok": True}
+"#,
+    );
+    write_file(&temp.path().join("authmap.yml"), "exclude: []\n");
+    git_commit_all(temp.path(), "head");
+
+    let output = authmap_in_dir(
+        &[
+            "diff",
+            "HEAD~1...HEAD",
+            "--target",
+            ".",
+            "--config",
+            "authmap.yml",
+            "--format",
+            "json",
+        ],
+        temp.path(),
+    );
+    assert_exit(&output, 0);
+    let report: Value =
+        serde_json::from_slice(&output.stdout).expect("git range diff should emit JSON");
+    assert_eq!(report["metadata"]["config"]["source"], "per_ref");
+    assert_eq!(report["metadata"]["config"]["path"], "authmap.yml");
+    assert_eq!(report["summary"]["added_routes"], 2);
+}
+
+#[test]
+fn diff_git_range_reports_external_absolute_config_metadata() {
+    if Command::new("git").arg("--version").output().is_err() {
+        return;
+    }
+
+    let temp = TestDir::new("diff-git-range-external-config");
+    write_file(
+        &temp.path().join("app.py"),
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts():
+    return []
+"#,
+    );
+    init_git_repo(temp.path());
+    git_commit_all(temp.path(), "base");
+    write_file(
+        &temp.path().join("app.py"),
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts():
+    return []
+
+@app.post("/admin")
+def create_admin():
+    return {"ok": True}
+"#,
+    );
+    git_commit_all(temp.path(), "head");
+
+    let config = temp.path().join("external-authmap.yml");
+    write_file(
+        &config,
+        "drift:\n  fail_on: [added_review_required_route]\n",
+    );
+    let config_arg = config.to_str().expect("path should be UTF-8");
+    let output = authmap_in_dir(
+        &[
+            "diff",
+            "HEAD~1...HEAD",
+            "--config",
+            config_arg,
+            "--format",
+            "json",
+        ],
+        temp.path(),
+    );
+    assert_exit(&output, 0);
+    let report: Value =
+        serde_json::from_slice(&output.stdout).expect("git range diff should emit JSON");
+    assert_eq!(report["metadata"]["config"]["source"], "external");
+    assert_eq!(report["metadata"]["config"]["path"], config_arg);
+}
+
+fn init_git_repo(path: &Path) {
+    for args in [
+        vec!["init"],
+        vec!["config", "user.email", "authmap@example.test"],
+        vec!["config", "user.name", "AuthMap Test"],
+    ] {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(path)
+            .output()
+            .expect("git should run");
+        assert_exit(&output, 0);
+    }
+}
+
+fn git_commit_all(path: &Path, message: &str) {
+    for args in [vec!["add", "."], vec!["commit", "-m", message]] {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(path)
+            .output()
+            .expect("git should run");
+        assert_exit(&output, 0);
+    }
 }
 
 #[test]
@@ -369,6 +1109,8 @@ fn init_yes_creates_valid_starter_config() {
     let text = fs::read_to_string(config).expect("starter config should exist");
     assert!(text.contains("authorization:"));
     assert!(text.contains("sensitivity:"));
+    assert!(text.contains("drift:"));
+    assert!(text.contains("auth_downgrade"));
     assert!(text.contains("max_total_bytes: 268435456"));
     assert!(text.contains("max_runtime_ms: 120000"));
     assert!(text.contains("Starter examples:"));
@@ -765,6 +1507,51 @@ fn scan_writes_sarif_for_diagnostics() {
             .iter()
             .any(|result| result["ruleId"] == "parser.source_parse_recovered")
     );
+}
+
+#[test]
+fn scan_writes_sarif_for_coverage_alerts() {
+    let temp = TestDir::new("sarif-coverage-output");
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output_path = temp.path().join("authmap.sarif");
+
+    let output = authmap_in_dir(
+        &[
+            "scan",
+            "tests/fixtures/realistic/fastapi",
+            "--format",
+            "sarif",
+            "--output",
+            output_path.to_str().expect("path should be UTF-8"),
+        ],
+        &repo_root,
+    );
+
+    assert_exit(&output, 0);
+    let document: Value =
+        serde_json::from_str(&fs::read_to_string(output_path).expect("output should exist"))
+            .expect("output should be valid SARIF JSON");
+    assert_valid_sarif(&document);
+    let results = document["runs"][0]["results"]
+        .as_array()
+        .expect("SARIF results should be an array");
+    assert!(results.iter().any(|result| {
+        result["ruleId"] == "authmap.authn_only_sensitive" && result["level"] == "warning"
+    }));
+    assert!(results.iter().any(|result| {
+        result["ruleId"] == "authmap.missing_explicit_evidence" && result["level"] == "warning"
+    }));
+    let authn_only = results
+        .iter()
+        .find(|result| result["ruleId"] == "authmap.authn_only_sensitive")
+        .expect("authn-only result should exist");
+    assert_eq!(authn_only["properties"]["authmap.kind"], "coverage");
+    assert_eq!(authn_only["properties"]["coverage_class"], "authn_only");
+    assert_eq!(authn_only["properties"]["risk"], "review_required");
+    let uri = authn_only["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+        .as_str()
+        .expect("coverage result should have a source URI");
+    assert!(uri.ends_with("accounts.py"));
 }
 
 #[test]
