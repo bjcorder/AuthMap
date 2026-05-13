@@ -1,5 +1,5 @@
 from rest_framework.decorators import action
-from rest_framework.viewsets import ModelViewSet, ViewSet
+from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet, ViewSet
 
 from .models import Account
 from .services import create_account
@@ -51,6 +51,20 @@ class UserViewSet(ModelViewSet):
     @action(detail=True, methods=["post"], url_path="disable")
     def disable(self, request, uuid=None):
         return Account.objects.filter(uuid=uuid).update(disabled=True)
+
+
+class ReadOnlyAccountViewSet(ReadOnlyModelViewSet):
+    def nested_helpers(self):
+        def destroy():
+            return Account.objects.filter(active=False).delete()
+
+        return destroy
+
+
+class ReadOnlyAuditViewSet(ReadOnlyModelViewSet):
+    @action(detail=False, methods=["post"], url_path="refresh")
+    def refresh(self, request):
+        return Account.objects.filter(active=True).update(reviewed=True)
 
 
 class DynamicViewSet(ViewSet):

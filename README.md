@@ -288,7 +288,8 @@ AuthMap is not intended to:
 
 ## Status
 
-This repository contains the v0.1.0 foundation work: Rust workspace crates for
-the CLI, config loading, deterministic discovery, Tree-sitter parsing,
-canonical schema/IR, and JSON/Markdown/SARIF reporting. Framework-specific
-route and authorization adapters are still future milestone work.
+This repository contains the local CLI, configuration loading, deterministic
+source discovery, Tree-sitter parsing, canonical schema/IR, framework route
+adapters, evidence extraction, reachability linking, coverage classification,
+and JSON/Markdown/SARIF reporting. Current built-in route coverage includes
+FastAPI, Django/DRF, Express, and Next.js App Router handlers.

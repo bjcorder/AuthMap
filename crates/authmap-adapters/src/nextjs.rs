@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use authmap_core::{
     Confidence, Diagnostic, DiagnosticCategory, DiagnosticSeverity, Framework, Recoverability,
-    Route, SourceEvidence, Span, SymbolRef,
+    Route, SourceEvidence, Span, SymbolRef, diagnostic_codes,
 };
 use authmap_parsers::ParsedFile;
 use tree_sitter::Node;
@@ -25,6 +25,11 @@ impl FrameworkAdapter for NextJsAdapter {
         let mut routes = Vec::new();
         let mut diagnostics = Vec::new();
         let mut seen = BTreeSet::<(String, String, String)>::new();
+        let module_index = build_js_module_index(parsed_files);
+        let parsed_by_path = parsed_files
+            .iter()
+            .map(|parsed| (parsed.source.path.clone(), parsed))
+            .collect::<BTreeMap<_, _>>();
 
         for parsed in parsed_files.iter().filter(|file| is_js_like(file.language)) {
             if !is_next_route_file(&parsed.source.path) {
@@ -36,7 +41,14 @@ impl FrameworkAdapter for NextJsAdapter {
                 continue;
             };
             let definitions = collect_definitions(parsed, root);
-            for export in collect_route_exports(parsed, root, &definitions, &mut diagnostics) {
+            for export in collect_route_exports(
+                parsed,
+                root,
+                &definitions,
+                &module_index,
+                &parsed_by_path,
+                &mut diagnostics,
+            ) {
                 let key = (
                     parsed.source.path.clone(),
                     export.method.clone(),
@@ -139,13 +151,23 @@ fn collect_route_exports(
     parsed: &ParsedFile,
     root: Node<'_>,
     definitions: &BTreeMap<String, Definition>,
+    module_index: &BTreeMap<String, String>,
+    parsed_by_path: &BTreeMap<String, &ParsedFile>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Vec<RouteExport> {
     let mut exports = Vec::new();
     let mut stack = vec![root];
     while let Some(node) = stack.pop() {
         if node.kind() == "export_statement" {
-            collect_export_statement(parsed, node, definitions, diagnostics, &mut exports);
+            collect_export_statement(
+                parsed,
+                node,
+                definitions,
+                module_index,
+                parsed_by_path,
+                diagnostics,
+                &mut exports,
+            );
         }
         let mut cursor = node.walk();
         stack.extend(node.children(&mut cursor));
@@ -157,6 +179,8 @@ fn collect_export_statement(
     parsed: &ParsedFile,
     node: Node<'_>,
     definitions: &BTreeMap<String, Definition>,
+    module_index: &BTreeMap<String, String>,
+    parsed_by_path: &BTreeMap<String, &ParsedFile>,
     diagnostics: &mut Vec<Diagnostic>,
     exports: &mut Vec<RouteExport>,
 ) {
@@ -192,7 +216,16 @@ fn collect_export_statement(
     }
 
     if text.trim_start().starts_with("export {") {
-        collect_export_clause(parsed, node, text, definitions, exports);
+        collect_export_clause(
+            parsed,
+            node,
+            text,
+            definitions,
+            module_index,
+            parsed_by_path,
+            diagnostics,
+            exports,
+        );
     }
 }
 
@@ -202,13 +235,14 @@ fn collect_exported_variables(
     diagnostics: &mut Vec<Diagnostic>,
     exports: &mut Vec<RouteExport>,
 ) {
-    let mut stack = vec![declaration];
-    while let Some(node) = stack.pop() {
-        if node.kind() == "variable_declarator"
-            && let Some(name_node) = node.child_by_field_name("name")
-            && let Some(name) = parsed.text_for(name_node)
-            && is_http_method(name)
-        {
+    for node in top_level_variable_declarators(declaration) {
+        let Some(name_node) = node.child_by_field_name("name") else {
+            continue;
+        };
+        let Some(name) = parsed.text_for(name_node) else {
+            continue;
+        };
+        if is_http_method(name) {
             exports.push(route_export_from_variable(
                 parsed,
                 node,
@@ -217,9 +251,27 @@ fn collect_exported_variables(
                 diagnostics,
             ));
         }
-        let mut cursor = node.walk();
-        stack.extend(node.children(&mut cursor));
     }
+}
+
+fn top_level_variable_declarators(declaration: Node<'_>) -> Vec<Node<'_>> {
+    let mut declarators = Vec::new();
+    let mut stack = vec![declaration];
+    while let Some(node) = stack.pop() {
+        if matches!(
+            node.kind(),
+            "arrow_function" | "function" | "function_expression"
+        ) {
+            continue;
+        }
+        if node.kind() == "variable_declarator" {
+            declarators.push(node);
+            continue;
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor).filter(|child| child.is_named()));
+    }
+    declarators
 }
 
 fn route_export_from_variable(
@@ -283,7 +335,7 @@ fn route_export_from_variable(
                     .to_string(),
             );
             diagnostics.push(diagnostic(
-                "nextjs_dynamic_route_export",
+                diagnostic_codes::NEXTJS_DYNAMIC_ROUTE_EXPORT,
                 parsed.span_for(node),
                 "Next.js route handler export value is dynamic or unsupported",
             ));
@@ -306,6 +358,9 @@ fn collect_export_clause(
     node: Node<'_>,
     text: &str,
     definitions: &BTreeMap<String, Definition>,
+    module_index: &BTreeMap<String, String>,
+    parsed_by_path: &BTreeMap<String, &ParsedFile>,
+    diagnostics: &mut Vec<Diagnostic>,
     exports: &mut Vec<RouteExport>,
 ) {
     let Some(specifiers) = text
@@ -315,6 +370,23 @@ fn collect_export_clause(
     else {
         return;
     };
+    let external_file = export_module_literal(text)
+        .and_then(|module| resolve_js_module(parsed, module_index, module));
+    let external_definitions = external_file
+        .as_ref()
+        .and_then(|file| parsed_by_path.get(file))
+        .and_then(|external| {
+            external
+                .root_node()
+                .map(|root| collect_definitions(external, root))
+        });
+    if export_module_literal(text).is_some() && external_file.is_none() {
+        diagnostics.push(diagnostic(
+            diagnostic_codes::NEXTJS_EXTERNAL_REEXPORT_UNRESOLVED,
+            parsed.span_for(node),
+            "Next.js route handler re-export target could not be resolved statically",
+        ));
+    }
     for specifier in specifiers
         .split(',')
         .map(str::trim)
@@ -328,7 +400,18 @@ fn collect_export_clause(
         if !is_http_method(exported) {
             continue;
         }
-        let definition = definitions.get(local);
+        let definition = external_definitions
+            .as_ref()
+            .and_then(|definitions| definitions.get(local))
+            .or_else(|| definitions.get(local));
+        let unresolved_external = export_module_literal(text).is_some() && definition.is_none();
+        if unresolved_external {
+            diagnostics.push(diagnostic(
+                diagnostic_codes::NEXTJS_EXTERNAL_REEXPORT_UNRESOLVED,
+                parsed.span_for(node),
+                "Next.js route handler re-export target could not be analyzed statically",
+            ));
+        }
         exports.push(RouteExport {
             method: exported.to_string(),
             handler: SymbolRef {
@@ -340,8 +423,19 @@ fn collect_export_clause(
             export_kind: ExportKind::ReExport,
             wrapper: None,
             span: parsed.span_for(node),
-            confidence: Confidence::High,
-            notes: Vec::new(),
+            confidence: if unresolved_external {
+                Confidence::Medium
+            } else {
+                Confidence::High
+            },
+            notes: if unresolved_external {
+                vec![
+                    "Next.js route handler re-export target could not be analyzed statically"
+                        .to_string(),
+                ]
+            } else {
+                Vec::new()
+            },
         });
     }
 }
@@ -388,6 +482,77 @@ fn collect_definitions(parsed: &ParsedFile, root: Node<'_>) -> BTreeMap<String, 
     definitions
 }
 
+fn build_js_module_index(parsed_files: &[ParsedFile]) -> BTreeMap<String, String> {
+    let mut index = BTreeMap::new();
+    for parsed in parsed_files.iter().filter(|file| is_js_like(file.language)) {
+        let normalized = parsed.source.path.replace('\\', "/");
+        let Some(stem) = strip_js_extension(&normalized) else {
+            continue;
+        };
+        index.insert(stem.to_string(), parsed.source.path.clone());
+        if let Some(index_stem) = stem.strip_suffix("/index") {
+            index.insert(index_stem.to_string(), parsed.source.path.clone());
+        }
+    }
+    index
+}
+
+fn strip_js_extension(path: &str) -> Option<&str> {
+    [".js", ".jsx", ".ts", ".tsx"]
+        .iter()
+        .find_map(|extension| path.strip_suffix(extension))
+}
+
+fn export_module_literal(text: &str) -> Option<&str> {
+    let (_, module_part) = text.split_once(" from ")?;
+    Some(
+        module_part
+            .trim()
+            .trim_end_matches(';')
+            .trim()
+            .trim_matches('"')
+            .trim_matches('\''),
+    )
+}
+
+fn resolve_js_module(
+    parsed: &ParsedFile,
+    module_index: &BTreeMap<String, String>,
+    module: &str,
+) -> Option<String> {
+    if !module.starts_with('.') {
+        return None;
+    }
+    let current = parsed.source.path.replace('\\', "/");
+    let current_dir = current.rsplit_once('/').map_or("", |(dir, _)| dir);
+    let candidate = normalize_js_module_path(current_dir, module);
+    module_index.get(&candidate).cloned()
+}
+
+fn normalize_js_module_path(current_dir: &str, module: &str) -> String {
+    let is_absolute = current_dir.starts_with('/');
+    let mut parts = current_dir
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    for part in module.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            _ => parts.push(part.to_string()),
+        }
+    }
+    let normalized = parts.join("/");
+    if is_absolute {
+        format!("/{normalized}")
+    } else {
+        normalized
+    }
+}
+
 fn route_path_for_file(path: &str) -> PathInfo {
     let normalized = path.replace('\\', "/");
     let parts = normalized.split('/').collect::<Vec<_>>();
@@ -418,7 +583,7 @@ fn route_path_for_file(path: &str) -> PathInfo {
                 "Next.js route segment `{segment}` uses an unusual routing convention"
             ));
             diagnostics.push(diagnostic(
-                "nextjs_unusual_route_segment",
+                diagnostic_codes::NEXTJS_UNUSUAL_ROUTE_SEGMENT,
                 span_for_path(path),
                 "Next.js route segment uses an unusual routing convention",
             ));
@@ -461,7 +626,10 @@ fn is_unusual_segment(segment: &str) -> bool {
 }
 
 fn is_http_method(name: &str) -> bool {
-    matches!(name, "GET" | "POST" | "PUT" | "PATCH" | "DELETE")
+    matches!(
+        name,
+        "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS"
+    )
 }
 
 fn is_js_like(language: authmap_core::Language) -> bool {

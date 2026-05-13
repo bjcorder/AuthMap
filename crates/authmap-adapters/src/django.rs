@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use authmap_core::{
     Confidence, Diagnostic, DiagnosticCategory, DiagnosticSeverity, Framework, Recoverability,
-    Route, SourceEvidence, Span, SymbolRef,
+    Route, SourceEvidence, Span, SymbolRef, diagnostic_codes,
 };
 use authmap_parsers::ParsedFile;
 use tree_sitter::Node;
@@ -62,6 +62,7 @@ impl FrameworkAdapter for DjangoAdapter {
 struct ImportTarget {
     file: Option<String>,
     name: Option<String>,
+    module: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -284,7 +285,7 @@ impl<'a> DjangoCollector<'a> {
         }
         if kind == RouterKind::Custom {
             self.index.diagnostics.push(diagnostic(
-                "django_custom_router",
+                diagnostic_codes::DJANGO_CUSTOM_ROUTER,
                 self.parsed.span_for(call),
                 "DRF custom router behavior could not be resolved statically",
             ));
@@ -305,7 +306,20 @@ impl<'a> DjangoCollector<'a> {
         };
         let function_name = terminal_name(self.parsed, function).unwrap_or_default();
         match function_name.as_str() {
-            "path" | "re_path" => self.collect_url_pattern(node, function_name.as_str()),
+            "path" | "re_path" => {
+                if !self.is_django_url_helper(function, function_name.as_str()) {
+                    return;
+                }
+                if !is_urlpatterns_context(self.parsed, node) {
+                    self.index.diagnostics.push(diagnostic(
+                        diagnostic_codes::DJANGO_URLPATTERN_CONTEXT_UNCERTAIN,
+                        self.parsed.span_for(node),
+                        "Django URL helper call is outside a statically recognized urlpatterns context",
+                    ));
+                    return;
+                }
+                self.collect_url_pattern(node, function_name.as_str());
+            }
             "register" => self.collect_router_register(node, function),
             _ => {}
         }
@@ -320,7 +334,7 @@ impl<'a> DjangoCollector<'a> {
         let dynamic_path = path.is_none();
         if dynamic_path {
             self.index.diagnostics.push(diagnostic(
-                "django_dynamic_url_path",
+                diagnostic_codes::DJANGO_DYNAMIC_URL_PATH,
                 self.parsed.span_for(args[0]),
                 "Django URL path is dynamic and could not be resolved",
             ));
@@ -338,7 +352,7 @@ impl<'a> DjangoCollector<'a> {
             PatternTarget::Handler(handler)
         } else {
             self.index.diagnostics.push(diagnostic(
-                "django_unresolved_handler",
+                diagnostic_codes::DJANGO_UNRESOLVED_HANDLER,
                 self.parsed.span_for(args[1]),
                 "Django URL handler could not be resolved statically",
             ));
@@ -367,7 +381,7 @@ impl<'a> DjangoCollector<'a> {
         let args = call_argument_nodes(call);
         let Some(first) = args.first().copied() else {
             self.index.diagnostics.push(diagnostic(
-                "django_dynamic_include",
+                diagnostic_codes::DJANGO_DYNAMIC_INCLUDE,
                 self.parsed.span_for(call),
                 "Django include target is missing or dynamic",
             ));
@@ -381,7 +395,7 @@ impl<'a> DjangoCollector<'a> {
             let file = resolve_absolute_module_file(&self.index.module_index, &module);
             if file.is_none() {
                 self.index.diagnostics.push(diagnostic(
-                    "django_unresolved_include",
+                    diagnostic_codes::DJANGO_UNRESOLVED_INCLUDE,
                     self.parsed.span_for(first),
                     "Django include module could not be resolved statically",
                 ));
@@ -419,7 +433,7 @@ impl<'a> DjangoCollector<'a> {
             };
         }
         self.index.diagnostics.push(diagnostic(
-            "django_dynamic_include",
+            diagnostic_codes::DJANGO_DYNAMIC_INCLUDE,
             self.parsed.span_for(first),
             "Django include target is dynamic and could not be resolved",
         ));
@@ -499,7 +513,7 @@ impl<'a> DjangoCollector<'a> {
         let dynamic_prefix = prefix.is_none();
         if dynamic_prefix {
             self.index.diagnostics.push(diagnostic(
-                "drf_dynamic_router_prefix",
+                diagnostic_codes::DRF_DYNAMIC_ROUTER_PREFIX,
                 self.parsed.span_for(args[0]),
                 "DRF router registration prefix is dynamic and could not be resolved",
             ));
@@ -508,7 +522,7 @@ impl<'a> DjangoCollector<'a> {
         let viewset = self.resolve_class(viewset_text);
         if viewset.is_none() {
             self.index.diagnostics.push(diagnostic(
-                "drf_unresolved_viewset",
+                diagnostic_codes::DRF_UNRESOLVED_VIEWSET,
                 self.parsed.span_for(args[1]),
                 "DRF router viewset could not be resolved statically",
             ));
@@ -517,7 +531,7 @@ impl<'a> DjangoCollector<'a> {
         let dynamic_basename = keyword_exists(self.parsed, call, "basename") && basename.is_none();
         if dynamic_basename {
             self.index.diagnostics.push(diagnostic(
-                "drf_dynamic_basename",
+                diagnostic_codes::DRF_DYNAMIC_BASENAME,
                 self.parsed.span_for(call),
                 "DRF router basename is dynamic and could not be resolved",
             ));
@@ -540,6 +554,30 @@ impl<'a> DjangoCollector<'a> {
             .get(&self.parsed.source.path)?
             .get(symbol)
             .cloned()
+    }
+
+    fn is_django_url_helper(&self, function: Node<'_>, function_name: &str) -> bool {
+        if function.kind() == "identifier" {
+            return self
+                .resolve_import(function_name)
+                .is_some_and(|target| target.module.as_deref() == Some("django.urls"));
+        }
+        if function.kind() == "attribute"
+            && let Some((object, attr)) = attribute_target(self.parsed, function)
+        {
+            if attr != function_name {
+                return false;
+            }
+            if object == "django.urls" {
+                return true;
+            }
+            return self.resolve_import(&object).is_some_and(|target| {
+                target.module.as_deref() == Some("django.urls")
+                    || (target.module.as_deref() == Some("django")
+                        && target.name.as_deref() == Some("urls"))
+            });
+        }
+        false
     }
 
     fn resolve_function(&self, symbol: &str) -> Option<SymbolDef> {
@@ -823,10 +861,14 @@ struct StandardAction<'a> {
 }
 
 fn standard_viewset_actions(viewset: &ClassInfo) -> Vec<StandardAction<'_>> {
+    let read_only_model_viewset = viewset
+        .bases
+        .iter()
+        .any(|base| base.ends_with("ReadOnlyModelViewSet"));
     let model_viewset = viewset
         .bases
         .iter()
-        .any(|base| base.ends_with("ModelViewSet") || base.ends_with("ReadOnlyModelViewSet"));
+        .any(|base| base.ends_with("ModelViewSet") && !base.ends_with("ReadOnlyModelViewSet"));
     let candidates = [
         ("list", "GET", false),
         ("create", "POST", false),
@@ -838,7 +880,9 @@ fn standard_viewset_actions(viewset: &ClassInfo) -> Vec<StandardAction<'_>> {
     candidates
         .into_iter()
         .filter_map(|(name, method, detail)| {
-            if model_viewset || viewset.methods.contains_key(name) {
+            let standard_for_base =
+                model_viewset || (read_only_model_viewset && matches!(name, "list" | "retrieve"));
+            if standard_for_base || viewset.methods.contains_key(name) {
                 Some(StandardAction {
                     name,
                     method,
@@ -974,8 +1018,9 @@ fn class_info(parsed: &ParsedFile, node: Node<'_>) -> Option<ClassInfo> {
     let mut methods = BTreeMap::new();
     let mut actions = Vec::new();
     let mut lookup_field = None;
-    let mut stack = vec![node];
-    while let Some(current) = stack.pop() {
+    let body = node.child_by_field_name("body")?;
+    let mut cursor = body.walk();
+    for current in body.children(&mut cursor).filter(|child| child.is_named()) {
         match current.kind() {
             "function_definition" => {
                 if let Some(name_node) = current.child_by_field_name("name")
@@ -995,10 +1040,16 @@ fn class_info(parsed: &ParsedFile, node: Node<'_>) -> Option<ClassInfo> {
                     }
                 }
             }
-            "assignment" => {
-                if let Some((left, right)) = assignment_sides(parsed, current)
+            "assignment" | "expression_statement" => {
+                let assignment = if current.kind() == "assignment" {
+                    Some(current)
+                } else {
+                    find_direct_child_kind(current, "assignment")
+                };
+                if let Some(assignment) = assignment
+                    && let Some((left, right)) = assignment_sides(parsed, assignment)
                     && left.trim() == "lookup_field"
-                    && let Some(value) = assignment_right_node(current)
+                    && let Some(value) = assignment_right_node(assignment)
                         .and_then(|right| string_literal(parsed, right))
                 {
                     let _ = right;
@@ -1007,8 +1058,6 @@ fn class_info(parsed: &ParsedFile, node: Node<'_>) -> Option<ClassInfo> {
             }
             _ => {}
         }
-        let mut cursor = current.walk();
-        stack.extend(current.children(&mut cursor));
     }
     let bases = class_bases(parsed, node);
     Some(ClassInfo {
@@ -1132,7 +1181,14 @@ fn parse_imports(
                 } else {
                     Some(original.to_string())
                 };
-                imports.insert(local.to_string(), ImportTarget { file, name });
+                imports.insert(
+                    local.to_string(),
+                    ImportTarget {
+                        file,
+                        name,
+                        module: Some(module.to_string()),
+                    },
+                );
             }
         } else if let Some(rest) = trimmed.strip_prefix("import ") {
             for imported in rest.split(',') {
@@ -1146,6 +1202,7 @@ fn parse_imports(
                     ImportTarget {
                         file: resolve_absolute_module_file(module_index, module),
                         name: None,
+                        module: Some(module.to_string()),
                     },
                 );
             }
@@ -1277,6 +1334,24 @@ fn include_call<'tree>(parsed: &ParsedFile, node: Node<'tree>) -> Option<Node<'t
         }
     }
     None
+}
+
+fn is_urlpatterns_context(parsed: &ParsedFile, call: Node<'_>) -> bool {
+    let mut current = call;
+    while let Some(parent) = current.parent() {
+        match parent.kind() {
+            "assignment" => {
+                return parent
+                    .child_by_field_name("left")
+                    .or_else(|| parent.child_by_field_name("target"))
+                    .and_then(|left| parsed.text_for(left))
+                    .is_some_and(|left| left.trim() == "urlpatterns");
+            }
+            "function_definition" | "class_definition" => return false,
+            _ => current = parent,
+        }
+    }
+    false
 }
 
 fn source_evidence_item(

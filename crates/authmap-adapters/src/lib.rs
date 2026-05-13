@@ -2370,7 +2370,7 @@ mod tests {
         ]);
         let output = DjangoAdapter.discover_routes(&parsed, &AdapterContext::default());
 
-        assert_eq!(output.routes.len(), 13);
+        assert_eq!(output.routes.len(), 18);
         assert!(output.routes.iter().all(|route| route.span.is_some()));
         assert!(output.routes.iter().all(|route| {
             route
@@ -2434,6 +2434,30 @@ mod tests {
             output
                 .routes
                 .iter()
+                .any(|route| route.method == "GET" && route.path == "/accounts/api/readonly")
+        );
+        assert!(
+            output.routes.iter().any(|route| {
+                route.method == "GET" && route.path == "/accounts/api/readonly/{pk}"
+            })
+        );
+        assert!(!output.routes.iter().any(|route| {
+            matches!(route.method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE")
+                && route.path.starts_with("/accounts/api/readonly")
+        }));
+        assert!(output.routes.iter().any(|route| {
+            route.method == "POST" && route.path == "/accounts/readonly-api/audit/refresh"
+        }));
+        assert!(
+            !output
+                .routes
+                .iter()
+                .any(|route| route.path == "/accounts/not-a-django-route/")
+        );
+        assert!(
+            output
+                .routes
+                .iter()
                 .any(|route| route.path == "<dynamic>" && route.confidence == Confidence::Medium)
         );
 
@@ -2443,6 +2467,7 @@ mod tests {
             "drf_dynamic_router_prefix",
             "drf_dynamic_basename",
             "django_custom_router",
+            "django_urlpattern_context_uncertain",
         ] {
             assert!(
                 output
@@ -2464,10 +2489,16 @@ mod tests {
             "nextjs/app/(admin)/reports/route.ts",
             "nextjs/app/(.)modal/route.ts",
             "nextjs/app/dynamic-export/route.ts",
+            "nextjs/app/head/route.js",
+            "nextjs/app/options/route.jsx",
+            "nextjs/app/tsx/route.tsx",
+            "nextjs/app/wrapped-named/route.ts",
+            "nextjs/app/external/route.ts",
+            "nextjs/app/external/handler.ts",
         ]);
         let output = NextJsAdapter.discover_routes(&parsed, &AdapterContext::default());
 
-        assert_eq!(output.routes.len(), 9);
+        assert_eq!(output.routes.len(), 14);
         assert!(output.routes.iter().all(|route| route.span.is_some()));
         assert!(output.routes.iter().all(|route| {
             route
@@ -2529,6 +2560,39 @@ mod tests {
 
         let unusual = route(&output, "GET", "/(.)modal");
         assert_eq!(unusual.confidence, Confidence::Medium);
+        assert_eq!(route(&output, "HEAD", "/head").framework, Framework::NextJs);
+        assert_eq!(
+            route(&output, "OPTIONS", "/options").framework,
+            Framework::NextJs
+        );
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.method == "GET" && route.path == "/tsx")
+        );
+        assert!(
+            !output
+                .routes
+                .iter()
+                .any(|route| route.method == "DELETE" && route.path == "/tsx")
+        );
+        assert_eq!(
+            route(&output, "PATCH", "/wrapped-named")
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("updateProfile")
+        );
+        assert_eq!(
+            route(&output, "POST", "/external")
+                .handler
+                .as_ref()
+                .and_then(|handler| handler.span.as_ref())
+                .map(|span| span.file.replace('\\', "/"))
+                .is_some_and(|file| file.ends_with("tests/fixtures/nextjs/app/external/handler.ts")),
+            true
+        );
         assert!(output.routes.iter().all(|route| {
             route
                 .source_evidence

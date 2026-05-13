@@ -37,7 +37,7 @@
     {
       "path": "tests/fixtures/django/accounts/urls.py",
       "language": "python",
-      "size_bytes": 567,
+      "size_bytes": 987,
       "sha256": null,
       "project_hints": [
         "django",
@@ -49,7 +49,7 @@
     {
       "path": "tests/fixtures/django/accounts/views.py",
       "language": "python",
-      "size_bytes": 1311,
+      "size_bytes": 1750,
       "sha256": null,
       "project_hints": [
         "django",
@@ -87,8 +87,8 @@
           "line": 41,
           "column": 7,
           "byte_range": {
-            "start": 812,
-            "end": 823
+            "start": 834,
+            "end": 845
           }
         }
       },
@@ -97,8 +97,8 @@
         "line": 7,
         "column": 1,
         "byte_range": {
-          "start": 134,
-          "end": 194
+          "start": 148,
+          "end": 208
         }
       },
       "source_evidence": [
@@ -122,11 +122,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 15,
+            "line": 18,
             "column": 5,
             "byte_range": {
-              "start": 465,
-              "end": 499
+              "start": 671,
+              "end": 705
             }
           },
           "confidence": "high",
@@ -141,8 +141,8 @@
               "line": 41,
               "column": 7,
               "byte_range": {
-                "start": 812,
-                "end": 823
+                "start": 834,
+                "end": 845
               }
             }
           },
@@ -151,8 +151,8 @@
             "line": 7,
             "column": 1,
             "byte_range": {
-              "start": 134,
-              "end": 194
+              "start": 148,
+              "end": 208
             }
           },
           "confidence": "high",
@@ -188,8 +188,8 @@
           "line": 44,
           "column": 9,
           "byte_range": {
-            "start": 874,
-            "end": 878
+            "start": 896,
+            "end": 900
           }
         }
       },
@@ -198,8 +198,8 @@
         "line": 7,
         "column": 1,
         "byte_range": {
-          "start": 134,
-          "end": 194
+          "start": 148,
+          "end": 208
         }
       },
       "source_evidence": [
@@ -223,11 +223,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 15,
+            "line": 18,
             "column": 5,
             "byte_range": {
-              "start": 465,
-              "end": 499
+              "start": 671,
+              "end": 705
             }
           },
           "confidence": "high",
@@ -242,8 +242,8 @@
               "line": 41,
               "column": 7,
               "byte_range": {
-                "start": 812,
-                "end": 823
+                "start": 834,
+                "end": 845
               }
             }
           },
@@ -252,8 +252,8 @@
             "line": 7,
             "column": 1,
             "byte_range": {
-              "start": 134,
-              "end": 194
+              "start": 148,
+              "end": 208
             }
           },
           "confidence": "high",
@@ -289,8 +289,8 @@
           "line": 41,
           "column": 7,
           "byte_range": {
-            "start": 812,
-            "end": 823
+            "start": 834,
+            "end": 845
           }
         }
       },
@@ -299,8 +299,8 @@
         "line": 7,
         "column": 1,
         "byte_range": {
-          "start": 134,
-          "end": 194
+          "start": 148,
+          "end": 208
         }
       },
       "source_evidence": [
@@ -324,11 +324,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 15,
+            "line": 18,
             "column": 5,
             "byte_range": {
-              "start": 465,
-              "end": 499
+              "start": 671,
+              "end": 705
             }
           },
           "confidence": "high",
@@ -343,8 +343,8 @@
               "line": 41,
               "column": 7,
               "byte_range": {
-                "start": 812,
-                "end": 823
+                "start": 834,
+                "end": 845
               }
             }
           },
@@ -353,8 +353,8 @@
             "line": 7,
             "column": 1,
             "byte_range": {
-              "start": 134,
-              "end": 194
+              "start": 148,
+              "end": 208
             }
           },
           "confidence": "high",
@@ -390,8 +390,8 @@
           "line": 41,
           "column": 7,
           "byte_range": {
-            "start": 812,
-            "end": 823
+            "start": 834,
+            "end": 845
           }
         }
       },
@@ -400,8 +400,8 @@
         "line": 7,
         "column": 1,
         "byte_range": {
-          "start": 134,
-          "end": 194
+          "start": 148,
+          "end": 208
         }
       },
       "source_evidence": [
@@ -425,11 +425,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 15,
+            "line": 18,
             "column": 5,
             "byte_range": {
-              "start": 465,
-              "end": 499
+              "start": 671,
+              "end": 705
             }
           },
           "confidence": "high",
@@ -444,8 +444,8 @@
               "line": 41,
               "column": 7,
               "byte_range": {
-                "start": 812,
-                "end": 823
+                "start": 834,
+                "end": 845
               }
             }
           },
@@ -454,8 +454,8 @@
             "line": 7,
             "column": 1,
             "byte_range": {
-              "start": 134,
-              "end": 194
+              "start": 148,
+              "end": 208
             }
           },
           "confidence": "high",
@@ -491,8 +491,8 @@
           "line": 48,
           "column": 9,
           "byte_range": {
-            "start": 963,
-            "end": 969
+            "start": 985,
+            "end": 991
           }
         }
       },
@@ -501,8 +501,8 @@
         "line": 7,
         "column": 1,
         "byte_range": {
-          "start": 134,
-          "end": 194
+          "start": 148,
+          "end": 208
         }
       },
       "source_evidence": [
@@ -526,11 +526,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 15,
+            "line": 18,
             "column": 5,
             "byte_range": {
-              "start": 465,
-              "end": 499
+              "start": 671,
+              "end": 705
             }
           },
           "confidence": "high",
@@ -545,8 +545,8 @@
               "line": 41,
               "column": 7,
               "byte_range": {
-                "start": 812,
-                "end": 823
+                "start": 834,
+                "end": 845
               }
             }
           },
@@ -555,8 +555,8 @@
             "line": 7,
             "column": 1,
             "byte_range": {
-              "start": 134,
-              "end": 194
+              "start": 148,
+              "end": 208
             }
           },
           "confidence": "high",
@@ -592,8 +592,8 @@
           "line": 52,
           "column": 9,
           "byte_range": {
-            "start": 1125,
-            "end": 1132
+            "start": 1147,
+            "end": 1154
           }
         }
       },
@@ -602,8 +602,8 @@
         "line": 7,
         "column": 1,
         "byte_range": {
-          "start": 134,
-          "end": 194
+          "start": 148,
+          "end": 208
         }
       },
       "source_evidence": [
@@ -627,11 +627,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 15,
+            "line": 18,
             "column": 5,
             "byte_range": {
-              "start": 465,
-              "end": 499
+              "start": 671,
+              "end": 705
             }
           },
           "confidence": "high",
@@ -646,8 +646,8 @@
               "line": 41,
               "column": 7,
               "byte_range": {
-                "start": 812,
-                "end": 823
+                "start": 834,
+                "end": 845
               }
             }
           },
@@ -656,8 +656,8 @@
             "line": 7,
             "column": 1,
             "byte_range": {
-              "start": 134,
-              "end": 194
+              "start": 148,
+              "end": 208
             }
           },
           "confidence": "high",
@@ -672,8 +672,8 @@
               "line": 52,
               "column": 9,
               "byte_range": {
-                "start": 1125,
-                "end": 1132
+                "start": 1147,
+                "end": 1154
               }
             }
           },
@@ -682,8 +682,8 @@
             "line": 52,
             "column": 9,
             "byte_range": {
-              "start": 1125,
-              "end": 1132
+              "start": 1147,
+              "end": 1154
             }
           },
           "confidence": "high",
@@ -719,8 +719,8 @@
           "line": 41,
           "column": 7,
           "byte_range": {
-            "start": 812,
-            "end": 823
+            "start": 834,
+            "end": 845
           }
         }
       },
@@ -729,8 +729,8 @@
         "line": 7,
         "column": 1,
         "byte_range": {
-          "start": 134,
-          "end": 194
+          "start": 148,
+          "end": 208
         }
       },
       "source_evidence": [
@@ -754,11 +754,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 15,
+            "line": 18,
             "column": 5,
             "byte_range": {
-              "start": 465,
-              "end": 499
+              "start": 671,
+              "end": 705
             }
           },
           "confidence": "high",
@@ -773,8 +773,8 @@
               "line": 41,
               "column": 7,
               "byte_range": {
-                "start": 812,
-                "end": 823
+                "start": 834,
+                "end": 845
               }
             }
           },
@@ -783,8 +783,8 @@
             "line": 7,
             "column": 1,
             "byte_range": {
-              "start": 134,
-              "end": 194
+              "start": 148,
+              "end": 208
             }
           },
           "confidence": "high",
@@ -809,19 +809,19 @@
       "id": "route_0008",
       "framework": "django_rest_framework",
       "method": "GET",
-      "path": "<dynamic>",
-      "name": null,
+      "path": "/accounts/api/readonly",
+      "name": "readonly-list",
       "tags": [],
       "middleware": [],
       "handler": {
-        "name": "DynamicViewSet.list",
+        "name": "ReadOnlyAccountViewSet.list",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 57,
-          "column": 9,
+          "line": 56,
+          "column": 7,
           "byte_range": {
-            "start": 1272,
-            "end": 1276
+            "start": 1261,
+            "end": 1283
           }
         }
       },
@@ -830,8 +830,8 @@
         "line": 8,
         "column": 1,
         "byte_range": {
-          "start": 195,
-          "end": 275
+          "start": 209,
+          "end": 287
         }
       },
       "source_evidence": [
@@ -855,11 +855,213 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 15,
+            "line": 18,
             "column": 5,
             "byte_range": {
-              "start": 465,
-              "end": 499
+              "start": 671,
+              "end": 705
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "ReadOnlyAccountViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 56,
+              "column": 7,
+              "byte_range": {
+                "start": 1261,
+                "end": 1283
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 8,
+            "column": 1,
+            "byte_range": {
+              "start": 209,
+              "end": 287
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "readonly",
+          "class_name": "ReadOnlyAccountViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "list",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0009",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/accounts/api/readonly/{pk}",
+      "name": "readonly-retrieve",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "ReadOnlyAccountViewSet.retrieve",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 56,
+          "column": 7,
+          "byte_range": {
+            "start": 1261,
+            "end": 1283
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 8,
+        "column": 1,
+        "byte_range": {
+          "start": 209,
+          "end": 287
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 18,
+            "column": 5,
+            "byte_range": {
+              "start": 671,
+              "end": 705
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "ReadOnlyAccountViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 56,
+              "column": 7,
+              "byte_range": {
+                "start": 1261,
+                "end": 1283
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 8,
+            "column": 1,
+            "byte_range": {
+              "start": 209,
+              "end": 287
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "readonly",
+          "class_name": "ReadOnlyAccountViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "retrieve",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0010",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "<dynamic>",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "DynamicViewSet.list",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 71,
+          "column": 9,
+          "byte_range": {
+            "start": 1711,
+            "end": 1715
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 9,
+        "column": 1,
+        "byte_range": {
+          "start": 288,
+          "end": 368
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 18,
+            "column": 5,
+            "byte_range": {
+              "start": 671,
+              "end": 705
             }
           },
           "confidence": "high",
@@ -871,21 +1073,21 @@
             "name": "DynamicViewSet",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 56,
+              "line": 70,
               "column": 7,
               "byte_range": {
-                "start": 1239,
-                "end": 1253
+                "start": 1678,
+                "end": 1692
               }
             }
           },
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 8,
+            "line": 9,
             "column": 1,
             "byte_range": {
-              "start": 195,
-              "end": 275
+              "start": 288,
+              "end": 368
             }
           },
           "confidence": "medium",
@@ -913,7 +1115,336 @@
       }
     },
     {
-      "id": "route_0009",
+      "id": "route_0011",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/accounts/readonly-api/audit",
+      "name": "audit-list",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "ReadOnlyAuditViewSet.list",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 64,
+          "column": 7,
+          "byte_range": {
+            "start": 1457,
+            "end": 1477
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 13,
+        "column": 1,
+        "byte_range": {
+          "start": 434,
+          "end": 513
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 19,
+            "column": 5,
+            "byte_range": {
+              "start": 711,
+              "end": 763
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "ReadOnlyAuditViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 64,
+              "column": 7,
+              "byte_range": {
+                "start": 1457,
+                "end": 1477
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 13,
+            "column": 1,
+            "byte_range": {
+              "start": 434,
+              "end": 513
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "audit",
+          "class_name": "ReadOnlyAuditViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "list",
+          "route_pattern_kind": "drf_router",
+          "router_name": "readonly_router"
+        }
+      }
+    },
+    {
+      "id": "route_0012",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/accounts/readonly-api/audit/{pk}",
+      "name": "audit-retrieve",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "ReadOnlyAuditViewSet.retrieve",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 64,
+          "column": 7,
+          "byte_range": {
+            "start": 1457,
+            "end": 1477
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 13,
+        "column": 1,
+        "byte_range": {
+          "start": 434,
+          "end": 513
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 19,
+            "column": 5,
+            "byte_range": {
+              "start": 711,
+              "end": 763
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "ReadOnlyAuditViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 64,
+              "column": 7,
+              "byte_range": {
+                "start": 1457,
+                "end": 1477
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 13,
+            "column": 1,
+            "byte_range": {
+              "start": 434,
+              "end": 513
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "audit",
+          "class_name": "ReadOnlyAuditViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "retrieve",
+          "route_pattern_kind": "drf_router",
+          "router_name": "readonly_router"
+        }
+      }
+    },
+    {
+      "id": "route_0013",
+      "framework": "django_rest_framework",
+      "method": "POST",
+      "path": "/accounts/readonly-api/audit/refresh",
+      "name": "audit-refresh",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "ReadOnlyAuditViewSet.refresh",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 66,
+          "column": 9,
+          "byte_range": {
+            "start": 1573,
+            "end": 1580
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 13,
+        "column": 1,
+        "byte_range": {
+          "start": 434,
+          "end": 513
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 19,
+            "column": 5,
+            "byte_range": {
+              "start": 711,
+              "end": 763
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "ReadOnlyAuditViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 64,
+              "column": 7,
+              "byte_range": {
+                "start": 1457,
+                "end": 1477
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 13,
+            "column": 1,
+            "byte_range": {
+              "start": 434,
+              "end": 513
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_viewset_action",
+          "symbol": {
+            "name": "refresh",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 66,
+              "column": 9,
+              "byte_range": {
+                "start": 1573,
+                "end": 1580
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 66,
+            "column": 9,
+            "byte_range": {
+              "start": 1573,
+              "end": 1580
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "audit",
+          "class_name": "ReadOnlyAuditViewSet",
+          "handler_kind": "viewset_action",
+          "lookup_field": "pk",
+          "method_name": "refresh",
+          "route_pattern_kind": "drf_router",
+          "router_name": "readonly_router"
+        }
+      }
+    },
+    {
+      "id": "route_0014",
       "framework": "django",
       "method": "ANY",
       "path": "/accounts",
@@ -927,18 +1458,18 @@
           "line": 20,
           "column": 5,
           "byte_range": {
-            "start": 332,
-            "end": 337
+            "start": 354,
+            "end": 359
           }
         }
       },
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 13,
+        "line": 16,
         "column": 5,
         "byte_range": {
-          "start": 329,
-          "end": 372
+          "start": 535,
+          "end": 578
         }
       },
       "source_evidence": [
@@ -966,18 +1497,18 @@
               "line": 20,
               "column": 5,
               "byte_range": {
-                "start": 332,
-                "end": 337
+                "start": 354,
+                "end": 359
               }
             }
           },
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 13,
+            "line": 16,
             "column": 5,
             "byte_range": {
-              "start": 329,
-              "end": 372
+              "start": 535,
+              "end": 578
             }
           },
           "confidence": "high",
@@ -996,7 +1527,7 @@
       }
     },
     {
-      "id": "route_0010",
+      "id": "route_0015",
       "framework": "django",
       "method": "ANY",
       "path": "/accounts/users/<int:pk>/",
@@ -1010,18 +1541,18 @@
           "line": 28,
           "column": 7,
           "byte_range": {
-            "start": 462,
-            "end": 479
+            "start": 484,
+            "end": 501
           }
         }
       },
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 14,
+        "line": 17,
         "column": 5,
         "byte_range": {
-          "start": 378,
-          "end": 459
+          "start": 584,
+          "end": 665
         }
       },
       "source_evidence": [
@@ -1049,18 +1580,18 @@
               "line": 28,
               "column": 7,
               "byte_range": {
-                "start": 462,
-                "end": 479
+                "start": 484,
+                "end": 501
               }
             }
           },
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 14,
+            "line": 17,
             "column": 5,
             "byte_range": {
-              "start": 378,
-              "end": 459
+              "start": 584,
+              "end": 665
             }
           },
           "confidence": "high",
@@ -1079,7 +1610,7 @@
       }
     },
     {
-      "id": "route_0011",
+      "id": "route_0016",
       "framework": "django",
       "method": "ANY",
       "path": "<dynamic>",
@@ -1093,18 +1624,18 @@
           "line": 24,
           "column": 5,
           "byte_range": {
-            "start": 402,
-            "end": 414
+            "start": 424,
+            "end": 436
           }
         }
       },
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 16,
+        "line": 20,
         "column": 5,
         "byte_range": {
-          "start": 505,
-          "end": 563
+          "start": 769,
+          "end": 827
         }
       },
       "source_evidence": [
@@ -1132,18 +1663,18 @@
               "line": 24,
               "column": 5,
               "byte_range": {
-                "start": 402,
-                "end": 414
+                "start": 424,
+                "end": 436
               }
             }
           },
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 16,
+            "line": 20,
             "column": 5,
             "byte_range": {
-              "start": 505,
-              "end": 563
+              "start": 769,
+              "end": 827
             }
           },
           "confidence": "medium",
@@ -1166,7 +1697,7 @@
       }
     },
     {
-      "id": "route_0012",
+      "id": "route_0017",
       "framework": "django",
       "method": "ANY",
       "path": "/status/",
@@ -1180,8 +1711,8 @@
           "line": 12,
           "column": 5,
           "byte_range": {
-            "start": 223,
-            "end": 229
+            "start": 245,
+            "end": 251
           }
         }
       },
@@ -1204,8 +1735,8 @@
               "line": 12,
               "column": 5,
               "byte_range": {
-                "start": 223,
-                "end": 229
+                "start": 245,
+                "end": 251
               }
             }
           },
@@ -1234,7 +1765,7 @@
       }
     },
     {
-      "id": "route_0013",
+      "id": "route_0018",
       "framework": "django",
       "method": "ANY",
       "path": "/^legacy/(?P<slug>[-\\w]+)/$",
@@ -1248,8 +1779,8 @@
           "line": 16,
           "column": 5,
           "byte_range": {
-            "start": 270,
-            "end": 283
+            "start": 292,
+            "end": 305
           }
         }
       },
@@ -1272,8 +1803,8 @@
               "line": 16,
               "column": 5,
               "byte_range": {
-                "start": 270,
-                "end": 283
+                "start": 292,
+                "end": 305
               }
             }
           },
@@ -1319,8 +1850,8 @@
           "line": 45,
           "column": 9,
           "byte_range": {
-            "start": 903,
-            "end": 921
+            "start": 925,
+            "end": 943
           }
         }
       },
@@ -1329,8 +1860,8 @@
         "line": 45,
         "column": 9,
         "byte_range": {
-          "start": 903,
-          "end": 935
+          "start": 925,
+          "end": 957
         }
       },
       "confidence": "high",
@@ -1338,7 +1869,7 @@
     },
     {
       "id": "evidence_0002",
-      "route_id": "route_0010",
+      "route_id": "route_0015",
       "evidence_type": "unknown_dynamic_check",
       "mechanism": "handler_condition",
       "symbol": {
@@ -1348,8 +1879,8 @@
           "line": 28,
           "column": 7,
           "byte_range": {
-            "start": 462,
-            "end": 479
+            "start": 484,
+            "end": 501
           }
         }
       },
@@ -1358,8 +1889,8 @@
         "line": 31,
         "column": 12,
         "byte_range": {
-          "start": 569,
-          "end": 597
+          "start": 591,
+          "end": 619
         }
       },
       "confidence": "low",
@@ -1396,8 +1927,8 @@
         "line": 34,
         "column": 9,
         "byte_range": {
-          "start": 676,
-          "end": 690
+          "start": 698,
+          "end": 712
         }
       },
       "confidence": "medium",
@@ -1413,8 +1944,8 @@
         "line": 38,
         "column": 16,
         "byte_range": {
-          "start": 765,
-          "end": 803
+          "start": 787,
+          "end": 825
         }
       },
       "confidence": "high",
@@ -1430,8 +1961,8 @@
         "line": 49,
         "column": 16,
         "byte_range": {
-          "start": 1001,
-          "end": 1052
+          "start": 1023,
+          "end": 1074
         }
       },
       "confidence": "high",
@@ -1447,8 +1978,42 @@
         "line": 53,
         "column": 16,
         "byte_range": {
-          "start": 1175,
-          "end": 1230
+          "start": 1197,
+          "end": 1252
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "mutation_0006",
+      "operation": "delete",
+      "library": "django_orm",
+      "resource": "Account",
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 59,
+        "column": 20,
+        "byte_range": {
+          "start": 1379,
+          "end": 1424
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "mutation_0007",
+      "operation": "bulk_update",
+      "library": "django_orm",
+      "resource": "Account",
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 67,
+        "column": 16,
+        "byte_range": {
+          "start": 1612,
+          "end": 1669
         }
       },
       "confidence": "high",
@@ -1478,7 +2043,17 @@
     },
     {
       "id": "link_0003",
-      "route_id": "route_0009",
+      "route_id": "route_0013",
+      "mutation_id": "mutation_0007",
+      "evidence_id": null,
+      "confidence": "high",
+      "notes": [
+        "Mutation is directly inside route handler"
+      ]
+    },
+    {
+      "id": "link_0004",
+      "route_id": "route_0014",
       "mutation_id": "mutation_0001",
       "evidence_id": null,
       "confidence": "medium",
@@ -1487,8 +2062,8 @@
       ]
     },
     {
-      "id": "link_0004",
-      "route_id": "route_0010",
+      "id": "link_0005",
+      "route_id": "route_0015",
       "mutation_id": null,
       "evidence_id": null,
       "confidence": "low",
@@ -1499,8 +2074,8 @@
         "authmap.reachability": {
           "call_span": {
             "byte_range": {
-              "end": 690,
-              "start": 676
+              "end": 712,
+              "start": 698
             },
             "column": 9,
             "file": "tests/fixtures/django/accounts/views.py",
@@ -1512,8 +2087,8 @@
       }
     },
     {
-      "id": "link_0005",
-      "route_id": "route_0010",
+      "id": "link_0006",
+      "route_id": "route_0015",
       "mutation_id": "mutation_0002",
       "evidence_id": null,
       "confidence": "high",
@@ -1522,8 +2097,8 @@
       ]
     },
     {
-      "id": "link_0006",
-      "route_id": "route_0010",
+      "id": "link_0007",
+      "route_id": "route_0015",
       "mutation_id": "mutation_0003",
       "evidence_id": null,
       "confidence": "high",
@@ -1747,6 +2322,55 @@
     {
       "route_id": "route_0008",
       "class": "unauthenticated",
+      "risk": "medium",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0009",
+      "class": "unauthenticated",
+      "risk": "medium",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path, path_param."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "path_param"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0010",
+      "class": "unauthenticated",
       "risk": "low",
       "rationale": [
         "No authorization evidence was detected."
@@ -1766,7 +2390,90 @@
       }
     },
     {
-      "route_id": "route_0009",
+      "route_id": "route_0011",
+      "class": "unauthenticated",
+      "risk": "medium",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0012",
+      "class": "unauthenticated",
+      "risk": "medium",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path, path_param."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "path_param"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0013",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path, linked_mutation, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [
+            "link_0003"
+          ],
+          "mutation_ids": [
+            "mutation_0007"
+          ],
+          "sensitivity_reasons": [
+            "account_path",
+            "linked_mutation",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0014",
       "class": "unauthenticated",
       "risk": "high",
       "rationale": [
@@ -1785,7 +2492,7 @@
         "authmap.coverage": {
           "evidence_ids": [],
           "link_ids": [
-            "link_0003"
+            "link_0004"
           ],
           "mutation_ids": [
             "mutation_0001"
@@ -1801,7 +2508,7 @@
       }
     },
     {
-      "route_id": "route_0010",
+      "route_id": "route_0015",
       "class": "unknown_or_dynamic",
       "risk": "review_required",
       "rationale": [
@@ -1825,9 +2532,9 @@
             "evidence_0002"
           ],
           "link_ids": [
-            "link_0004",
             "link_0005",
-            "link_0006"
+            "link_0006",
+            "link_0007"
           ],
           "mutation_ids": [
             "mutation_0002",
@@ -1848,7 +2555,7 @@
       }
     },
     {
-      "route_id": "route_0011",
+      "route_id": "route_0016",
       "class": "unauthenticated",
       "risk": "high",
       "rationale": [
@@ -1876,7 +2583,7 @@
       }
     },
     {
-      "route_id": "route_0012",
+      "route_id": "route_0017",
       "class": "unauthenticated",
       "risk": "high",
       "rationale": [
@@ -1902,7 +2609,7 @@
       }
     },
     {
-      "route_id": "route_0013",
+      "route_id": "route_0018",
       "class": "unauthenticated",
       "risk": "high",
       "rationale": [
@@ -1936,11 +2643,11 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 10,
+        "line": 11,
         "column": 17,
         "byte_range": {
-          "start": 293,
-          "end": 307
+          "start": 386,
+          "end": 400
         }
       },
       "message": "DRF custom router behavior could not be resolved statically"
@@ -1968,14 +2675,30 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 16,
+        "line": 20,
         "column": 10,
         "byte_range": {
-          "start": 510,
-          "end": 521
+          "start": 774,
+          "end": 785
         }
       },
       "message": "Django URL path is dynamic and could not be resolved"
+    },
+    {
+      "category": "adapter",
+      "code": "django_urlpattern_context_uncertain",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 29,
+        "column": 5,
+        "byte_range": {
+          "start": 926,
+          "end": 983
+        }
+      },
+      "message": "Django URL helper call is outside a statically recognized urlpatterns context"
     },
     {
       "category": "adapter",
@@ -1984,11 +2707,11 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 8,
+        "line": 9,
         "column": 1,
         "byte_range": {
-          "start": 195,
-          "end": 275
+          "start": 288,
+          "end": 368
         }
       },
       "message": "DRF router basename is dynamic and could not be resolved"
@@ -2000,11 +2723,11 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 8,
+        "line": 9,
         "column": 17,
         "byte_range": {
-          "start": 211,
-          "end": 227
+          "start": 304,
+          "end": 320
         }
       },
       "message": "DRF router registration prefix is dynamic and could not be resolved"

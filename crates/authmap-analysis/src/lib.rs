@@ -3117,7 +3117,6 @@ fn nextjs_wrapped_handler_nodes<'tree>(
 ) -> Vec<Node<'tree>> {
     let mut nodes = Vec::new();
     if let Some(variable) = js_variable_declarator_node(parsed, export_name) {
-        nodes.push(variable);
         if let Some(value) = variable.child_by_field_name("value")
             && value.kind() == "call_expression"
         {
@@ -4567,7 +4566,7 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 13);
+        assert_eq!(document.routes.len(), 18);
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::Django
                 && route.method == "ANY"
@@ -4585,6 +4584,20 @@ sensitivity:
                     .handler
                     .as_ref()
                     .is_some_and(|handler| handler.name == "UserViewSet.disable")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::DjangoRestFramework
+                && route.method == "GET"
+                && route.path == "/accounts/api/readonly/{pk}"
+        }));
+        assert!(!document.routes.iter().any(|route| {
+            route.path.starts_with("/accounts/api/readonly")
+                && matches!(route.method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::DjangoRestFramework
+                && route.method == "POST"
+                && route.path == "/accounts/readonly-api/audit/refresh"
         }));
         assert!(document.evidence.iter().any(|evidence| {
             evidence.evidence_type == EvidenceType::PermissionCheck
@@ -4614,6 +4627,7 @@ sensitivity:
         for code in [
             "django_dynamic_include",
             "django_dynamic_url_path",
+            "django_urlpattern_context_uncertain",
             "drf_dynamic_router_prefix",
             "drf_dynamic_basename",
         ] {
@@ -4633,7 +4647,7 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 9);
+        assert_eq!(document.routes.len(), 14);
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::NextJs
                 && route.method == "GET"
@@ -4649,6 +4663,22 @@ sensitivity:
                     .as_ref()
                     .is_some_and(|handler| handler.name == "updateDoc")
         }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::NextJs
+                && route.method == "HEAD"
+                && route.path == "/head"
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::NextJs
+                && route.method == "OPTIONS"
+                && route.path == "/options"
+        }));
+        assert!(
+            !document
+                .routes
+                .iter()
+                .any(|route| route.method == "DELETE" && route.path == "/tsx")
+        );
         assert!(document.evidence.iter().any(|evidence| {
             evidence.evidence_type == EvidenceType::PermissionCheck
                 && evidence
@@ -4661,7 +4691,7 @@ sensitivity:
                 && evidence
                     .symbol
                     .as_ref()
-                    .is_some_and(|symbol| symbol.name == "requireUser")
+                    .is_some_and(|symbol| symbol.name == "requireAuth")
         }));
         assert!(document.links.iter().any(|link| {
             document.routes.iter().any(|route| {
@@ -4681,6 +4711,17 @@ sensitivity:
                     && route.path == "/docs/[[...slug]]"
             }) && link.confidence == Confidence::High
                 && link.mutation_id.as_ref().is_some()
+        }));
+        assert!(document.links.iter().any(|link| {
+            document.routes.iter().any(|route| {
+                route.id == link.route_id && route.method == "POST" && route.path == "/external"
+            }) && link.mutation_id.as_ref().is_some_and(|mutation_id| {
+                document.mutations.iter().any(|mutation| {
+                    &mutation.id == mutation_id
+                        && mutation.library.as_deref() == Some("prisma")
+                        && mutation.operation == MutationOperation::Create
+                })
+            })
         }));
         for code in [
             "nextjs_unusual_route_segment",
