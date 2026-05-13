@@ -1,0 +1,2045 @@
+{
+  "schema_version": "0.1.0",
+  "metadata": {
+    "tool_name": "authmap",
+    "tool_version": "0.1.0",
+    "mode": "advisory",
+    "target_roots": [
+      "tests/fixtures/nextjs"
+    ],
+    "config_path": null
+  },
+  "source_files": [
+    {
+      "path": "tests/fixtures/nextjs/app/(.)modal/route.ts",
+      "language": "type_script",
+      "size_bytes": 67,
+      "sha256": null,
+      "project_hints": [
+        "next_js",
+        "prisma"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/nextjs/app/(admin)/reports/route.ts",
+      "language": "type_script",
+      "size_bytes": 126,
+      "sha256": null,
+      "project_hints": [
+        "next_js",
+        "prisma"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/nextjs/app/blog/[...slug]/route.ts",
+      "language": "type_script",
+      "size_bytes": 206,
+      "sha256": null,
+      "project_hints": [
+        "next_js",
+        "prisma"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/nextjs/app/docs/[[...slug]]/route.ts",
+      "language": "type_script",
+      "size_bytes": 196,
+      "sha256": null,
+      "project_hints": [
+        "next_js",
+        "prisma"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/nextjs/app/dynamic-export/route.ts",
+      "language": "type_script",
+      "size_bytes": 61,
+      "sha256": null,
+      "project_hints": [
+        "next_js",
+        "prisma"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/nextjs/app/external/handler.ts",
+      "language": "type_script",
+      "size_bytes": 107,
+      "sha256": null,
+      "project_hints": [
+        "next_js",
+        "prisma"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/nextjs/app/external/route.ts",
+      "language": "type_script",
+      "size_bytes": 50,
+      "sha256": null,
+      "project_hints": [
+        "next_js",
+        "prisma"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/nextjs/app/head/route.js",
+      "language": "java_script",
+      "size_bytes": 56,
+      "sha256": null,
+      "project_hints": [
+        "next_js",
+        "prisma"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/nextjs/app/nested/app/users/route.ts",
+      "language": "type_script",
+      "size_bytes": 64,
+      "sha256": null,
+      "project_hints": [
+        "next_js",
+        "prisma"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/nextjs/app/options/route.jsx",
+      "language": "java_script_react",
+      "size_bytes": 72,
+      "sha256": null,
+      "project_hints": [
+        "next_js",
+        "prisma"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/nextjs/app/route.ts",
+      "language": "type_script",
+      "size_bytes": 228,
+      "sha256": null,
+      "project_hints": [
+        "next_js",
+        "prisma"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/nextjs/app/tsx/route.tsx",
+      "language": "type_script_react",
+      "size_bytes": 153,
+      "sha256": null,
+      "project_hints": [
+        "next_js",
+        "prisma"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/nextjs/app/users/[id]/route.ts",
+      "language": "type_script",
+      "size_bytes": 193,
+      "sha256": null,
+      "project_hints": [
+        "next_js",
+        "prisma"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/nextjs/app/wrapped-named/route.ts",
+      "language": "type_script",
+      "size_bytes": 213,
+      "sha256": null,
+      "project_hints": [
+        "next_js",
+        "prisma"
+      ],
+      "skipped": null
+    }
+  ],
+  "routes": [
+    {
+      "id": "route_0001",
+      "framework": "next_js",
+      "method": "GET",
+      "path": "/modal",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "GET",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/(.)modal/route.ts",
+          "line": 1,
+          "column": 17,
+          "byte_range": {
+            "start": 16,
+            "end": 19
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/(.)modal/route.ts",
+        "line": 1,
+        "column": 8,
+        "byte_range": {
+          "start": 7,
+          "end": 66
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_route_handler_export",
+          "symbol": {
+            "name": "GET",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/(.)modal/route.ts",
+              "line": 1,
+              "column": 17,
+              "byte_range": {
+                "start": 16,
+                "end": 19
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/(.)modal/route.ts",
+            "line": 1,
+            "column": 8,
+            "byte_range": {
+              "start": 7,
+              "end": 66
+            }
+          },
+          "confidence": "medium",
+          "notes": [
+            "Next.js route segment `(.)modal` uses an unusual routing convention and was normalized for review"
+          ]
+        }
+      ],
+      "confidence": "medium",
+      "notes": [
+        "Next.js route segment `(.)modal` uses an unusual routing convention and was normalized for review"
+      ],
+      "extensions": {
+        "authmap.nextjs": {
+          "export_kind": "function",
+          "export_name": "GET",
+          "route_file": "tests/fixtures/nextjs/app/(.)modal/route.ts",
+          "wrapper": null
+        }
+      }
+    },
+    {
+      "id": "route_0002",
+      "framework": "next_js",
+      "method": "DELETE",
+      "path": "/reports",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "handleDelete",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/(admin)/reports/route.ts",
+          "line": 1,
+          "column": 10,
+          "byte_range": {
+            "start": 9,
+            "end": 21
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/(admin)/reports/route.ts",
+        "line": 5,
+        "column": 1,
+        "byte_range": {
+          "start": 91,
+          "end": 125
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_route_handler_export",
+          "symbol": {
+            "name": "handleDelete",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/(admin)/reports/route.ts",
+              "line": 1,
+              "column": 10,
+              "byte_range": {
+                "start": 9,
+                "end": 21
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/(admin)/reports/route.ts",
+            "line": 5,
+            "column": 1,
+            "byte_range": {
+              "start": 91,
+              "end": 125
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.nextjs": {
+          "export_kind": "re_export",
+          "export_name": "DELETE",
+          "route_file": "tests/fixtures/nextjs/app/(admin)/reports/route.ts",
+          "wrapper": null
+        }
+      }
+    },
+    {
+      "id": "route_0003",
+      "framework": "next_js",
+      "method": "GET",
+      "path": "/blog/[...slug]",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "GET",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/blog/[...slug]/route.ts",
+          "line": 9,
+          "column": 14,
+          "byte_range": {
+            "start": 122,
+            "end": 125
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/blog/[...slug]/route.ts",
+        "line": 9,
+        "column": 14,
+        "byte_range": {
+          "start": 122,
+          "end": 204
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_route_handler_export",
+          "symbol": {
+            "name": "GET",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/blog/[...slug]/route.ts",
+              "line": 9,
+              "column": 14,
+              "byte_range": {
+                "start": 122,
+                "end": 125
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/blog/[...slug]/route.ts",
+            "line": 9,
+            "column": 14,
+            "byte_range": {
+              "start": 122,
+              "end": 204
+            }
+          },
+          "confidence": "medium",
+          "notes": [
+            "Next.js route handler export is wrapped; wrapper behavior requires review"
+          ]
+        }
+      ],
+      "confidence": "medium",
+      "notes": [
+        "Next.js route handler export is wrapped; wrapper behavior requires review"
+      ],
+      "extensions": {
+        "authmap.nextjs": {
+          "export_kind": "wrapped",
+          "export_name": "GET",
+          "route_file": "tests/fixtures/nextjs/app/blog/[...slug]/route.ts",
+          "wrapper": "withAuth"
+        }
+      }
+    },
+    {
+      "id": "route_0004",
+      "framework": "next_js",
+      "method": "PUT",
+      "path": "/docs/[[...slug]]",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "updateDoc",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/docs/[[...slug]]/route.ts",
+          "line": 9,
+          "column": 32,
+          "byte_range": {
+            "start": 184,
+            "end": 193
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/docs/[[...slug]]/route.ts",
+        "line": 9,
+        "column": 14,
+        "byte_range": {
+          "start": 166,
+          "end": 194
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_route_handler_export",
+          "symbol": {
+            "name": "updateDoc",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/docs/[[...slug]]/route.ts",
+              "line": 9,
+              "column": 32,
+              "byte_range": {
+                "start": 184,
+                "end": 193
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/docs/[[...slug]]/route.ts",
+            "line": 9,
+            "column": 14,
+            "byte_range": {
+              "start": 166,
+              "end": 194
+            }
+          },
+          "confidence": "medium",
+          "notes": [
+            "Next.js route handler export is wrapped; wrapper behavior requires review"
+          ]
+        }
+      ],
+      "confidence": "medium",
+      "notes": [
+        "Next.js route handler export is wrapped; wrapper behavior requires review"
+      ],
+      "extensions": {
+        "authmap.nextjs": {
+          "export_kind": "wrapped",
+          "export_name": "PUT",
+          "route_file": "tests/fixtures/nextjs/app/docs/[[...slug]]/route.ts",
+          "wrapper": "requireUser"
+        }
+      }
+    },
+    {
+      "id": "route_0005",
+      "framework": "next_js",
+      "method": "DELETE",
+      "path": "/dynamic-export",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "DELETE",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/dynamic-export/route.ts",
+          "line": 3,
+          "column": 14,
+          "byte_range": {
+            "start": 35,
+            "end": 41
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/dynamic-export/route.ts",
+        "line": 3,
+        "column": 14,
+        "byte_range": {
+          "start": 35,
+          "end": 59
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_route_handler_export",
+          "symbol": {
+            "name": "DELETE",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/dynamic-export/route.ts",
+              "line": 3,
+              "column": 14,
+              "byte_range": {
+                "start": 35,
+                "end": 41
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/dynamic-export/route.ts",
+            "line": 3,
+            "column": 14,
+            "byte_range": {
+              "start": 35,
+              "end": 59
+            }
+          },
+          "confidence": "medium",
+          "notes": [
+            "Next.js route handler export value is dynamic or unsupported; review required"
+          ]
+        }
+      ],
+      "confidence": "medium",
+      "notes": [
+        "Next.js route handler export value is dynamic or unsupported; review required"
+      ],
+      "extensions": {
+        "authmap.nextjs": {
+          "export_kind": "re_export",
+          "export_name": "DELETE",
+          "route_file": "tests/fixtures/nextjs/app/dynamic-export/route.ts",
+          "wrapper": null
+        }
+      }
+    },
+    {
+      "id": "route_0006",
+      "framework": "next_js",
+      "method": "POST",
+      "path": "/external",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "POST",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/external/handler.ts",
+          "line": 1,
+          "column": 23,
+          "byte_range": {
+            "start": 22,
+            "end": 26
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/external/route.ts",
+        "line": 1,
+        "column": 1,
+        "byte_range": {
+          "start": 0,
+          "end": 49
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_route_handler_export",
+          "symbol": {
+            "name": "POST",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/external/handler.ts",
+              "line": 1,
+              "column": 23,
+              "byte_range": {
+                "start": 22,
+                "end": 26
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/external/route.ts",
+            "line": 1,
+            "column": 1,
+            "byte_range": {
+              "start": 0,
+              "end": 49
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.nextjs": {
+          "export_kind": "re_export",
+          "export_name": "POST",
+          "route_file": "tests/fixtures/nextjs/app/external/route.ts",
+          "wrapper": null
+        }
+      }
+    },
+    {
+      "id": "route_0007",
+      "framework": "next_js",
+      "method": "PUT",
+      "path": "/external",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "missing",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/external/route.ts",
+          "line": 1,
+          "column": 1,
+          "byte_range": {
+            "start": 0,
+            "end": 49
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/external/route.ts",
+        "line": 1,
+        "column": 1,
+        "byte_range": {
+          "start": 0,
+          "end": 49
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_route_handler_export",
+          "symbol": {
+            "name": "missing",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/external/route.ts",
+              "line": 1,
+              "column": 1,
+              "byte_range": {
+                "start": 0,
+                "end": 49
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/external/route.ts",
+            "line": 1,
+            "column": 1,
+            "byte_range": {
+              "start": 0,
+              "end": 49
+            }
+          },
+          "confidence": "medium",
+          "notes": [
+            "Next.js route handler re-export target could not be analyzed statically"
+          ]
+        }
+      ],
+      "confidence": "medium",
+      "notes": [
+        "Next.js route handler re-export target could not be analyzed statically"
+      ],
+      "extensions": {
+        "authmap.nextjs": {
+          "export_kind": "re_export",
+          "export_name": "PUT",
+          "route_file": "tests/fixtures/nextjs/app/external/route.ts",
+          "wrapper": null
+        }
+      }
+    },
+    {
+      "id": "route_0008",
+      "framework": "next_js",
+      "method": "HEAD",
+      "path": "/head",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "HEAD",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/head/route.js",
+          "line": 1,
+          "column": 17,
+          "byte_range": {
+            "start": 16,
+            "end": 20
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/head/route.js",
+        "line": 1,
+        "column": 8,
+        "byte_range": {
+          "start": 7,
+          "end": 55
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_route_handler_export",
+          "symbol": {
+            "name": "HEAD",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/head/route.js",
+              "line": 1,
+              "column": 17,
+              "byte_range": {
+                "start": 16,
+                "end": 20
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/head/route.js",
+            "line": 1,
+            "column": 8,
+            "byte_range": {
+              "start": 7,
+              "end": 55
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.nextjs": {
+          "export_kind": "function",
+          "export_name": "HEAD",
+          "route_file": "tests/fixtures/nextjs/app/head/route.js",
+          "wrapper": null
+        }
+      }
+    },
+    {
+      "id": "route_0009",
+      "framework": "next_js",
+      "method": "GET",
+      "path": "/nested/app/users",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "GET",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/nested/app/users/route.ts",
+          "line": 1,
+          "column": 17,
+          "byte_range": {
+            "start": 16,
+            "end": 19
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/nested/app/users/route.ts",
+        "line": 1,
+        "column": 8,
+        "byte_range": {
+          "start": 7,
+          "end": 63
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_route_handler_export",
+          "symbol": {
+            "name": "GET",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/nested/app/users/route.ts",
+              "line": 1,
+              "column": 17,
+              "byte_range": {
+                "start": 16,
+                "end": 19
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/nested/app/users/route.ts",
+            "line": 1,
+            "column": 8,
+            "byte_range": {
+              "start": 7,
+              "end": 63
+            }
+          },
+          "confidence": "medium",
+          "notes": [
+            "Next.js route file path contains nested app segments; first app segment was used"
+          ]
+        }
+      ],
+      "confidence": "medium",
+      "notes": [
+        "Next.js route file path contains nested app segments; first app segment was used"
+      ],
+      "extensions": {
+        "authmap.nextjs": {
+          "export_kind": "function",
+          "export_name": "GET",
+          "route_file": "tests/fixtures/nextjs/app/nested/app/users/route.ts",
+          "wrapper": null
+        }
+      }
+    },
+    {
+      "id": "route_0010",
+      "framework": "next_js",
+      "method": "OPTIONS",
+      "path": "/options",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "OPTIONS",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/options/route.jsx",
+          "line": 1,
+          "column": 14,
+          "byte_range": {
+            "start": 13,
+            "end": 20
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/options/route.jsx",
+        "line": 1,
+        "column": 14,
+        "byte_range": {
+          "start": 13,
+          "end": 70
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_route_handler_export",
+          "symbol": {
+            "name": "OPTIONS",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/options/route.jsx",
+              "line": 1,
+              "column": 14,
+              "byte_range": {
+                "start": 13,
+                "end": 20
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/options/route.jsx",
+            "line": 1,
+            "column": 14,
+            "byte_range": {
+              "start": 13,
+              "end": 70
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.nextjs": {
+          "export_kind": "const_function",
+          "export_name": "OPTIONS",
+          "route_file": "tests/fixtures/nextjs/app/options/route.jsx",
+          "wrapper": null
+        }
+      }
+    },
+    {
+      "id": "route_0011",
+      "framework": "next_js",
+      "method": "GET",
+      "path": "/",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "GET",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/route.ts",
+          "line": 5,
+          "column": 23,
+          "byte_range": {
+            "start": 65,
+            "end": 68
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/route.ts",
+        "line": 5,
+        "column": 8,
+        "byte_range": {
+          "start": 50,
+          "end": 129
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_route_handler_export",
+          "symbol": {
+            "name": "GET",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/route.ts",
+              "line": 5,
+              "column": 23,
+              "byte_range": {
+                "start": 65,
+                "end": 68
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/route.ts",
+            "line": 5,
+            "column": 8,
+            "byte_range": {
+              "start": 50,
+              "end": 129
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.nextjs": {
+          "export_kind": "function",
+          "export_name": "GET",
+          "route_file": "tests/fixtures/nextjs/app/route.ts",
+          "wrapper": null
+        }
+      }
+    },
+    {
+      "id": "route_0012",
+      "framework": "next_js",
+      "method": "POST",
+      "path": "/",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "POST",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/route.ts",
+          "line": 10,
+          "column": 14,
+          "byte_range": {
+            "start": 144,
+            "end": 148
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/route.ts",
+        "line": 10,
+        "column": 14,
+        "byte_range": {
+          "start": 144,
+          "end": 226
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_route_handler_export",
+          "symbol": {
+            "name": "POST",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/route.ts",
+              "line": 10,
+              "column": 14,
+              "byte_range": {
+                "start": 144,
+                "end": 148
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/route.ts",
+            "line": 10,
+            "column": 14,
+            "byte_range": {
+              "start": 144,
+              "end": 226
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.nextjs": {
+          "export_kind": "const_function",
+          "export_name": "POST",
+          "route_file": "tests/fixtures/nextjs/app/route.ts",
+          "wrapper": null
+        }
+      }
+    },
+    {
+      "id": "route_0013",
+      "framework": "next_js",
+      "method": "GET",
+      "path": "/tsx",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "GET",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/tsx/route.tsx",
+          "line": 1,
+          "column": 14,
+          "byte_range": {
+            "start": 13,
+            "end": 16
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/tsx/route.tsx",
+        "line": 1,
+        "column": 14,
+        "byte_range": {
+          "start": 13,
+          "end": 151
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_route_handler_export",
+          "symbol": {
+            "name": "GET",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/tsx/route.tsx",
+              "line": 1,
+              "column": 14,
+              "byte_range": {
+                "start": 13,
+                "end": 16
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/tsx/route.tsx",
+            "line": 1,
+            "column": 14,
+            "byte_range": {
+              "start": 13,
+              "end": 151
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.nextjs": {
+          "export_kind": "const_function",
+          "export_name": "GET",
+          "route_file": "tests/fixtures/nextjs/app/tsx/route.tsx",
+          "wrapper": null
+        }
+      }
+    },
+    {
+      "id": "route_0014",
+      "framework": "next_js",
+      "method": "GET",
+      "path": "/users/[id]",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "GET",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/users/[id]/route.ts",
+          "line": 1,
+          "column": 23,
+          "byte_range": {
+            "start": 22,
+            "end": 25
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/users/[id]/route.ts",
+        "line": 1,
+        "column": 8,
+        "byte_range": {
+          "start": 7,
+          "end": 69
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_route_handler_export",
+          "symbol": {
+            "name": "GET",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/users/[id]/route.ts",
+              "line": 1,
+              "column": 23,
+              "byte_range": {
+                "start": 22,
+                "end": 25
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/users/[id]/route.ts",
+            "line": 1,
+            "column": 8,
+            "byte_range": {
+              "start": 7,
+              "end": 69
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.nextjs": {
+          "export_kind": "function",
+          "export_name": "GET",
+          "route_file": "tests/fixtures/nextjs/app/users/[id]/route.ts",
+          "wrapper": null
+        }
+      }
+    },
+    {
+      "id": "route_0015",
+      "framework": "next_js",
+      "method": "PATCH",
+      "path": "/users/[id]",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "PATCH",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/users/[id]/route.ts",
+          "line": 5,
+          "column": 14,
+          "byte_range": {
+            "start": 84,
+            "end": 89
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/users/[id]/route.ts",
+        "line": 5,
+        "column": 14,
+        "byte_range": {
+          "start": 84,
+          "end": 191
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_route_handler_export",
+          "symbol": {
+            "name": "PATCH",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/users/[id]/route.ts",
+              "line": 5,
+              "column": 14,
+              "byte_range": {
+                "start": 84,
+                "end": 89
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/users/[id]/route.ts",
+            "line": 5,
+            "column": 14,
+            "byte_range": {
+              "start": 84,
+              "end": 191
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.nextjs": {
+          "export_kind": "const_function",
+          "export_name": "PATCH",
+          "route_file": "tests/fixtures/nextjs/app/users/[id]/route.ts",
+          "wrapper": null
+        }
+      }
+    },
+    {
+      "id": "route_0016",
+      "framework": "next_js",
+      "method": "PATCH",
+      "path": "/wrapped-named",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "updateProfile",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/wrapped-named/route.ts",
+          "line": 9,
+          "column": 34,
+          "byte_range": {
+            "start": 197,
+            "end": 210
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/wrapped-named/route.ts",
+        "line": 9,
+        "column": 14,
+        "byte_range": {
+          "start": 177,
+          "end": 211
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "nextjs_route_handler_export",
+          "symbol": {
+            "name": "updateProfile",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/wrapped-named/route.ts",
+              "line": 9,
+              "column": 34,
+              "byte_range": {
+                "start": 197,
+                "end": 210
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/wrapped-named/route.ts",
+            "line": 9,
+            "column": 14,
+            "byte_range": {
+              "start": 177,
+              "end": 211
+            }
+          },
+          "confidence": "medium",
+          "notes": [
+            "Next.js route handler export is wrapped; wrapper behavior requires review"
+          ]
+        }
+      ],
+      "confidence": "medium",
+      "notes": [
+        "Next.js route handler export is wrapped; wrapper behavior requires review"
+      ],
+      "extensions": {
+        "authmap.nextjs": {
+          "export_kind": "wrapped",
+          "export_name": "PATCH",
+          "route_file": "tests/fixtures/nextjs/app/wrapped-named/route.ts",
+          "wrapper": "requireUser"
+        }
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "evidence_0001",
+      "route_id": "route_0003",
+      "evidence_type": "permission_check",
+      "mechanism": "permission_guard",
+      "symbol": {
+        "name": "requirePermission",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/blog/[...slug]/route.ts",
+          "line": 10,
+          "column": 3,
+          "byte_range": {
+            "start": 153,
+            "end": 170
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/blog/[...slug]/route.ts",
+        "line": 10,
+        "column": 3,
+        "byte_range": {
+          "start": 153,
+          "end": 172
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0002",
+      "route_id": "route_0006",
+      "evidence_type": "authn",
+      "mechanism": "authn_guard",
+      "symbol": {
+        "name": "requireAuth",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/external/handler.ts",
+          "line": 2,
+          "column": 3,
+          "byte_range": {
+            "start": 33,
+            "end": 44
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/external/handler.ts",
+        "line": 2,
+        "column": 3,
+        "byte_range": {
+          "start": 33,
+          "end": 46
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0003",
+      "route_id": "route_0011",
+      "evidence_type": "authn",
+      "mechanism": "authn_guard",
+      "symbol": {
+        "name": "requireAuth",
+        "span": {
+          "file": "tests/fixtures/nextjs/app/route.ts",
+          "line": 6,
+          "column": 3,
+          "byte_range": {
+            "start": 75,
+            "end": 86
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/nextjs/app/route.ts",
+        "line": 6,
+        "column": 3,
+        "byte_range": {
+          "start": 75,
+          "end": 88
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    }
+  ],
+  "mutations": [
+    {
+      "id": "mutation_0001",
+      "operation": "delete",
+      "library": "prisma",
+      "resource": "report",
+      "span": {
+        "file": "tests/fixtures/nextjs/app/(admin)/reports/route.ts",
+        "line": 2,
+        "column": 10,
+        "byte_range": {
+          "start": 35,
+          "end": 86
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "mutation_0002",
+      "operation": "update",
+      "library": "prisma",
+      "resource": "doc",
+      "span": {
+        "file": "tests/fixtures/nextjs/app/docs/[[...slug]]/route.ts",
+        "line": 6,
+        "column": 10,
+        "byte_range": {
+          "start": 75,
+          "end": 148
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "mutation_0003",
+      "operation": "create",
+      "library": "prisma",
+      "resource": "external",
+      "span": {
+        "file": "tests/fixtures/nextjs/app/external/handler.ts",
+        "line": 3,
+        "column": 10,
+        "byte_range": {
+          "start": 57,
+          "end": 103
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "mutation_0004",
+      "operation": "create",
+      "library": "prisma",
+      "resource": "session",
+      "span": {
+        "file": "tests/fixtures/nextjs/app/route.ts",
+        "line": 11,
+        "column": 10,
+        "byte_range": {
+          "start": 174,
+          "end": 223
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "mutation_0005",
+      "operation": "delete",
+      "library": "prisma",
+      "resource": "shadow",
+      "span": {
+        "file": "tests/fixtures/nextjs/app/tsx/route.tsx",
+        "line": 2,
+        "column": 24,
+        "byte_range": {
+          "start": 50,
+          "end": 99
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "mutation_0006",
+      "operation": "update",
+      "library": "prisma",
+      "resource": "user",
+      "span": {
+        "file": "tests/fixtures/nextjs/app/users/[id]/route.ts",
+        "line": 6,
+        "column": 10,
+        "byte_range": {
+          "start": 115,
+          "end": 188
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "mutation_0007",
+      "operation": "update",
+      "library": "prisma",
+      "resource": "profile",
+      "span": {
+        "file": "tests/fixtures/nextjs/app/wrapped-named/route.ts",
+        "line": 6,
+        "column": 10,
+        "byte_range": {
+          "start": 89,
+          "end": 159
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    }
+  ],
+  "links": [
+    {
+      "id": "link_0001",
+      "route_id": "route_0002",
+      "mutation_id": "mutation_0001",
+      "evidence_id": null,
+      "confidence": "high",
+      "notes": [
+        "Mutation is directly inside route handler"
+      ]
+    },
+    {
+      "id": "link_0002",
+      "route_id": "route_0004",
+      "mutation_id": "mutation_0002",
+      "evidence_id": null,
+      "confidence": "high",
+      "notes": [
+        "Mutation is directly inside route handler"
+      ]
+    },
+    {
+      "id": "link_0003",
+      "route_id": "route_0006",
+      "mutation_id": "mutation_0003",
+      "evidence_id": null,
+      "confidence": "high",
+      "notes": [
+        "Mutation is directly inside route handler"
+      ]
+    },
+    {
+      "id": "link_0004",
+      "route_id": "route_0012",
+      "mutation_id": "mutation_0004",
+      "evidence_id": null,
+      "confidence": "high",
+      "notes": [
+        "Mutation is directly inside route handler"
+      ]
+    },
+    {
+      "id": "link_0005",
+      "route_id": "route_0015",
+      "mutation_id": "mutation_0006",
+      "evidence_id": null,
+      "confidence": "high",
+      "notes": [
+        "Mutation is directly inside route handler"
+      ]
+    },
+    {
+      "id": "link_0006",
+      "route_id": "route_0016",
+      "mutation_id": "mutation_0007",
+      "evidence_id": null,
+      "confidence": "high",
+      "notes": [
+        "Mutation is directly inside route handler"
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "route_id": "route_0001",
+      "class": "unauthenticated",
+      "risk": "low",
+      "rationale": [
+        "No authorization evidence was detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0002",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): linked_mutation, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [
+            "link_0001"
+          ],
+          "mutation_ids": [
+            "mutation_0001"
+          ],
+          "sensitivity_reasons": [
+            "linked_mutation",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0003",
+      "class": "permission_guarded",
+      "risk": "low",
+      "rationale": [
+        "1 strong authorization evidence item(s) support permission_guarded coverage."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0001"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0004",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): linked_mutation, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [
+            "link_0002"
+          ],
+          "mutation_ids": [
+            "mutation_0002"
+          ],
+          "sensitivity_reasons": [
+            "linked_mutation",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0005",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): unsafe_method.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0006",
+      "class": "authn_only",
+      "risk": "review_required",
+      "rationale": [
+        "1 strong authorization evidence item(s) support authn_only coverage.",
+        "Sensitive route modifier(s): linked_mutation, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0002"
+          ],
+          "link_ids": [
+            "link_0003"
+          ],
+          "mutation_ids": [
+            "mutation_0003"
+          ],
+          "sensitivity_reasons": [
+            "linked_mutation",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0007",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): unsafe_method.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0008",
+      "class": "unauthenticated",
+      "risk": "low",
+      "rationale": [
+        "No authorization evidence was detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0009",
+      "class": "unauthenticated",
+      "risk": "medium",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): user_path."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "user_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0010",
+      "class": "unauthenticated",
+      "risk": "low",
+      "rationale": [
+        "No authorization evidence was detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0011",
+      "class": "authn_only",
+      "risk": "low",
+      "rationale": [
+        "1 strong authorization evidence item(s) support authn_only coverage."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0003"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0012",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): linked_mutation, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [
+            "link_0004"
+          ],
+          "mutation_ids": [
+            "mutation_0004"
+          ],
+          "sensitivity_reasons": [
+            "linked_mutation",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0013",
+      "class": "unauthenticated",
+      "risk": "low",
+      "rationale": [
+        "No authorization evidence was detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0014",
+      "class": "unauthenticated",
+      "risk": "medium",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): user_path."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "user_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0015",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): linked_mutation, unsafe_method, user_path.",
+        "Linked data mutation(s) increase review sensitivity.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [
+            "link_0005"
+          ],
+          "mutation_ids": [
+            "mutation_0006"
+          ],
+          "sensitivity_reasons": [
+            "linked_mutation",
+            "unsafe_method",
+            "user_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0016",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): linked_mutation, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [
+            "link_0006"
+          ],
+          "mutation_ids": [
+            "mutation_0007"
+          ],
+          "sensitivity_reasons": [
+            "linked_mutation",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "category": "adapter",
+      "code": "nextjs_dynamic_route_export",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/nextjs/app/dynamic-export/route.ts",
+        "line": 3,
+        "column": 14,
+        "byte_range": {
+          "start": 35,
+          "end": 59
+        }
+      },
+      "message": "Next.js route handler export value is dynamic or unsupported"
+    },
+    {
+      "category": "adapter",
+      "code": "nextjs_external_reexport_unresolved",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/nextjs/app/external/route.ts",
+        "line": 1,
+        "column": 1,
+        "byte_range": {
+          "start": 0,
+          "end": 49
+        }
+      },
+      "message": "Next.js route handler re-export target could not be analyzed statically"
+    },
+    {
+      "category": "adapter",
+      "code": "nextjs_nested_app_segment",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/nextjs/app/nested/app/users/route.ts",
+        "line": 1,
+        "column": 1,
+        "byte_range": null
+      },
+      "message": "Next.js route file path contains nested app segments"
+    },
+    {
+      "category": "adapter",
+      "code": "nextjs_unusual_route_segment",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/nextjs/app/(.)modal/route.ts",
+        "line": 1,
+        "column": 1,
+        "byte_range": null
+      },
+      "message": "Next.js route segment uses an unusual routing convention; emitted path is normalized for review"
+    }
+  ]
+}

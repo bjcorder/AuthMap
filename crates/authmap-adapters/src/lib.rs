@@ -7,6 +7,12 @@ use authmap_core::{
 use authmap_parsers::ParsedFile;
 use tree_sitter::{Node, Tree};
 
+mod django;
+mod nextjs;
+
+pub use django::DjangoAdapter;
+pub use nextjs::NextJsAdapter;
+
 #[derive(Clone, Debug, Default)]
 pub struct AdapterContext {
     pub enabled_frameworks: Vec<String>,
@@ -64,7 +70,12 @@ pub struct AdapterRegistry {
 impl AdapterRegistry {
     pub fn built_in() -> Self {
         Self {
-            adapters: vec![Box::new(FastApiAdapter), Box::new(ExpressAdapter)],
+            adapters: vec![
+                Box::new(FastApiAdapter),
+                Box::new(DjangoAdapter),
+                Box::new(ExpressAdapter),
+                Box::new(NextJsAdapter),
+            ],
         }
     }
 
@@ -2020,7 +2031,10 @@ mod tests {
     use authmap_parsers::{ParserBackend, TreeSitterBackend};
     use authmap_testkit::fixture_path;
 
-    use super::{AdapterContext, ExpressAdapter, FastApiAdapter, FrameworkAdapter};
+    use super::{
+        AdapterContext, DjangoAdapter, ExpressAdapter, FastApiAdapter, FrameworkAdapter,
+        NextJsAdapter,
+    };
 
     #[test]
     fn discovers_fastapi_routes_from_apps_routers_and_imported_includes() {
@@ -2346,6 +2360,316 @@ mod tests {
     }
 
     #[test]
+    fn discovers_django_urlpatterns_drf_routers_and_uncertainty() {
+        let parsed = parse_fixtures(&[
+            "django/project/urls.py",
+            "django/accounts/urls.py",
+            "django/accounts/views.py",
+            "django/accounts/services.py",
+            "django/accounts/models.py",
+        ]);
+        let output = DjangoAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert_eq!(output.routes.len(), 20);
+        assert!(output.routes.iter().all(|route| route.span.is_some()));
+        assert!(output.routes.iter().all(|route| {
+            route
+                .handler
+                .as_ref()
+                .and_then(|handler| handler.span.as_ref())
+                .is_some()
+        }));
+
+        let index = route(&output, "ANY", "/accounts");
+        assert_eq!(index.framework, Framework::Django);
+        assert_eq!(
+            index.handler.as_ref().map(|handler| handler.name.as_str()),
+            Some("index")
+        );
+        assert!(
+            index
+                .source_evidence
+                .iter()
+                .any(|evidence| evidence.mechanism == "django_include")
+        );
+
+        let class_based = route(&output, "ANY", "/accounts/users/<int:pk>/");
+        assert_eq!(
+            class_based
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("AccountDetailView")
+        );
+        assert_eq!(
+            class_based
+                .extensions
+                .get("authmap.django")
+                .and_then(|value| value.get("handler_kind"))
+                .and_then(serde_json::Value::as_str),
+            Some("class_based_view")
+        );
+
+        let create = route(&output, "POST", "/accounts/api/users");
+        assert_eq!(create.framework, Framework::DjangoRestFramework);
+        assert_eq!(
+            create
+                .extensions
+                .get("authmap.django")
+                .and_then(|value| value.get("handler_kind"))
+                .and_then(serde_json::Value::as_str),
+            Some("viewset_standard")
+        );
+
+        let action = route(&output, "POST", "/accounts/api/users/{uuid}/disable");
+        assert_eq!(
+            action
+                .extensions
+                .get("authmap.django")
+                .and_then(|value| value.get("method_name"))
+                .and_then(serde_json::Value::as_str),
+            Some("disable")
+        );
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.method == "GET" && route.path == "/accounts/api/readonly")
+        );
+        assert!(
+            output.routes.iter().any(|route| {
+                route.method == "GET" && route.path == "/accounts/api/readonly/{pk}"
+            })
+        );
+        assert!(!output.routes.iter().any(|route| {
+            matches!(route.method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE")
+                && route.path.starts_with("/accounts/api/readonly")
+        }));
+        assert!(output.routes.iter().any(|route| {
+            route.method == "POST" && route.path == "/accounts/readonly-api/audit/refresh"
+        }));
+        assert!(
+            output.routes.iter().any(|route| {
+                route.method == "GET" && route.path == "/accounts/api/custom-model"
+            })
+        );
+        assert!(output.routes.iter().any(|route| {
+            route.method == "POST"
+                && route.path == "/accounts/api/custom-model/recalculate"
+                && route.confidence == Confidence::Medium
+        }));
+        assert!(!output.routes.iter().any(|route| {
+            matches!(route.method.as_str(), "PUT" | "PATCH" | "DELETE")
+                && route.path.starts_with("/accounts/api/custom-model")
+        }));
+        assert_eq!(
+            route(&output, "ANY", "/legacy/{slug}/").path,
+            "/legacy/{slug}/"
+        );
+        assert!(
+            !output
+                .routes
+                .iter()
+                .any(|route| route.path == "/accounts/not-a-django-route/")
+        );
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.path == "<dynamic>" && route.confidence == Confidence::Medium)
+        );
+
+        for code in [
+            "django_dynamic_include",
+            "django_dynamic_url_path",
+            "drf_dynamic_router_prefix",
+            "drf_dynamic_basename",
+            "django_custom_router",
+            "django_urlpattern_context_uncertain",
+            "drf_unresolved_viewset_base",
+        ] {
+            assert!(
+                output
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.code == code),
+                "missing diagnostic {code}"
+            );
+        }
+    }
+
+    #[test]
+    fn discovers_nextjs_app_router_handlers_segments_and_wrappers() {
+        let parsed = parse_fixtures(&[
+            "nextjs/app/route.ts",
+            "nextjs/app/users/[id]/route.ts",
+            "nextjs/app/blog/[...slug]/route.ts",
+            "nextjs/app/docs/[[...slug]]/route.ts",
+            "nextjs/app/(admin)/reports/route.ts",
+            "nextjs/app/(.)modal/route.ts",
+            "nextjs/app/dynamic-export/route.ts",
+            "nextjs/app/head/route.js",
+            "nextjs/app/options/route.jsx",
+            "nextjs/app/tsx/route.tsx",
+            "nextjs/app/wrapped-named/route.ts",
+            "nextjs/app/external/route.ts",
+            "nextjs/app/external/handler.ts",
+            "nextjs/app/nested/app/users/route.ts",
+        ]);
+        let output = NextJsAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert_eq!(output.routes.len(), 16);
+        assert!(output.routes.iter().all(|route| route.span.is_some()));
+        assert!(output.routes.iter().all(|route| {
+            route
+                .handler
+                .as_ref()
+                .and_then(|handler| handler.span.as_ref())
+                .is_some()
+        }));
+
+        let root_get = route(&output, "GET", "/");
+        assert_eq!(root_get.framework, Framework::NextJs);
+        assert_eq!(
+            root_get
+                .extensions
+                .get("authmap.nextjs")
+                .and_then(|value| value.get("export_kind"))
+                .and_then(serde_json::Value::as_str),
+            Some("function")
+        );
+
+        let dynamic = route(&output, "PATCH", "/users/[id]");
+        assert_eq!(
+            dynamic
+                .extensions
+                .get("authmap.nextjs")
+                .and_then(|value| value.get("export_kind"))
+                .and_then(serde_json::Value::as_str),
+            Some("const_function")
+        );
+
+        let catch_all = route(&output, "GET", "/blog/[...slug]");
+        assert_eq!(catch_all.confidence, Confidence::Medium);
+        assert_eq!(
+            catch_all
+                .extensions
+                .get("authmap.nextjs")
+                .and_then(|value| value.get("wrapper"))
+                .and_then(serde_json::Value::as_str),
+            Some("withAuth")
+        );
+
+        let optional = route(&output, "PUT", "/docs/[[...slug]]");
+        assert_eq!(
+            optional
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("updateDoc")
+        );
+
+        let grouped = route(&output, "DELETE", "/reports");
+        assert_eq!(
+            grouped
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("handleDelete")
+        );
+
+        let unusual = route(&output, "GET", "/modal");
+        assert_eq!(unusual.confidence, Confidence::Medium);
+        assert_eq!(
+            route(&output, "GET", "/nested/app/users").confidence,
+            Confidence::Medium
+        );
+        assert_eq!(route(&output, "HEAD", "/head").framework, Framework::NextJs);
+        assert_eq!(
+            route(&output, "OPTIONS", "/options").framework,
+            Framework::NextJs
+        );
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.method == "GET" && route.path == "/tsx")
+        );
+        assert!(
+            !output
+                .routes
+                .iter()
+                .any(|route| route.method == "DELETE" && route.path == "/tsx")
+        );
+        assert_eq!(
+            route(&output, "PATCH", "/wrapped-named")
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("updateProfile")
+        );
+        assert_eq!(
+            route(&output, "POST", "/external")
+                .handler
+                .as_ref()
+                .and_then(|handler| handler.span.as_ref())
+                .map(|span| span.file.replace('\\', "/"))
+                .is_some_and(|file| file.ends_with("tests/fixtures/nextjs/app/external/handler.ts")),
+            true
+        );
+        assert!(output.routes.iter().all(|route| {
+            route
+                .source_evidence
+                .iter()
+                .any(|evidence| evidence.mechanism == "nextjs_route_handler_export")
+        }));
+
+        for code in [
+            "nextjs_unusual_route_segment",
+            "nextjs_dynamic_route_export",
+            "nextjs_nested_app_segment",
+            "nextjs_external_reexport_unresolved",
+        ] {
+            assert!(
+                output
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.code == code),
+                "missing diagnostic {code}"
+            );
+        }
+    }
+
+    #[test]
+    fn django_include_depth_limit_stops_deep_chains() {
+        let mut sources = Vec::new();
+        for index in 0..66 {
+            let path = format!("tests/fixtures/generated_django_depth/urls{index}.py");
+            let text = if index < 65 {
+                format!(
+                    "from django.urls import include, path\nurlpatterns = [path('', include('urls{}'))]\n",
+                    index + 1
+                )
+            } else {
+                "from django.urls import path\n\ndef terminal(request):\n    return {}\n\nurlpatterns = [path('terminal/', terminal)]\n".to_string()
+            };
+            sources.push((path, Language::Python, text));
+        }
+        let parsed = parse_sources(&sources);
+        let output = DjangoAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert!(output.routes.is_empty());
+        assert_eq!(
+            output
+                .diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic.code == "django_include_depth_exceeded")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
     fn normalizes_posix_absolute_relative_js_imports() {
         assert_eq!(
             super::normalize_js_module_path(
@@ -2401,6 +2725,26 @@ mod tests {
                 backend
                     .parse(&source, &text)
                     .expect("fixture should parse as Python")
+            })
+            .collect()
+    }
+
+    fn parse_sources(sources: &[(String, Language, String)]) -> Vec<authmap_parsers::ParsedFile> {
+        let backend = TreeSitterBackend;
+        sources
+            .iter()
+            .map(|(path, language, text)| {
+                let source = SourceFile {
+                    path: path.clone(),
+                    language: *language,
+                    size_bytes: text.len() as u64,
+                    sha256: None,
+                    project_hints: Vec::new(),
+                    skipped: None,
+                };
+                backend
+                    .parse(&source, text)
+                    .expect("inline fixture should parse")
             })
             .collect()
     }

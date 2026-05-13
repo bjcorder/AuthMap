@@ -1,0 +1,3043 @@
+{
+  "schema_version": "0.1.0",
+  "metadata": {
+    "tool_name": "authmap",
+    "tool_version": "0.1.0",
+    "mode": "advisory",
+    "target_roots": [
+      "tests/fixtures/django"
+    ],
+    "config_path": null
+  },
+  "source_files": [
+    {
+      "path": "tests/fixtures/django/accounts/models.py",
+      "language": "python",
+      "size_bytes": 24,
+      "sha256": null,
+      "project_hints": [
+        "django",
+        "django_rest_framework",
+        "django_orm"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/django/accounts/services.py",
+      "language": "python",
+      "size_bytes": 109,
+      "sha256": null,
+      "project_hints": [
+        "django",
+        "django_rest_framework",
+        "django_orm"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/django/accounts/urls.py",
+      "language": "python",
+      "size_bytes": 1076,
+      "sha256": null,
+      "project_hints": [
+        "django",
+        "django_rest_framework",
+        "django_orm"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/django/accounts/views.py",
+      "language": "python",
+      "size_bytes": 2056,
+      "sha256": null,
+      "project_hints": [
+        "django",
+        "django_rest_framework",
+        "django_orm"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/django/project/urls.py",
+      "language": "python",
+      "size_bytes": 365,
+      "sha256": null,
+      "project_hints": [
+        "django",
+        "django_rest_framework",
+        "django_orm"
+      ],
+      "skipped": null
+    }
+  ],
+  "routes": [
+    {
+      "id": "route_0001",
+      "framework": "django_rest_framework",
+      "method": "DELETE",
+      "path": "/accounts/api/users/{uuid}",
+      "name": "user-destroy",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "UserViewSet.destroy",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 45,
+          "column": 7,
+          "byte_range": {
+            "start": 877,
+            "end": 888
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 7,
+        "column": 1,
+        "byte_range": {
+          "start": 148,
+          "end": 208
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 19,
+            "column": 5,
+            "byte_range": {
+              "start": 760,
+              "end": 794
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "UserViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 45,
+              "column": 7,
+              "byte_range": {
+                "start": 877,
+                "end": 888
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 7,
+            "column": 1,
+            "byte_range": {
+              "start": 148,
+              "end": 208
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "user",
+          "class_name": "UserViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "uuid",
+          "method_name": "destroy",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0002",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/accounts/api/users",
+      "name": "user-list",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "UserViewSet.list",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 48,
+          "column": 9,
+          "byte_range": {
+            "start": 939,
+            "end": 943
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 7,
+        "column": 1,
+        "byte_range": {
+          "start": 148,
+          "end": 208
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 19,
+            "column": 5,
+            "byte_range": {
+              "start": 760,
+              "end": 794
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "UserViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 45,
+              "column": 7,
+              "byte_range": {
+                "start": 877,
+                "end": 888
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 7,
+            "column": 1,
+            "byte_range": {
+              "start": 148,
+              "end": 208
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "user",
+          "class_name": "UserViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "uuid",
+          "method_name": "list",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0003",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/accounts/api/users/{uuid}",
+      "name": "user-retrieve",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "UserViewSet.retrieve",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 45,
+          "column": 7,
+          "byte_range": {
+            "start": 877,
+            "end": 888
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 7,
+        "column": 1,
+        "byte_range": {
+          "start": 148,
+          "end": 208
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 19,
+            "column": 5,
+            "byte_range": {
+              "start": 760,
+              "end": 794
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "UserViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 45,
+              "column": 7,
+              "byte_range": {
+                "start": 877,
+                "end": 888
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 7,
+            "column": 1,
+            "byte_range": {
+              "start": 148,
+              "end": 208
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "user",
+          "class_name": "UserViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "uuid",
+          "method_name": "retrieve",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0004",
+      "framework": "django_rest_framework",
+      "method": "PATCH",
+      "path": "/accounts/api/users/{uuid}",
+      "name": "user-partial-update",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "UserViewSet.partial_update",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 45,
+          "column": 7,
+          "byte_range": {
+            "start": 877,
+            "end": 888
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 7,
+        "column": 1,
+        "byte_range": {
+          "start": 148,
+          "end": 208
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 19,
+            "column": 5,
+            "byte_range": {
+              "start": 760,
+              "end": 794
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "UserViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 45,
+              "column": 7,
+              "byte_range": {
+                "start": 877,
+                "end": 888
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 7,
+            "column": 1,
+            "byte_range": {
+              "start": 148,
+              "end": 208
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "user",
+          "class_name": "UserViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "uuid",
+          "method_name": "partial_update",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0005",
+      "framework": "django_rest_framework",
+      "method": "POST",
+      "path": "/accounts/api/users",
+      "name": "user-create",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "UserViewSet.create",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 52,
+          "column": 9,
+          "byte_range": {
+            "start": 1028,
+            "end": 1034
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 7,
+        "column": 1,
+        "byte_range": {
+          "start": 148,
+          "end": 208
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 19,
+            "column": 5,
+            "byte_range": {
+              "start": 760,
+              "end": 794
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "UserViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 45,
+              "column": 7,
+              "byte_range": {
+                "start": 877,
+                "end": 888
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 7,
+            "column": 1,
+            "byte_range": {
+              "start": 148,
+              "end": 208
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "user",
+          "class_name": "UserViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "uuid",
+          "method_name": "create",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0006",
+      "framework": "django_rest_framework",
+      "method": "POST",
+      "path": "/accounts/api/users/{uuid}/disable",
+      "name": "user-disable",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "UserViewSet.disable",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 56,
+          "column": 9,
+          "byte_range": {
+            "start": 1190,
+            "end": 1197
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 7,
+        "column": 1,
+        "byte_range": {
+          "start": 148,
+          "end": 208
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 19,
+            "column": 5,
+            "byte_range": {
+              "start": 760,
+              "end": 794
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "UserViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 45,
+              "column": 7,
+              "byte_range": {
+                "start": 877,
+                "end": 888
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 7,
+            "column": 1,
+            "byte_range": {
+              "start": 148,
+              "end": 208
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_viewset_action",
+          "symbol": {
+            "name": "disable",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 56,
+              "column": 9,
+              "byte_range": {
+                "start": 1190,
+                "end": 1197
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 56,
+            "column": 9,
+            "byte_range": {
+              "start": 1190,
+              "end": 1197
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "user",
+          "class_name": "UserViewSet",
+          "handler_kind": "viewset_action",
+          "lookup_field": "uuid",
+          "method_name": "disable",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0007",
+      "framework": "django_rest_framework",
+      "method": "PUT",
+      "path": "/accounts/api/users/{uuid}",
+      "name": "user-update",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "UserViewSet.update",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 45,
+          "column": 7,
+          "byte_range": {
+            "start": 877,
+            "end": 888
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 7,
+        "column": 1,
+        "byte_range": {
+          "start": 148,
+          "end": 208
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 19,
+            "column": 5,
+            "byte_range": {
+              "start": 760,
+              "end": 794
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "UserViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 45,
+              "column": 7,
+              "byte_range": {
+                "start": 877,
+                "end": 888
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 7,
+            "column": 1,
+            "byte_range": {
+              "start": 148,
+              "end": 208
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "user",
+          "class_name": "UserViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "uuid",
+          "method_name": "update",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0008",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/accounts/api/readonly",
+      "name": "readonly-list",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "ReadOnlyAccountViewSet.list",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 60,
+          "column": 7,
+          "byte_range": {
+            "start": 1304,
+            "end": 1326
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 8,
+        "column": 1,
+        "byte_range": {
+          "start": 209,
+          "end": 287
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 19,
+            "column": 5,
+            "byte_range": {
+              "start": 760,
+              "end": 794
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "ReadOnlyAccountViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 60,
+              "column": 7,
+              "byte_range": {
+                "start": 1304,
+                "end": 1326
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 8,
+            "column": 1,
+            "byte_range": {
+              "start": 209,
+              "end": 287
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "readonly",
+          "class_name": "ReadOnlyAccountViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "list",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0009",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/accounts/api/readonly/{pk}",
+      "name": "readonly-retrieve",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "ReadOnlyAccountViewSet.retrieve",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 60,
+          "column": 7,
+          "byte_range": {
+            "start": 1304,
+            "end": 1326
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 8,
+        "column": 1,
+        "byte_range": {
+          "start": 209,
+          "end": 287
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 19,
+            "column": 5,
+            "byte_range": {
+              "start": 760,
+              "end": 794
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "ReadOnlyAccountViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 60,
+              "column": 7,
+              "byte_range": {
+                "start": 1304,
+                "end": 1326
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 8,
+            "column": 1,
+            "byte_range": {
+              "start": 209,
+              "end": 287
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "readonly",
+          "class_name": "ReadOnlyAccountViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "retrieve",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0010",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/accounts/api/custom-model",
+      "name": "custom-model-list",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "CustomModelBackedViewSet.list",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 79,
+          "column": 9,
+          "byte_range": {
+            "start": 1813,
+            "end": 1817
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 9,
+        "column": 1,
+        "byte_range": {
+          "start": 288,
+          "end": 376
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 19,
+            "column": 5,
+            "byte_range": {
+              "start": 760,
+              "end": 794
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "CustomModelBackedViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 78,
+              "column": 7,
+              "byte_range": {
+                "start": 1763,
+                "end": 1787
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 9,
+            "column": 1,
+            "byte_range": {
+              "start": 288,
+              "end": 376
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "custom-model",
+          "class_name": "CustomModelBackedViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "list",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0011",
+      "framework": "django_rest_framework",
+      "method": "POST",
+      "path": "/accounts/api/custom-model/recalculate",
+      "name": "custom-model-recalculate",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "CustomModelBackedViewSet.recalculate",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 83,
+          "column": 9,
+          "byte_range": {
+            "start": 1930,
+            "end": 1941
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 9,
+        "column": 1,
+        "byte_range": {
+          "start": 288,
+          "end": 376
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 19,
+            "column": 5,
+            "byte_range": {
+              "start": 760,
+              "end": 794
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "CustomModelBackedViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 78,
+              "column": 7,
+              "byte_range": {
+                "start": 1763,
+                "end": 1787
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 9,
+            "column": 1,
+            "byte_range": {
+              "start": 288,
+              "end": 376
+            }
+          },
+          "confidence": "medium",
+          "notes": [
+            "DRF action url_path is dynamic; emitted method name as path"
+          ]
+        },
+        {
+          "mechanism": "drf_viewset_action",
+          "symbol": {
+            "name": "recalculate",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 83,
+              "column": 9,
+              "byte_range": {
+                "start": 1930,
+                "end": 1941
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 83,
+            "column": 9,
+            "byte_range": {
+              "start": 1930,
+              "end": 1941
+            }
+          },
+          "confidence": "medium",
+          "notes": [
+            "DRF action url_path is dynamic; emitted method name as path"
+          ]
+        }
+      ],
+      "confidence": "medium",
+      "notes": [
+        "DRF action url_path is dynamic; emitted method name as path"
+      ],
+      "extensions": {
+        "authmap.django": {
+          "basename": "custom-model",
+          "class_name": "CustomModelBackedViewSet",
+          "handler_kind": "viewset_action",
+          "lookup_field": "pk",
+          "method_name": "recalculate",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0012",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "<dynamic>",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "DynamicViewSet.list",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 88,
+          "column": 9,
+          "byte_range": {
+            "start": 2017,
+            "end": 2021
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 10,
+        "column": 1,
+        "byte_range": {
+          "start": 377,
+          "end": 457
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 19,
+            "column": 5,
+            "byte_range": {
+              "start": 760,
+              "end": 794
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "DynamicViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 87,
+              "column": 7,
+              "byte_range": {
+                "start": 1984,
+                "end": 1998
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 10,
+            "column": 1,
+            "byte_range": {
+              "start": 377,
+              "end": 457
+            }
+          },
+          "confidence": "medium",
+          "notes": [
+            "DRF router prefix is dynamic and was emitted as <dynamic>",
+            "DRF router basename is dynamic"
+          ]
+        }
+      ],
+      "confidence": "medium",
+      "notes": [
+        "DRF router prefix is dynamic and was emitted as <dynamic>",
+        "DRF router basename is dynamic"
+      ],
+      "extensions": {
+        "authmap.django": {
+          "basename": null,
+          "class_name": "DynamicViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "list",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0013",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/accounts/readonly-api/audit",
+      "name": "audit-list",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "ReadOnlyAuditViewSet.list",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 68,
+          "column": 7,
+          "byte_range": {
+            "start": 1500,
+            "end": 1520
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 14,
+        "column": 1,
+        "byte_range": {
+          "start": 523,
+          "end": 602
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 20,
+            "column": 5,
+            "byte_range": {
+              "start": 800,
+              "end": 852
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "ReadOnlyAuditViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 68,
+              "column": 7,
+              "byte_range": {
+                "start": 1500,
+                "end": 1520
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 14,
+            "column": 1,
+            "byte_range": {
+              "start": 523,
+              "end": 602
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "audit",
+          "class_name": "ReadOnlyAuditViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "list",
+          "route_pattern_kind": "drf_router",
+          "router_name": "readonly_router"
+        }
+      }
+    },
+    {
+      "id": "route_0014",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/accounts/readonly-api/audit/{pk}",
+      "name": "audit-retrieve",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "ReadOnlyAuditViewSet.retrieve",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 68,
+          "column": 7,
+          "byte_range": {
+            "start": 1500,
+            "end": 1520
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 14,
+        "column": 1,
+        "byte_range": {
+          "start": 523,
+          "end": 602
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 20,
+            "column": 5,
+            "byte_range": {
+              "start": 800,
+              "end": 852
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "ReadOnlyAuditViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 68,
+              "column": 7,
+              "byte_range": {
+                "start": 1500,
+                "end": 1520
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 14,
+            "column": 1,
+            "byte_range": {
+              "start": 523,
+              "end": 602
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "audit",
+          "class_name": "ReadOnlyAuditViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "retrieve",
+          "route_pattern_kind": "drf_router",
+          "router_name": "readonly_router"
+        }
+      }
+    },
+    {
+      "id": "route_0015",
+      "framework": "django_rest_framework",
+      "method": "POST",
+      "path": "/accounts/readonly-api/audit/refresh",
+      "name": "audit-refresh",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "ReadOnlyAuditViewSet.refresh",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 70,
+          "column": 9,
+          "byte_range": {
+            "start": 1616,
+            "end": 1623
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 14,
+        "column": 1,
+        "byte_range": {
+          "start": 523,
+          "end": 602
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 20,
+            "column": 5,
+            "byte_range": {
+              "start": 800,
+              "end": 852
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "ReadOnlyAuditViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 68,
+              "column": 7,
+              "byte_range": {
+                "start": 1500,
+                "end": 1520
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 14,
+            "column": 1,
+            "byte_range": {
+              "start": 523,
+              "end": 602
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_viewset_action",
+          "symbol": {
+            "name": "refresh",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 70,
+              "column": 9,
+              "byte_range": {
+                "start": 1616,
+                "end": 1623
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 70,
+            "column": 9,
+            "byte_range": {
+              "start": 1616,
+              "end": 1623
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "audit",
+          "class_name": "ReadOnlyAuditViewSet",
+          "handler_kind": "viewset_action",
+          "lookup_field": "pk",
+          "method_name": "refresh",
+          "route_pattern_kind": "drf_router",
+          "router_name": "readonly_router"
+        }
+      }
+    },
+    {
+      "id": "route_0016",
+      "framework": "django",
+      "method": "ANY",
+      "path": "/accounts",
+      "name": "account_index",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "index",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 24,
+          "column": 5,
+          "byte_range": {
+            "start": 397,
+            "end": 402
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 17,
+        "column": 5,
+        "byte_range": {
+          "start": 624,
+          "end": 667
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_urlpattern",
+          "symbol": {
+            "name": "index",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 24,
+              "column": 5,
+              "byte_range": {
+                "start": 397,
+                "end": 402
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 17,
+            "column": 5,
+            "byte_range": {
+              "start": 624,
+              "end": 667
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "class_name": null,
+          "handler_kind": "function",
+          "method_name": null,
+          "route_pattern_kind": "path"
+        }
+      }
+    },
+    {
+      "id": "route_0017",
+      "framework": "django",
+      "method": "ANY",
+      "path": "/accounts/users/<int:pk>/",
+      "name": "account_detail",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "AccountDetailView",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 32,
+          "column": 7,
+          "byte_range": {
+            "start": 527,
+            "end": 544
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 18,
+        "column": 5,
+        "byte_range": {
+          "start": 673,
+          "end": 754
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_urlpattern",
+          "symbol": {
+            "name": "AccountDetailView",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 32,
+              "column": 7,
+              "byte_range": {
+                "start": 527,
+                "end": 544
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 18,
+            "column": 5,
+            "byte_range": {
+              "start": 673,
+              "end": 754
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "class_name": "AccountDetailView",
+          "handler_kind": "class_based_view",
+          "method_name": null,
+          "route_pattern_kind": "path"
+        }
+      }
+    },
+    {
+      "id": "route_0018",
+      "framework": "django",
+      "method": "ANY",
+      "path": "<dynamic>",
+      "name": "dynamic_view",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "dynamic_view",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 28,
+          "column": 5,
+          "byte_range": {
+            "start": 467,
+            "end": 479
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 21,
+        "column": 5,
+        "byte_range": {
+          "start": 858,
+          "end": 916
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_urlpattern",
+          "symbol": {
+            "name": "dynamic_view",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 28,
+              "column": 5,
+              "byte_range": {
+                "start": 467,
+                "end": 479
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 21,
+            "column": 5,
+            "byte_range": {
+              "start": 858,
+              "end": 916
+            }
+          },
+          "confidence": "medium",
+          "notes": [
+            "Django URL path is dynamic and was emitted as <dynamic>"
+          ]
+        }
+      ],
+      "confidence": "medium",
+      "notes": [
+        "Django URL path is dynamic and was emitted as <dynamic>"
+      ],
+      "extensions": {
+        "authmap.django": {
+          "class_name": null,
+          "handler_kind": "function",
+          "method_name": null,
+          "route_pattern_kind": "path"
+        }
+      }
+    },
+    {
+      "id": "route_0019",
+      "framework": "django",
+      "method": "ANY",
+      "path": "/status/",
+      "name": "status",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "status",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 16,
+          "column": 5,
+          "byte_range": {
+            "start": 288,
+            "end": 294
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/project/urls.py",
+        "line": 7,
+        "column": 5,
+        "byte_range": {
+          "start": 138,
+          "end": 182
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_urlpattern",
+          "symbol": {
+            "name": "status",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 16,
+              "column": 5,
+              "byte_range": {
+                "start": 288,
+                "end": 294
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 7,
+            "column": 5,
+            "byte_range": {
+              "start": 138,
+              "end": 182
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "class_name": null,
+          "handler_kind": "function",
+          "method_name": null,
+          "route_pattern_kind": "path"
+        }
+      }
+    },
+    {
+      "id": "route_0020",
+      "framework": "django",
+      "method": "ANY",
+      "path": "/legacy/{slug}/",
+      "name": "legacy_detail",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "legacy_detail",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 20,
+          "column": 5,
+          "byte_range": {
+            "start": 335,
+            "end": 348
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/project/urls.py",
+        "line": 8,
+        "column": 5,
+        "byte_range": {
+          "start": 188,
+          "end": 269
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_re_path",
+          "symbol": {
+            "name": "legacy_detail",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 20,
+              "column": 5,
+              "byte_range": {
+                "start": 335,
+                "end": 348
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 8,
+            "column": 5,
+            "byte_range": {
+              "start": 188,
+              "end": 269
+            }
+          },
+          "confidence": "medium",
+          "notes": [
+            "Django re_path regex literal normalized as route path"
+          ]
+        }
+      ],
+      "confidence": "medium",
+      "notes": [
+        "Django re_path regex literal normalized as route path"
+      ],
+      "extensions": {
+        "authmap.django": {
+          "class_name": null,
+          "handler_kind": "function",
+          "method_name": null,
+          "route_pattern_kind": "re_path"
+        }
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "evidence_0001",
+      "route_id": "route_0002",
+      "evidence_type": "permission_check",
+      "mechanism": "permission_guard",
+      "symbol": {
+        "name": "require_permission",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 49,
+          "column": 9,
+          "byte_range": {
+            "start": 968,
+            "end": 986
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 49,
+        "column": 9,
+        "byte_range": {
+          "start": 968,
+          "end": 1000
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0002",
+      "route_id": "route_0017",
+      "evidence_type": "unknown_dynamic_check",
+      "mechanism": "handler_condition",
+      "symbol": {
+        "name": "AccountDetailView",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 32,
+          "column": 7,
+          "byte_range": {
+            "start": 527,
+            "end": 544
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 35,
+        "column": 12,
+        "byte_range": {
+          "start": 634,
+          "end": 662
+        }
+      },
+      "confidence": "low",
+      "notes": [
+        "Handler condition references user authorization attributes; review required"
+      ]
+    }
+  ],
+  "mutations": [
+    {
+      "id": "mutation_0001",
+      "operation": "create",
+      "library": "django_orm",
+      "resource": "Account",
+      "span": {
+        "file": "tests/fixtures/django/accounts/services.py",
+        "line": 5,
+        "column": 12,
+        "byte_range": {
+          "start": 73,
+          "end": 108
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "mutation_0002",
+      "operation": "save",
+      "library": "django_orm",
+      "resource": "Account",
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 38,
+        "column": 9,
+        "byte_range": {
+          "start": 741,
+          "end": 755
+        }
+      },
+      "confidence": "medium",
+      "notes": []
+    },
+    {
+      "id": "mutation_0003",
+      "operation": "delete",
+      "library": "django_orm",
+      "resource": "Account",
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 42,
+        "column": 16,
+        "byte_range": {
+          "start": 830,
+          "end": 868
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "mutation_0004",
+      "operation": "create",
+      "library": "django_orm",
+      "resource": "Account",
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 53,
+        "column": 16,
+        "byte_range": {
+          "start": 1066,
+          "end": 1117
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "mutation_0005",
+      "operation": "bulk_update",
+      "library": "django_orm",
+      "resource": "Account",
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 57,
+        "column": 16,
+        "byte_range": {
+          "start": 1240,
+          "end": 1295
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "mutation_0006",
+      "operation": "delete",
+      "library": "django_orm",
+      "resource": "Account",
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 63,
+        "column": 20,
+        "byte_range": {
+          "start": 1422,
+          "end": 1467
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "mutation_0007",
+      "operation": "bulk_update",
+      "library": "django_orm",
+      "resource": "Account",
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 71,
+        "column": 16,
+        "byte_range": {
+          "start": 1655,
+          "end": 1712
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    }
+  ],
+  "links": [
+    {
+      "id": "link_0001",
+      "route_id": "route_0005",
+      "mutation_id": "mutation_0004",
+      "evidence_id": null,
+      "confidence": "high",
+      "notes": [
+        "Mutation is directly inside route handler"
+      ]
+    },
+    {
+      "id": "link_0002",
+      "route_id": "route_0006",
+      "mutation_id": "mutation_0005",
+      "evidence_id": null,
+      "confidence": "high",
+      "notes": [
+        "Mutation is directly inside route handler"
+      ]
+    },
+    {
+      "id": "link_0003",
+      "route_id": "route_0015",
+      "mutation_id": "mutation_0007",
+      "evidence_id": null,
+      "confidence": "high",
+      "notes": [
+        "Mutation is directly inside route handler"
+      ]
+    },
+    {
+      "id": "link_0004",
+      "route_id": "route_0016",
+      "mutation_id": "mutation_0001",
+      "evidence_id": null,
+      "confidence": "medium",
+      "notes": [
+        "One-hop imported service call `create_account` reaches `create_account`"
+      ]
+    },
+    {
+      "id": "link_0005",
+      "route_id": "route_0017",
+      "mutation_id": null,
+      "evidence_id": null,
+      "confidence": "low",
+      "notes": [
+        "Service-like call `account.save` could not be resolved statically"
+      ],
+      "extensions": {
+        "authmap.reachability": {
+          "call_span": {
+            "byte_range": {
+              "end": 755,
+              "start": 741
+            },
+            "column": 9,
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 38
+          },
+          "call_target": "account.save",
+          "reason": "unresolved_service_call"
+        }
+      }
+    },
+    {
+      "id": "link_0006",
+      "route_id": "route_0017",
+      "mutation_id": "mutation_0002",
+      "evidence_id": null,
+      "confidence": "high",
+      "notes": [
+        "Mutation is directly inside route handler"
+      ]
+    },
+    {
+      "id": "link_0007",
+      "route_id": "route_0017",
+      "mutation_id": "mutation_0003",
+      "evidence_id": null,
+      "confidence": "high",
+      "notes": [
+        "Mutation is directly inside route handler"
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "route_id": "route_0001",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path, path_param, unsafe_method, user_path.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "path_param",
+            "unsafe_method",
+            "user_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0002",
+      "class": "permission_guarded",
+      "risk": "low",
+      "rationale": [
+        "1 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): account_path, user_path."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0001"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "user_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0003",
+      "class": "unauthenticated",
+      "risk": "medium",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path, path_param, user_path."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "path_param",
+            "user_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0004",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path, path_param, unsafe_method, user_path.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "path_param",
+            "unsafe_method",
+            "user_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0005",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path, linked_mutation, unsafe_method, user_path.",
+        "Linked data mutation(s) increase review sensitivity.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [
+            "link_0001"
+          ],
+          "mutation_ids": [
+            "mutation_0004"
+          ],
+          "sensitivity_reasons": [
+            "account_path",
+            "linked_mutation",
+            "unsafe_method",
+            "user_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0006",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method, user_path.",
+        "Linked data mutation(s) increase review sensitivity.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [
+            "link_0002"
+          ],
+          "mutation_ids": [
+            "mutation_0005"
+          ],
+          "sensitivity_reasons": [
+            "account_path",
+            "linked_mutation",
+            "path_param",
+            "unsafe_method",
+            "user_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0007",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path, path_param, unsafe_method, user_path.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "path_param",
+            "unsafe_method",
+            "user_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0008",
+      "class": "unauthenticated",
+      "risk": "medium",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0009",
+      "class": "unauthenticated",
+      "risk": "medium",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path, path_param."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "path_param"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0010",
+      "class": "unauthenticated",
+      "risk": "medium",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0011",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path, unsafe_method.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0012",
+      "class": "unauthenticated",
+      "risk": "low",
+      "rationale": [
+        "No authorization evidence was detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0013",
+      "class": "unauthenticated",
+      "risk": "medium",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0014",
+      "class": "unauthenticated",
+      "risk": "medium",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path, path_param."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "path_param"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0015",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path, linked_mutation, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [
+            "link_0003"
+          ],
+          "mutation_ids": [
+            "mutation_0007"
+          ],
+          "sensitivity_reasons": [
+            "account_path",
+            "linked_mutation",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0016",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path, any_method, linked_mutation, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [
+            "link_0004"
+          ],
+          "mutation_ids": [
+            "mutation_0001"
+          ],
+          "sensitivity_reasons": [
+            "account_path",
+            "any_method",
+            "linked_mutation",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0017",
+      "class": "unknown_or_dynamic",
+      "risk": "review_required",
+      "rationale": [
+        "1 weak or dynamic authorization evidence item(s) were detected.",
+        "Sensitive route modifier(s): account_path, any_method, linked_mutation, path_param, unsafe_method, user_path.",
+        "Linked data mutation(s) increase review sensitivity."
+      ],
+      "reviewer_questions": [
+        "Can the dynamic authorization path be confirmed?",
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [
+        "Dynamic authorization evidence requires review.",
+        "Low-confidence authorization evidence was detected."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0002"
+          ],
+          "link_ids": [
+            "link_0005",
+            "link_0006",
+            "link_0007"
+          ],
+          "mutation_ids": [
+            "mutation_0002",
+            "mutation_0003"
+          ],
+          "sensitivity_reasons": [
+            "account_path",
+            "any_method",
+            "linked_mutation",
+            "path_param",
+            "unsafe_method",
+            "user_path"
+          ],
+          "weak_evidence_ids": [
+            "evidence_0002"
+          ]
+        }
+      }
+    },
+    {
+      "route_id": "route_0018",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): any_method, unsafe_method.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "any_method",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0019",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): any_method, unsafe_method.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "any_method",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0020",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): any_method, path_param, unsafe_method.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "any_method",
+            "path_param",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "category": "adapter",
+      "code": "django_custom_router",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 12,
+        "column": 17,
+        "byte_range": {
+          "start": 475,
+          "end": 489
+        }
+      },
+      "message": "DRF custom router behavior could not be resolved statically"
+    },
+    {
+      "category": "adapter",
+      "code": "django_dynamic_include",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/django/project/urls.py",
+        "line": 10,
+        "column": 30,
+        "byte_range": {
+          "start": 346,
+          "end": 359
+        }
+      },
+      "message": "Django include target is dynamic and could not be resolved"
+    },
+    {
+      "category": "adapter",
+      "code": "django_dynamic_url_path",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 21,
+        "column": 10,
+        "byte_range": {
+          "start": 863,
+          "end": 874
+        }
+      },
+      "message": "Django URL path is dynamic and could not be resolved"
+    },
+    {
+      "category": "adapter",
+      "code": "django_urlpattern_context_uncertain",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 30,
+        "column": 5,
+        "byte_range": {
+          "start": 1015,
+          "end": 1072
+        }
+      },
+      "message": "Django URL helper call is outside a statically recognized urlpatterns context"
+    },
+    {
+      "category": "adapter",
+      "code": "drf_dynamic_basename",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 10,
+        "column": 1,
+        "byte_range": {
+          "start": 377,
+          "end": 457
+        }
+      },
+      "message": "DRF router basename is dynamic and could not be resolved"
+    },
+    {
+      "category": "adapter",
+      "code": "drf_dynamic_router_prefix",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 10,
+        "column": 17,
+        "byte_range": {
+          "start": 393,
+          "end": 409
+        }
+      },
+      "message": "DRF router registration prefix is dynamic and could not be resolved"
+    },
+    {
+      "category": "adapter",
+      "code": "drf_unresolved_viewset_base",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 78,
+        "column": 7,
+        "byte_range": {
+          "start": 1763,
+          "end": 1787
+        }
+      },
+      "message": "DRF viewset base class could not be resolved to a known framework base"
+    }
+  ]
+}

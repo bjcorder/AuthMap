@@ -111,6 +111,10 @@ impl EvidenceExtractor for BuiltInEvidenceExtractor {
                 Framework::FastApi => {
                     extract_fastapi_route_evidence(route, &parsed_by_path, &rules)
                 }
+                Framework::Django | Framework::DjangoRestFramework => {
+                    extract_django_route_evidence(route, &parsed_by_path, &rules)
+                }
+                Framework::NextJs => extract_nextjs_route_evidence(route, &parsed_by_path, &rules),
                 _ => Vec::new(),
             };
             evidence.append(&mut route_evidence);
@@ -189,20 +193,25 @@ impl ReachabilityLinker for BuiltInReachabilityLinker {
                 continue;
             };
             let handler_node = match route.framework {
-                Framework::Express => express_handler_node(parsed, handler),
-                Framework::FastApi => fastapi_handler_function_node(parsed, &handler.name),
-                _ => None,
+                Framework::Express => express_handler_node(parsed, handler).into_iter().collect(),
+                Framework::FastApi => fastapi_handler_function_node(parsed, &handler.name)
+                    .into_iter()
+                    .collect(),
+                Framework::Django | Framework::DjangoRestFramework => {
+                    django_handler_nodes(parsed, route, handler)
+                }
+                Framework::NextJs => nextjs_handler_nodes(parsed, route, handler),
+                _ => Vec::new(),
             };
-            let Some(handler_node) = handler_node else {
-                continue;
-            };
-            links.extend(link_route_handler_mutations(
-                route,
-                parsed,
-                handler_node,
-                input.mutations,
-                &index,
-            ));
+            for handler_node in handler_node {
+                links.extend(link_route_handler_mutations(
+                    route,
+                    parsed,
+                    handler_node,
+                    input.mutations,
+                    &index,
+                ));
+            }
         }
 
         dedup_links(&mut links);
@@ -1935,10 +1944,11 @@ fn looks_orm_call(function_text: &str) -> bool {
     lower.starts_with("prisma.")
         || lower.contains(".objects.")
         || lower.starts_with("session.")
-        || matches!(
-            terminal_symbol_name(function_text).as_str(),
-            "update" | "delete" | "text"
-        )
+        || (function_text.contains('.')
+            && matches!(
+                terminal_symbol_name(function_text).as_str(),
+                "update" | "delete" | "text"
+            ))
 }
 
 fn looks_response_or_builtin_call(function_text: &str, terminal_lower: &str) -> bool {
@@ -2145,6 +2155,7 @@ fn resolve_python_module(
     let normalized = parsed.source.path.replace('\\', "/");
     let current_dir = normalized.rsplit_once('/').map_or("", |(dir, _)| dir);
     if module.starts_with('.') {
+        let is_absolute = current_dir.starts_with('/');
         let dots = module.chars().take_while(|ch| *ch == '.').count();
         let remainder = module.trim_start_matches('.');
         let mut parts = current_dir
@@ -2158,7 +2169,13 @@ fn resolve_python_module(
         if !remainder.is_empty() {
             parts.extend(remainder.split('.').map(str::to_string));
         }
-        return module_index.get(&parts.join("/")).cloned();
+        let joined = parts.join("/");
+        let key = if is_absolute {
+            format!("/{joined}")
+        } else {
+            joined
+        };
+        return module_index.get(&key).cloned();
     }
 
     let candidate = module.replace('.', "/");
@@ -2734,6 +2751,66 @@ fn extract_fastapi_route_evidence(
     evidence
 }
 
+fn extract_django_route_evidence(
+    route: &authmap_core::Route,
+    parsed_by_path: &BTreeMap<&str, &ParsedFile>,
+    rules: &EvidenceRules,
+) -> Vec<Evidence> {
+    let Some(handler) = &route.handler else {
+        return Vec::new();
+    };
+    let Some(parsed) =
+        route_file(route).and_then(|file| parsed_by_path.get(file.as_str()).copied())
+    else {
+        return Vec::new();
+    };
+
+    let mut evidence = Vec::new();
+    for node in django_handler_nodes(parsed, route, handler) {
+        evidence.extend(extract_calls_from_node(
+            parsed,
+            node,
+            route,
+            rules,
+            "handler_call",
+        ));
+        evidence.extend(extract_guard_condition_evidence(
+            parsed, node, route, handler,
+        ));
+    }
+    evidence
+}
+
+fn extract_nextjs_route_evidence(
+    route: &authmap_core::Route,
+    parsed_by_path: &BTreeMap<&str, &ParsedFile>,
+    rules: &EvidenceRules,
+) -> Vec<Evidence> {
+    let Some(handler) = &route.handler else {
+        return Vec::new();
+    };
+    let Some(parsed) =
+        route_file(route).and_then(|file| parsed_by_path.get(file.as_str()).copied())
+    else {
+        return Vec::new();
+    };
+
+    let mut evidence = Vec::new();
+    for node in nextjs_handler_nodes(parsed, route, handler) {
+        evidence.extend(extract_calls_from_node(
+            parsed,
+            node,
+            route,
+            rules,
+            "handler_call",
+        ));
+        evidence.extend(extract_guard_condition_evidence(
+            parsed, node, route, handler,
+        ));
+    }
+    evidence
+}
+
 fn extract_calls_from_node(
     parsed: &ParsedFile,
     node: Node<'_>,
@@ -2909,16 +2986,11 @@ fn evidence_from_rule(
 
 fn route_file(route: &authmap_core::Route) -> Option<String> {
     route
-        .span
+        .handler
         .as_ref()
+        .and_then(|handler| handler.span.as_ref())
         .map(|span| span.file.clone())
-        .or_else(|| {
-            route
-                .handler
-                .as_ref()
-                .and_then(|handler| handler.span.as_ref())
-                .map(|span| span.file.clone())
-        })
+        .or_else(|| route.span.as_ref().map(|span| span.file.clone()))
 }
 
 fn fastapi_decorated_function_node<'tree>(
@@ -3000,6 +3072,281 @@ fn express_handler_node<'tree>(
     None
 }
 
+fn nextjs_handler_nodes<'tree>(
+    parsed: &'tree ParsedFile,
+    route: &authmap_core::Route,
+    handler: &SymbolRef,
+) -> Vec<Node<'tree>> {
+    let Some(metadata) = nextjs_route_metadata(route) else {
+        return js_function_or_value_node(parsed, &handler.name)
+            .into_iter()
+            .collect();
+    };
+    match metadata.export_kind.as_deref() {
+        Some("function") => js_function_declaration_node(parsed, &metadata.export_name)
+            .into_iter()
+            .collect(),
+        Some("const_function") => js_variable_function_value_node(parsed, &metadata.export_name)
+            .into_iter()
+            .collect(),
+        Some("re_export") => js_function_or_value_node(parsed, &handler.name)
+            .into_iter()
+            .collect(),
+        Some("wrapped") => nextjs_wrapped_handler_nodes(parsed, &metadata.export_name, handler),
+        _ => Vec::new(),
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct NextJsRouteMetadata {
+    export_name: String,
+    export_kind: Option<String>,
+}
+
+fn nextjs_route_metadata(route: &authmap_core::Route) -> Option<NextJsRouteMetadata> {
+    let value = route.extensions.get("authmap.nextjs")?;
+    Some(NextJsRouteMetadata {
+        export_name: value
+            .get("export_name")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        export_kind: value
+            .get("export_kind")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+    })
+}
+
+fn nextjs_wrapped_handler_nodes<'tree>(
+    parsed: &'tree ParsedFile,
+    export_name: &str,
+    handler: &SymbolRef,
+) -> Vec<Node<'tree>> {
+    if handler.name != export_name
+        && let Some(node) = js_function_or_value_node(parsed, &handler.name)
+    {
+        return vec![node];
+    }
+    if let Some(variable) = js_variable_declarator_node(parsed, export_name) {
+        if let Some(value) = variable.child_by_field_name("value")
+            && value.kind() == "call_expression"
+        {
+            return call_argument_nodes(value)
+                .into_iter()
+                .filter(|arg| {
+                    matches!(
+                        arg.kind(),
+                        "arrow_function" | "function" | "function_expression"
+                    )
+                })
+                .collect();
+        }
+    }
+    Vec::new()
+}
+
+fn js_function_or_value_node<'tree>(parsed: &'tree ParsedFile, name: &str) -> Option<Node<'tree>> {
+    js_function_declaration_node(parsed, name)
+        .or_else(|| js_variable_function_value_node(parsed, name))
+}
+
+fn js_function_declaration_node<'tree>(
+    parsed: &'tree ParsedFile,
+    name: &str,
+) -> Option<Node<'tree>> {
+    let root = parsed.root_node()?;
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "function_declaration"
+            && function_name(parsed, node).as_deref() == Some(name)
+        {
+            return Some(node);
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    None
+}
+
+fn js_variable_function_value_node<'tree>(
+    parsed: &'tree ParsedFile,
+    name: &str,
+) -> Option<Node<'tree>> {
+    let variable = js_variable_declarator_node(parsed, name)?;
+    variable.child_by_field_name("value").filter(|value| {
+        matches!(
+            value.kind(),
+            "arrow_function" | "function" | "function_expression"
+        )
+    })
+}
+
+fn js_variable_declarator_node<'tree>(
+    parsed: &'tree ParsedFile,
+    name: &str,
+) -> Option<Node<'tree>> {
+    let root = parsed.root_node()?;
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node != root
+            && matches!(
+                node.kind(),
+                "arrow_function"
+                    | "function"
+                    | "function_expression"
+                    | "class"
+                    | "class_declaration"
+            )
+        {
+            continue;
+        }
+        if node.kind() == "variable_declarator"
+            && node
+                .child_by_field_name("name")
+                .and_then(|name_node| parsed.text_for(name_node))
+                == Some(name)
+        {
+            return Some(node);
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    None
+}
+
+fn django_handler_nodes<'tree>(
+    parsed: &'tree ParsedFile,
+    route: &authmap_core::Route,
+    handler: &SymbolRef,
+) -> Vec<Node<'tree>> {
+    let Some(metadata) = django_route_metadata(route) else {
+        return python_function_node(parsed, &handler.name)
+            .into_iter()
+            .collect();
+    };
+    match metadata.handler_kind.as_deref() {
+        Some("function") => python_function_node(parsed, &handler.name)
+            .into_iter()
+            .collect(),
+        Some("class_based_view") => {
+            let Some(class_name) = metadata.class_name.as_deref() else {
+                return Vec::new();
+            };
+            django_class_method_nodes(parsed, class_name, &django_http_methods_for_route(route))
+        }
+        Some("viewset_standard") | Some("viewset_action") => {
+            let Some(class_name) = metadata.class_name.as_deref() else {
+                return Vec::new();
+            };
+            let Some(method_name) = metadata.method_name.as_deref() else {
+                return Vec::new();
+            };
+            django_class_method_nodes(parsed, class_name, &[method_name.to_string()])
+        }
+        _ => Vec::new(),
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct DjangoRouteMetadata {
+    handler_kind: Option<String>,
+    class_name: Option<String>,
+    method_name: Option<String>,
+}
+
+fn django_route_metadata(route: &authmap_core::Route) -> Option<DjangoRouteMetadata> {
+    let value = route.extensions.get("authmap.django")?;
+    Some(DjangoRouteMetadata {
+        handler_kind: value
+            .get("handler_kind")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+        class_name: value
+            .get("class_name")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+        method_name: value
+            .get("method_name")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+    })
+}
+
+fn django_http_methods_for_route(route: &authmap_core::Route) -> Vec<String> {
+    if route.method == "ANY" {
+        ["get", "post", "put", "patch", "delete"]
+            .into_iter()
+            .map(str::to_string)
+            .collect()
+    } else {
+        vec![route.method.to_ascii_lowercase()]
+    }
+}
+
+fn python_function_node<'tree>(
+    parsed: &'tree ParsedFile,
+    target_name: &str,
+) -> Option<Node<'tree>> {
+    let root = parsed.root_node()?;
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "function_definition"
+            && function_name(parsed, node).as_deref() == Some(target_name)
+        {
+            return Some(node);
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    None
+}
+
+fn django_class_method_nodes<'tree>(
+    parsed: &'tree ParsedFile,
+    class_name: &str,
+    method_names: &[String],
+) -> Vec<Node<'tree>> {
+    let Some(class_node) = python_class_node(parsed, class_name) else {
+        return Vec::new();
+    };
+    let wanted = method_names
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    let mut nodes = Vec::new();
+    let mut stack = vec![class_node];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "function_definition"
+            && let Some(name) = function_name(parsed, node)
+            && wanted.contains(name.as_str())
+        {
+            nodes.push(node);
+        }
+        if node != class_node && is_nested_scope_node(node) {
+            continue;
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    nodes
+}
+
+fn python_class_node<'tree>(parsed: &'tree ParsedFile, class_name: &str) -> Option<Node<'tree>> {
+    let root = parsed.root_node()?;
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "class_definition"
+            && function_name(parsed, node).as_deref() == Some(class_name)
+        {
+            return Some(node);
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    None
+}
+
 fn node_containing_span<'tree>(node: Node<'tree>, span: &Span) -> Option<Node<'tree>> {
     let range = span.byte_range?;
     if node.start_byte() as u64 > range.start || (node.end_byte() as u64) < range.end {
@@ -3067,7 +3414,19 @@ fn is_fastapi_depends(function_text: &str) -> bool {
 fn is_framework_route_call(function_text: &str) -> bool {
     matches!(
         terminal_symbol_name(function_text).as_str(),
-        "get" | "post" | "put" | "patch" | "delete" | "api_route" | "route" | "use"
+        "get"
+            | "post"
+            | "put"
+            | "patch"
+            | "delete"
+            | "api_route"
+            | "route"
+            | "use"
+            | "path"
+            | "re_path"
+            | "include"
+            | "register"
+            | "action"
     )
 }
 
@@ -3668,13 +4027,15 @@ mod tests {
     use authmap_config::{ScanConfig, ScanPlan};
     use authmap_core::{
         Confidence, CoverageClass, Evidence, EvidenceType, Framework, Mutation, MutationOperation,
-        ReachabilityLink, RiskLevel, Route, ScanMode, diagnostic_codes,
+        ReachabilityLink, RiskLevel, Route, ScanMode, SourceFile, diagnostic_codes,
     };
+    use authmap_parsers::{ParseStatus, ParsedFile};
     use authmap_testkit::fixture_path;
 
     use super::{
-        classify_coverage, normalize_adapter_evidence, normalize_module_path, route_id_remaps,
-        run_scan, run_scan_with_started_at, suggest_rules, suggest_rules_with_started_at,
+        classify_coverage, normalize_adapter_evidence, normalize_module_path,
+        resolve_python_module, route_id_remaps, run_scan, run_scan_with_started_at, suggest_rules,
+        suggest_rules_with_started_at,
     };
 
     #[test]
@@ -4224,6 +4585,219 @@ sensitivity:
     }
 
     #[test]
+    fn scan_pipeline_includes_django_routes_evidence_and_links() {
+        let target = fixture_path("django");
+        let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        assert_eq!(document.routes.len(), 20);
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Django
+                && route.method == "ANY"
+                && route.path == "/accounts/users/<int:pk>/"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "AccountDetailView")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::DjangoRestFramework
+                && route.method == "POST"
+                && route.path == "/accounts/api/users/{uuid}/disable"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "UserViewSet.disable")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::DjangoRestFramework
+                && route.method == "GET"
+                && route.path == "/accounts/api/readonly/{pk}"
+        }));
+        assert!(!document.routes.iter().any(|route| {
+            route.path.starts_with("/accounts/api/readonly")
+                && matches!(route.method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::DjangoRestFramework
+                && route.method == "POST"
+                && route.path == "/accounts/readonly-api/audit/refresh"
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::DjangoRestFramework
+                && route.method == "GET"
+                && route.path == "/accounts/api/custom-model"
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::DjangoRestFramework
+                && route.method == "POST"
+                && route.path == "/accounts/api/custom-model/recalculate"
+                && route.confidence == Confidence::Medium
+        }));
+        assert!(!document.routes.iter().any(|route| {
+            route.path.starts_with("/accounts/api/custom-model")
+                && matches!(route.method.as_str(), "PUT" | "PATCH" | "DELETE")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Django
+                && route.method == "ANY"
+                && route.path == "/legacy/{slug}/"
+                && route.confidence == Confidence::Medium
+        }));
+        assert!(document.evidence.iter().any(|evidence| {
+            evidence.evidence_type == EvidenceType::PermissionCheck
+                && evidence
+                    .symbol
+                    .as_ref()
+                    .is_some_and(|symbol| symbol.name == "require_permission")
+        }));
+        assert!(document.links.iter().any(|link| {
+            document.routes.iter().any(|route| {
+                route.id == link.route_id
+                    && route.method == "POST"
+                    && route.path == "/accounts/api/users"
+            }) && link.mutation_id.as_ref().is_some_and(|mutation_id| {
+                document.mutations.iter().any(|mutation| {
+                    &mutation.id == mutation_id
+                        && mutation.library.as_deref() == Some("django_orm")
+                        && mutation.operation == MutationOperation::Create
+                })
+            })
+        }));
+        assert!(document.links.iter().any(|link| {
+            link.route_id == route_by_path(&document, "/accounts").id.as_str()
+                && link.confidence == Confidence::Medium
+                && link.mutation_id.as_ref().is_some()
+        }));
+        for code in [
+            "django_dynamic_include",
+            "django_dynamic_url_path",
+            "django_urlpattern_context_uncertain",
+            "drf_dynamic_router_prefix",
+            "drf_dynamic_basename",
+            "drf_unresolved_viewset_base",
+        ] {
+            assert!(
+                document
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.code == code),
+                "missing diagnostic {code}"
+            );
+        }
+    }
+
+    #[test]
+    fn scan_pipeline_includes_nextjs_routes_evidence_and_links() {
+        let target = fixture_path("nextjs");
+        let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        assert_eq!(document.routes.len(), 16);
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::NextJs
+                && route.method == "GET"
+                && route.path == "/blog/[...slug]"
+                && route.confidence == Confidence::Medium
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::NextJs
+                && route.method == "PUT"
+                && route.path == "/docs/[[...slug]]"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "updateDoc")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::NextJs
+                && route.method == "HEAD"
+                && route.path == "/head"
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::NextJs
+                && route.method == "OPTIONS"
+                && route.path == "/options"
+        }));
+        assert!(
+            !document
+                .routes
+                .iter()
+                .any(|route| route.method == "DELETE" && route.path == "/tsx")
+        );
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::NextJs
+                && route.method == "GET"
+                && route.path == "/modal"
+                && route.confidence == Confidence::Medium
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::NextJs
+                && route.method == "GET"
+                && route.path == "/nested/app/users"
+                && route.confidence == Confidence::Medium
+        }));
+        assert!(document.evidence.iter().any(|evidence| {
+            evidence.evidence_type == EvidenceType::PermissionCheck
+                && evidence
+                    .symbol
+                    .as_ref()
+                    .is_some_and(|symbol| symbol.name == "requirePermission")
+        }));
+        assert!(document.evidence.iter().any(|evidence| {
+            evidence.evidence_type == EvidenceType::Authn
+                && evidence
+                    .symbol
+                    .as_ref()
+                    .is_some_and(|symbol| symbol.name == "requireAuth")
+        }));
+        assert!(document.links.iter().any(|link| {
+            document.routes.iter().any(|route| {
+                route.id == link.route_id && route.method == "PATCH" && route.path == "/users/[id]"
+            }) && link.mutation_id.as_ref().is_some_and(|mutation_id| {
+                document.mutations.iter().any(|mutation| {
+                    &mutation.id == mutation_id
+                        && mutation.library.as_deref() == Some("prisma")
+                        && mutation.operation == MutationOperation::Update
+                })
+            })
+        }));
+        assert!(document.links.iter().any(|link| {
+            document.routes.iter().any(|route| {
+                route.id == link.route_id
+                    && route.method == "PUT"
+                    && route.path == "/docs/[[...slug]]"
+            }) && link.confidence == Confidence::High
+                && link.mutation_id.as_ref().is_some()
+        }));
+        assert!(document.links.iter().any(|link| {
+            document.routes.iter().any(|route| {
+                route.id == link.route_id && route.method == "POST" && route.path == "/external"
+            }) && link.mutation_id.as_ref().is_some_and(|mutation_id| {
+                document.mutations.iter().any(|mutation| {
+                    &mutation.id == mutation_id
+                        && mutation.library.as_deref() == Some("prisma")
+                        && mutation.operation == MutationOperation::Create
+                })
+            })
+        }));
+        for code in [
+            "nextjs_unusual_route_segment",
+            "nextjs_dynamic_route_export",
+            "nextjs_nested_app_segment",
+            "nextjs_external_reexport_unresolved",
+        ] {
+            assert!(
+                document
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.code == code),
+                "missing diagnostic {code}"
+            );
+        }
+    }
+
+    #[test]
     fn scan_pipeline_detects_orm_data_mutations() {
         let target = fixture_path("mutations");
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
@@ -4539,6 +5113,54 @@ export default async function createSession(userId: string) {
     }
 
     #[test]
+    fn reachability_links_bare_update_service_call() {
+        let temp = TestDir::new("bare-update-service");
+        write_file(
+            &temp.path().join("app.py"),
+            r#"
+from fastapi import Depends, FastAPI
+
+from services import update_account
+
+app = FastAPI()
+
+def require_user():
+    return {"id": "user_1"}
+
+@app.post("/accounts/update")
+def route(user=Depends(require_user)):
+    return update_account("acct_1")
+"#,
+        );
+        write_file(
+            &temp.path().join("services.py"),
+            r#"
+from sqlalchemy.orm import Session
+
+class Account:
+    pass
+
+def update_account(account_id: str):
+    session = Session()
+    account = Account()
+    session.add(account)
+    session.commit()
+    return account
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        assert_mutation_link(
+            &document,
+            "/accounts/update",
+            "sqlalchemy",
+            Some("Account"),
+            Confidence::Medium,
+        );
+    }
+
+    #[test]
     fn js_module_normalization_preserves_posix_absolute_roots() {
         assert_eq!(
             normalize_module_path("/tmp/authmap/project/routes", "./service", "/"),
@@ -4547,6 +5169,36 @@ export default async function createSession(userId: string) {
         assert_eq!(
             normalize_module_path("/tmp/authmap/project/routes", "../service", "/"),
             "/tmp/authmap/project/service"
+        );
+    }
+
+    #[test]
+    fn python_relative_import_resolution_preserves_posix_absolute_roots() {
+        let parsed = ParsedFile {
+            source: SourceFile {
+                path: "/home/runner/work/AuthMap/tests/fixtures/django/accounts/views.py"
+                    .to_string(),
+                language: authmap_core::Language::Python,
+                size_bytes: 0,
+                sha256: None,
+                project_hints: Vec::new(),
+                skipped: None,
+            },
+            language: authmap_core::Language::Python,
+            text: String::new(),
+            tree: None,
+            status: ParseStatus::Parsed,
+            diagnostics: Vec::new(),
+        };
+        let mut modules = std::collections::BTreeMap::new();
+        modules.insert(
+            "/home/runner/work/AuthMap/tests/fixtures/django/accounts/services".to_string(),
+            "/home/runner/work/AuthMap/tests/fixtures/django/accounts/services.py".to_string(),
+        );
+
+        assert_eq!(
+            resolve_python_module(&parsed, &modules, ".services").as_deref(),
+            Some("/home/runner/work/AuthMap/tests/fixtures/django/accounts/services.py")
         );
     }
 

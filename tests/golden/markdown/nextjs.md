@@ -1,0 +1,370 @@
+# AuthMap Report
+
+- Tool: authmap 0.1.0
+- Schema: 0.1.0
+
+## Summary
+
+- Mode: advisory
+- Targets: tests/fixtures/nextjs
+- Source files: 14
+- Routes: 16
+- Evidence entries: 3
+- Mutations: 7
+- Diagnostics: 4
+- Frameworks: next_js: 16
+
+## Review Required
+
+| Item | Subject | Reason |
+| --- | --- | --- |
+| [route_0001](#route-route_0001) | GET /modal | confidence is medium; Next.js route segment \`(.)modal\` uses an unusual routing convention and was normalized for review |
+| [route_0002](#route-route_0002) | DELETE /reports | risk is high |
+| [route_0003](#route-route_0003) | GET /blog/\[...slug\] | confidence is medium; Next.js route handler export is wrapped; wrapper behavior requires review |
+| [route_0004](#route-route_0004) | PUT /docs/\[\[...slug\]\] | confidence is medium; Next.js route handler export is wrapped; wrapper behavior requires review; risk is high |
+| [route_0005](#route-route_0005) | DELETE /dynamic-export | confidence is medium; Next.js route handler export value is dynamic or unsupported; review required; risk is high |
+| [route_0006](#route-route_0006) | POST /external | risk is review_required |
+| [route_0007](#route-route_0007) | PUT /external | confidence is medium; Next.js route handler re-export target could not be analyzed statically; risk is high |
+| [route_0009](#route-route_0009) | GET /nested/app/users | confidence is medium; Next.js route file path contains nested app segments; first app segment was used |
+| [route_0012](#route-route_0012) | POST / | risk is high |
+| [route_0015](#route-route_0015) | PATCH /users/\[id\] | risk is high |
+| [route_0016](#route-route_0016) | PATCH /wrapped-named | confidence is medium; Next.js route handler export is wrapped; wrapper behavior requires review; risk is high |
+| diagnostic | nextjs_external_reexport_unresolved | Next.js route handler re-export target could not be analyzed statically at tests/fixtures/nextjs/app/external/route.ts:1:1 |
+| diagnostic | nextjs_nested_app_segment | Next.js route file path contains nested app segments at tests/fixtures/nextjs/app/nested/app/users/route.ts:1:1 |
+| diagnostic | nextjs_unusual_route_segment | Next.js route segment uses an unusual routing convention; emitted path is normalized for review at tests/fixtures/nextjs/app/(.)modal/route.ts:1:1 |
+| diagnostic | nextjs_dynamic_route_export | Next.js route handler export value is dynamic or unsupported at tests/fixtures/nextjs/app/dynamic-export/route.ts:3:14 |
+
+## Route Inventory
+
+| ID | Framework | Method | Path | Handler | Middleware | Confidence | Coverage | Risk |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [route_0001](#route-route_0001) | next_js | GET | /modal | \`GET\` (tests/fixtures/nextjs/app/(.)modal/route.ts:1:17) | none | medium | unauthenticated | low |
+| [route_0002](#route-route_0002) | next_js | DELETE | /reports | \`handleDelete\` (tests/fixtures/nextjs/app/(admin)/reports/route.ts:1:10) | none | high | unauthenticated | high |
+| [route_0003](#route-route_0003) | next_js | GET | /blog/\[...slug\] | \`GET\` (tests/fixtures/nextjs/app/blog/\[...slug\]/route.ts:9:14) | none | medium | permission_guarded | low |
+| [route_0004](#route-route_0004) | next_js | PUT | /docs/\[\[...slug\]\] | \`updateDoc\` (tests/fixtures/nextjs/app/docs/\[\[...slug\]\]/route.ts:9:32) | none | medium | unauthenticated | high |
+| [route_0005](#route-route_0005) | next_js | DELETE | /dynamic-export | \`DELETE\` (tests/fixtures/nextjs/app/dynamic-export/route.ts:3:14) | none | medium | unauthenticated | high |
+| [route_0006](#route-route_0006) | next_js | POST | /external | \`POST\` (tests/fixtures/nextjs/app/external/handler.ts:1:23) | none | high | authn_only | review_required |
+| [route_0007](#route-route_0007) | next_js | PUT | /external | \`missing\` (tests/fixtures/nextjs/app/external/route.ts:1:1) | none | medium | unauthenticated | high |
+| [route_0008](#route-route_0008) | next_js | HEAD | /head | \`HEAD\` (tests/fixtures/nextjs/app/head/route.js:1:17) | none | high | unauthenticated | low |
+| [route_0009](#route-route_0009) | next_js | GET | /nested/app/users | \`GET\` (tests/fixtures/nextjs/app/nested/app/users/route.ts:1:17) | none | medium | unauthenticated | medium |
+| [route_0010](#route-route_0010) | next_js | OPTIONS | /options | \`OPTIONS\` (tests/fixtures/nextjs/app/options/route.jsx:1:14) | none | high | unauthenticated | low |
+| [route_0011](#route-route_0011) | next_js | GET | / | \`GET\` (tests/fixtures/nextjs/app/route.ts:5:23) | none | high | authn_only | low |
+| [route_0012](#route-route_0012) | next_js | POST | / | \`POST\` (tests/fixtures/nextjs/app/route.ts:10:14) | none | high | unauthenticated | high |
+| [route_0013](#route-route_0013) | next_js | GET | /tsx | \`GET\` (tests/fixtures/nextjs/app/tsx/route.tsx:1:14) | none | high | unauthenticated | low |
+| [route_0014](#route-route_0014) | next_js | GET | /users/\[id\] | \`GET\` (tests/fixtures/nextjs/app/users/\[id\]/route.ts:1:23) | none | high | unauthenticated | medium |
+| [route_0015](#route-route_0015) | next_js | PATCH | /users/\[id\] | \`PATCH\` (tests/fixtures/nextjs/app/users/\[id\]/route.ts:5:14) | none | high | unauthenticated | high |
+| [route_0016](#route-route_0016) | next_js | PATCH | /wrapped-named | \`updateProfile\` (tests/fixtures/nextjs/app/wrapped-named/route.ts:9:34) | none | medium | unauthenticated | high |
+
+## Data Mutations
+
+| ID | Operation | Library | Resource | Location | Confidence | Review |
+| --- | --- | --- | --- | --- | --- | --- |
+| mutation_0001 | delete | prisma | report | tests/fixtures/nextjs/app/(admin)/reports/route.ts:2:10 | high | none |
+| mutation_0002 | update | prisma | doc | tests/fixtures/nextjs/app/docs/\[\[...slug\]\]/route.ts:6:10 | high | none |
+| mutation_0003 | create | prisma | external | tests/fixtures/nextjs/app/external/handler.ts:3:10 | high | none |
+| mutation_0004 | create | prisma | session | tests/fixtures/nextjs/app/route.ts:11:10 | high | none |
+| mutation_0005 | delete | prisma | shadow | tests/fixtures/nextjs/app/tsx/route.tsx:2:24 | high | none |
+| mutation_0006 | update | prisma | user | tests/fixtures/nextjs/app/users/\[id\]/route.ts:6:10 | high | none |
+| mutation_0007 | update | prisma | profile | tests/fixtures/nextjs/app/wrapped-named/route.ts:6:10 | high | none |
+
+## Route Details
+
+<a id="route-route_0001"></a>
+### route_0001 GET `/modal`
+
+- Framework: next_js
+- Handler: `GET` (tests/fixtures/nextjs/app/(.)modal/route.ts:1:17)
+- Route location: tests/fixtures/nextjs/app/(.)modal/route.ts:1:8
+- Middleware: none
+- Confidence: medium
+- Coverage: unauthenticated (low)
+- Coverage rationale: No authorization evidence was detected.
+- Coverage uncertainty:
+  - Route inventory confidence is not high.
+- Uncertainty notes:
+  - Next.js route segment \`(.)modal\` uses an unusual routing convention and was normalized for review
+- Auth evidence: none
+- Data mutations: none
+
+<a id="route-route_0002"></a>
+### route_0002 DELETE `/reports`
+
+- Framework: next_js
+- Handler: `handleDelete` (tests/fixtures/nextjs/app/(admin)/reports/route.ts:1:10)
+- Route location: tests/fixtures/nextjs/app/(admin)/reports/route.ts:5:1
+- Middleware: none
+- Confidence: high
+- Coverage: unauthenticated (high)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: mutations: mutation_0001; links: link_0001; sensitivity: linked_mutation, unsafe_method
+- Reviewer questions:
+  - Should linked data mutations have resource-specific authorization evidence?
+  - Should this state-changing route require more than authentication?
+- Auth evidence: none
+- Data mutations:
+  - delete `report` via `prisma` at tests/fixtures/nextjs/app/(admin)/reports/route.ts:2:10 (high)
+
+<a id="route-route_0003"></a>
+### route_0003 GET `/blog/\[...slug\]`
+
+- Framework: next_js
+- Handler: `GET` (tests/fixtures/nextjs/app/blog/\[...slug\]/route.ts:9:14)
+- Route location: tests/fixtures/nextjs/app/blog/\[...slug\]/route.ts:9:14
+- Middleware: none
+- Confidence: medium
+- Coverage: permission_guarded (low)
+- Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.
+- Coverage support: evidence: evidence_0001
+- Coverage uncertainty:
+  - Route inventory confidence is not high.
+- Uncertainty notes:
+  - Next.js route handler export is wrapped; wrapper behavior requires review
+- Auth evidence:
+  - permission_check `permission_guard` at tests/fixtures/nextjs/app/blog/\[...slug\]/route.ts:10:3 (high)
+    - Symbol: `requirePermission` (tests/fixtures/nextjs/app/blog/\[...slug\]/route.ts:10:3)
+- Data mutations: none
+
+<a id="route-route_0004"></a>
+### route_0004 PUT `/docs/\[\[...slug\]\]`
+
+- Framework: next_js
+- Handler: `updateDoc` (tests/fixtures/nextjs/app/docs/\[\[...slug\]\]/route.ts:9:32)
+- Route location: tests/fixtures/nextjs/app/docs/\[\[...slug\]\]/route.ts:9:14
+- Middleware: none
+- Confidence: medium
+- Coverage: unauthenticated (high)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: mutations: mutation_0002; links: link_0002; sensitivity: linked_mutation, unsafe_method
+- Reviewer questions:
+  - Should linked data mutations have resource-specific authorization evidence?
+  - Should this state-changing route require more than authentication?
+- Coverage uncertainty:
+  - Route inventory confidence is not high.
+- Uncertainty notes:
+  - Next.js route handler export is wrapped; wrapper behavior requires review
+- Auth evidence: none
+- Data mutations:
+  - update `doc` via `prisma` at tests/fixtures/nextjs/app/docs/\[\[...slug\]\]/route.ts:6:10 (high)
+
+<a id="route-route_0005"></a>
+### route_0005 DELETE `/dynamic-export`
+
+- Framework: next_js
+- Handler: `DELETE` (tests/fixtures/nextjs/app/dynamic-export/route.ts:3:14)
+- Route location: tests/fixtures/nextjs/app/dynamic-export/route.ts:3:14
+- Middleware: none
+- Confidence: medium
+- Coverage: unauthenticated (high)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): unsafe_method.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: sensitivity: unsafe_method
+- Reviewer questions:
+  - Should this state-changing route require more than authentication?
+- Coverage uncertainty:
+  - Route inventory confidence is not high.
+- Uncertainty notes:
+  - Next.js route handler export value is dynamic or unsupported; review required
+- Auth evidence: none
+- Data mutations: none
+
+<a id="route-route_0006"></a>
+### route_0006 POST `/external`
+
+- Framework: next_js
+- Handler: `POST` (tests/fixtures/nextjs/app/external/handler.ts:1:23)
+- Route location: tests/fixtures/nextjs/app/external/route.ts:1:1
+- Middleware: none
+- Confidence: high
+- Coverage: authn_only (review_required)
+- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
+- Coverage support: evidence: evidence_0002; mutations: mutation_0003; links: link_0003; sensitivity: linked_mutation, unsafe_method
+- Reviewer questions:
+  - Should linked data mutations have resource-specific authorization evidence?
+  - Should this state-changing route require more than authentication?
+- Auth evidence:
+  - authn `authn_guard` at tests/fixtures/nextjs/app/external/handler.ts:2:3 (high)
+    - Symbol: `requireAuth` (tests/fixtures/nextjs/app/external/handler.ts:2:3)
+- Data mutations:
+  - create `external` via `prisma` at tests/fixtures/nextjs/app/external/handler.ts:3:10 (high)
+
+<a id="route-route_0007"></a>
+### route_0007 PUT `/external`
+
+- Framework: next_js
+- Handler: `missing` (tests/fixtures/nextjs/app/external/route.ts:1:1)
+- Route location: tests/fixtures/nextjs/app/external/route.ts:1:1
+- Middleware: none
+- Confidence: medium
+- Coverage: unauthenticated (high)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): unsafe_method.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: sensitivity: unsafe_method
+- Reviewer questions:
+  - Should this state-changing route require more than authentication?
+- Coverage uncertainty:
+  - Route inventory confidence is not high.
+- Uncertainty notes:
+  - Next.js route handler re-export target could not be analyzed statically
+- Auth evidence: none
+- Data mutations: none
+
+<a id="route-route_0008"></a>
+### route_0008 HEAD `/head`
+
+- Framework: next_js
+- Handler: `HEAD` (tests/fixtures/nextjs/app/head/route.js:1:17)
+- Route location: tests/fixtures/nextjs/app/head/route.js:1:8
+- Middleware: none
+- Confidence: high
+- Coverage: unauthenticated (low)
+- Coverage rationale: No authorization evidence was detected.
+- Auth evidence: none
+- Data mutations: none
+
+<a id="route-route_0009"></a>
+### route_0009 GET `/nested/app/users`
+
+- Framework: next_js
+- Handler: `GET` (tests/fixtures/nextjs/app/nested/app/users/route.ts:1:17)
+- Route location: tests/fixtures/nextjs/app/nested/app/users/route.ts:1:8
+- Middleware: none
+- Confidence: medium
+- Coverage: unauthenticated (medium)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): user_path.
+- Coverage support: sensitivity: user_path
+- Reviewer questions:
+  - Should this route require ownership or permission checks?
+- Coverage uncertainty:
+  - Route inventory confidence is not high.
+- Uncertainty notes:
+  - Next.js route file path contains nested app segments; first app segment was used
+- Auth evidence: none
+- Data mutations: none
+
+<a id="route-route_0010"></a>
+### route_0010 OPTIONS `/options`
+
+- Framework: next_js
+- Handler: `OPTIONS` (tests/fixtures/nextjs/app/options/route.jsx:1:14)
+- Route location: tests/fixtures/nextjs/app/options/route.jsx:1:14
+- Middleware: none
+- Confidence: high
+- Coverage: unauthenticated (low)
+- Coverage rationale: No authorization evidence was detected.
+- Auth evidence: none
+- Data mutations: none
+
+<a id="route-route_0011"></a>
+### route_0011 GET `/`
+
+- Framework: next_js
+- Handler: `GET` (tests/fixtures/nextjs/app/route.ts:5:23)
+- Route location: tests/fixtures/nextjs/app/route.ts:5:8
+- Middleware: none
+- Confidence: high
+- Coverage: authn_only (low)
+- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
+- Coverage support: evidence: evidence_0003
+- Auth evidence:
+  - authn `authn_guard` at tests/fixtures/nextjs/app/route.ts:6:3 (high)
+    - Symbol: `requireAuth` (tests/fixtures/nextjs/app/route.ts:6:3)
+- Data mutations: none
+
+<a id="route-route_0012"></a>
+### route_0012 POST `/`
+
+- Framework: next_js
+- Handler: `POST` (tests/fixtures/nextjs/app/route.ts:10:14)
+- Route location: tests/fixtures/nextjs/app/route.ts:10:14
+- Middleware: none
+- Confidence: high
+- Coverage: unauthenticated (high)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: mutations: mutation_0004; links: link_0004; sensitivity: linked_mutation, unsafe_method
+- Reviewer questions:
+  - Should linked data mutations have resource-specific authorization evidence?
+  - Should this state-changing route require more than authentication?
+- Auth evidence: none
+- Data mutations:
+  - create `session` via `prisma` at tests/fixtures/nextjs/app/route.ts:11:10 (high)
+
+<a id="route-route_0013"></a>
+### route_0013 GET `/tsx`
+
+- Framework: next_js
+- Handler: `GET` (tests/fixtures/nextjs/app/tsx/route.tsx:1:14)
+- Route location: tests/fixtures/nextjs/app/tsx/route.tsx:1:14
+- Middleware: none
+- Confidence: high
+- Coverage: unauthenticated (low)
+- Coverage rationale: No authorization evidence was detected.
+- Auth evidence: none
+- Data mutations: none
+
+<a id="route-route_0014"></a>
+### route_0014 GET `/users/\[id\]`
+
+- Framework: next_js
+- Handler: `GET` (tests/fixtures/nextjs/app/users/\[id\]/route.ts:1:23)
+- Route location: tests/fixtures/nextjs/app/users/\[id\]/route.ts:1:8
+- Middleware: none
+- Confidence: high
+- Coverage: unauthenticated (medium)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): user_path.
+- Coverage support: sensitivity: user_path
+- Reviewer questions:
+  - Should this route require ownership or permission checks?
+- Auth evidence: none
+- Data mutations: none
+
+<a id="route-route_0015"></a>
+### route_0015 PATCH `/users/\[id\]`
+
+- Framework: next_js
+- Handler: `PATCH` (tests/fixtures/nextjs/app/users/\[id\]/route.ts:5:14)
+- Route location: tests/fixtures/nextjs/app/users/\[id\]/route.ts:5:14
+- Middleware: none
+- Confidence: high
+- Coverage: unauthenticated (high)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): linked_mutation, unsafe_method, user_path.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: mutations: mutation_0006; links: link_0005; sensitivity: linked_mutation, unsafe_method, user_path
+- Reviewer questions:
+  - Should linked data mutations have resource-specific authorization evidence?
+  - Should this route require ownership or permission checks?
+  - Should this state-changing route require more than authentication?
+- Auth evidence: none
+- Data mutations:
+  - update `user` via `prisma` at tests/fixtures/nextjs/app/users/\[id\]/route.ts:6:10 (high)
+
+<a id="route-route_0016"></a>
+### route_0016 PATCH `/wrapped-named`
+
+- Framework: next_js
+- Handler: `updateProfile` (tests/fixtures/nextjs/app/wrapped-named/route.ts:9:34)
+- Route location: tests/fixtures/nextjs/app/wrapped-named/route.ts:9:14
+- Middleware: none
+- Confidence: medium
+- Coverage: unauthenticated (high)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: mutations: mutation_0007; links: link_0006; sensitivity: linked_mutation, unsafe_method
+- Reviewer questions:
+  - Should linked data mutations have resource-specific authorization evidence?
+  - Should this state-changing route require more than authentication?
+- Coverage uncertainty:
+  - Route inventory confidence is not high.
+- Uncertainty notes:
+  - Next.js route handler export is wrapped; wrapper behavior requires review
+- Auth evidence: none
+- Data mutations:
+  - update `profile` via `prisma` at tests/fixtures/nextjs/app/wrapped-named/route.ts:6:10 (high)
+
+## Diagnostics
+
+| Severity | Code | Location | Message |
+| --- | --- | --- | --- |
+| warning | nextjs_external_reexport_unresolved | tests/fixtures/nextjs/app/external/route.ts:1:1 | Next.js route handler re-export target could not be analyzed statically |
+| warning | nextjs_nested_app_segment | tests/fixtures/nextjs/app/nested/app/users/route.ts:1:1 | Next.js route file path contains nested app segments |
+| warning | nextjs_unusual_route_segment | tests/fixtures/nextjs/app/(.)modal/route.ts:1:1 | Next.js route segment uses an unusual routing convention; emitted path is normalized for review |
+| warning | nextjs_dynamic_route_export | tests/fixtures/nextjs/app/dynamic-export/route.ts:3:14 | Next.js route handler export value is dynamic or unsupported |
+
+## Skipped Files
+
+No files were skipped.

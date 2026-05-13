@@ -24,6 +24,16 @@ fn express_json_matches_golden() {
 }
 
 #[test]
+fn django_json_matches_golden() {
+    assert_golden_eq(render_json(&scan_fixture("django")), "json/django.json");
+}
+
+#[test]
+fn nextjs_json_matches_golden() {
+    assert_golden_eq(render_json(&scan_fixture("nextjs")), "json/nextjs.json");
+}
+
+#[test]
 fn frontend_only_json_matches_golden_and_has_no_backend_facts() {
     let document = scan_fixture("negative/frontend_only");
 
@@ -44,6 +54,14 @@ fn active_markdown_goldens_match_pipeline_output() {
     assert_golden_eq(
         render_markdown(&scan_fixture("express")),
         "markdown/express.md",
+    );
+    assert_golden_eq(
+        render_markdown(&scan_fixture("django")),
+        "markdown/django.md",
+    );
+    assert_golden_eq(
+        render_markdown(&scan_fixture("nextjs")),
+        "markdown/nextjs.md",
     );
     assert_golden_eq(
         render_markdown(&scan_fixture("negative/frontend_only")),

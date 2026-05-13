@@ -190,6 +190,21 @@ pub mod diagnostic_codes {
 
     pub const ADAPTER_UNSUPPORTED_FRAMEWORK: &str = "adapter.unsupported_framework";
     pub const ADAPTER_PARTIAL_RESULT: &str = "adapter.partial_result";
+    pub const DJANGO_CUSTOM_ROUTER: &str = "django_custom_router";
+    pub const DJANGO_DYNAMIC_INCLUDE: &str = "django_dynamic_include";
+    pub const DJANGO_INCLUDE_DEPTH_EXCEEDED: &str = "django_include_depth_exceeded";
+    pub const DJANGO_DYNAMIC_URL_PATH: &str = "django_dynamic_url_path";
+    pub const DJANGO_UNRESOLVED_HANDLER: &str = "django_unresolved_handler";
+    pub const DJANGO_UNRESOLVED_INCLUDE: &str = "django_unresolved_include";
+    pub const DJANGO_URLPATTERN_CONTEXT_UNCERTAIN: &str = "django_urlpattern_context_uncertain";
+    pub const DRF_DYNAMIC_BASENAME: &str = "drf_dynamic_basename";
+    pub const DRF_DYNAMIC_ROUTER_PREFIX: &str = "drf_dynamic_router_prefix";
+    pub const DRF_UNRESOLVED_VIEWSET: &str = "drf_unresolved_viewset";
+    pub const DRF_UNRESOLVED_VIEWSET_BASE: &str = "drf_unresolved_viewset_base";
+    pub const NEXTJS_DYNAMIC_ROUTE_EXPORT: &str = "nextjs_dynamic_route_export";
+    pub const NEXTJS_EXTERNAL_REEXPORT_UNRESOLVED: &str = "nextjs_external_reexport_unresolved";
+    pub const NEXTJS_NESTED_APP_SEGMENT: &str = "nextjs_nested_app_segment";
+    pub const NEXTJS_UNUSUAL_ROUTE_SEGMENT: &str = "nextjs_unusual_route_segment";
 
     pub const REPORT_RENDER_FAILED: &str = "report.render_failed";
     pub const REPORT_WRITE_FAILED: &str = "report.write_failed";
@@ -265,6 +280,66 @@ pub const FIRST_PARTY_DIAGNOSTIC_CODES: &[(&str, DiagnosticCategory)] = &[
     ),
     (
         diagnostic_codes::ADAPTER_PARTIAL_RESULT,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::DJANGO_CUSTOM_ROUTER,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::DJANGO_DYNAMIC_INCLUDE,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::DJANGO_INCLUDE_DEPTH_EXCEEDED,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::DJANGO_DYNAMIC_URL_PATH,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::DJANGO_UNRESOLVED_HANDLER,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::DJANGO_UNRESOLVED_INCLUDE,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::DJANGO_URLPATTERN_CONTEXT_UNCERTAIN,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::DRF_DYNAMIC_BASENAME,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::DRF_DYNAMIC_ROUTER_PREFIX,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::DRF_UNRESOLVED_VIEWSET,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::DRF_UNRESOLVED_VIEWSET_BASE,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::NEXTJS_DYNAMIC_ROUTE_EXPORT,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::NEXTJS_EXTERNAL_REEXPORT_UNRESOLVED,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::NEXTJS_NESTED_APP_SEGMENT,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::NEXTJS_UNUSUAL_ROUTE_SEGMENT,
         DiagnosticCategory::Adapter,
     ),
     (
