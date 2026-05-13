@@ -111,6 +111,9 @@ impl EvidenceExtractor for BuiltInEvidenceExtractor {
                 Framework::FastApi => {
                     extract_fastapi_route_evidence(route, &parsed_by_path, &rules)
                 }
+                Framework::Django | Framework::DjangoRestFramework => {
+                    extract_django_route_evidence(route, &parsed_by_path, &rules)
+                }
                 _ => Vec::new(),
             };
             evidence.append(&mut route_evidence);
@@ -189,20 +192,24 @@ impl ReachabilityLinker for BuiltInReachabilityLinker {
                 continue;
             };
             let handler_node = match route.framework {
-                Framework::Express => express_handler_node(parsed, handler),
-                Framework::FastApi => fastapi_handler_function_node(parsed, &handler.name),
-                _ => None,
+                Framework::Express => express_handler_node(parsed, handler).into_iter().collect(),
+                Framework::FastApi => fastapi_handler_function_node(parsed, &handler.name)
+                    .into_iter()
+                    .collect(),
+                Framework::Django | Framework::DjangoRestFramework => {
+                    django_handler_nodes(parsed, route, handler)
+                }
+                _ => Vec::new(),
             };
-            let Some(handler_node) = handler_node else {
-                continue;
-            };
-            links.extend(link_route_handler_mutations(
-                route,
-                parsed,
-                handler_node,
-                input.mutations,
-                &index,
-            ));
+            for handler_node in handler_node {
+                links.extend(link_route_handler_mutations(
+                    route,
+                    parsed,
+                    handler_node,
+                    input.mutations,
+                    &index,
+                ));
+            }
         }
 
         dedup_links(&mut links);
@@ -2734,6 +2741,36 @@ fn extract_fastapi_route_evidence(
     evidence
 }
 
+fn extract_django_route_evidence(
+    route: &authmap_core::Route,
+    parsed_by_path: &BTreeMap<&str, &ParsedFile>,
+    rules: &EvidenceRules,
+) -> Vec<Evidence> {
+    let Some(handler) = &route.handler else {
+        return Vec::new();
+    };
+    let Some(parsed) =
+        route_file(route).and_then(|file| parsed_by_path.get(file.as_str()).copied())
+    else {
+        return Vec::new();
+    };
+
+    let mut evidence = Vec::new();
+    for node in django_handler_nodes(parsed, route, handler) {
+        evidence.extend(extract_calls_from_node(
+            parsed,
+            node,
+            route,
+            rules,
+            "handler_call",
+        ));
+        evidence.extend(extract_guard_condition_evidence(
+            parsed, node, route, handler,
+        ));
+    }
+    evidence
+}
+
 fn extract_calls_from_node(
     parsed: &ParsedFile,
     node: Node<'_>,
@@ -2909,16 +2946,11 @@ fn evidence_from_rule(
 
 fn route_file(route: &authmap_core::Route) -> Option<String> {
     route
-        .span
+        .handler
         .as_ref()
+        .and_then(|handler| handler.span.as_ref())
         .map(|span| span.file.clone())
-        .or_else(|| {
-            route
-                .handler
-                .as_ref()
-                .and_then(|handler| handler.span.as_ref())
-                .map(|span| span.file.clone())
-        })
+        .or_else(|| route.span.as_ref().map(|span| span.file.clone()))
 }
 
 fn fastapi_decorated_function_node<'tree>(
@@ -3000,6 +3032,138 @@ fn express_handler_node<'tree>(
     None
 }
 
+fn django_handler_nodes<'tree>(
+    parsed: &'tree ParsedFile,
+    route: &authmap_core::Route,
+    handler: &SymbolRef,
+) -> Vec<Node<'tree>> {
+    let Some(metadata) = django_route_metadata(route) else {
+        return python_function_node(parsed, &handler.name)
+            .into_iter()
+            .collect();
+    };
+    match metadata.handler_kind.as_deref() {
+        Some("function") => python_function_node(parsed, &handler.name)
+            .into_iter()
+            .collect(),
+        Some("class_based_view") => {
+            let Some(class_name) = metadata.class_name.as_deref() else {
+                return Vec::new();
+            };
+            django_class_method_nodes(parsed, class_name, &django_http_methods_for_route(route))
+        }
+        Some("viewset_standard") | Some("viewset_action") => {
+            let Some(class_name) = metadata.class_name.as_deref() else {
+                return Vec::new();
+            };
+            let Some(method_name) = metadata.method_name.as_deref() else {
+                return Vec::new();
+            };
+            django_class_method_nodes(parsed, class_name, &[method_name.to_string()])
+        }
+        _ => Vec::new(),
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct DjangoRouteMetadata {
+    handler_kind: Option<String>,
+    class_name: Option<String>,
+    method_name: Option<String>,
+}
+
+fn django_route_metadata(route: &authmap_core::Route) -> Option<DjangoRouteMetadata> {
+    let value = route.extensions.get("authmap.django")?;
+    Some(DjangoRouteMetadata {
+        handler_kind: value
+            .get("handler_kind")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+        class_name: value
+            .get("class_name")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+        method_name: value
+            .get("method_name")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+    })
+}
+
+fn django_http_methods_for_route(route: &authmap_core::Route) -> Vec<String> {
+    if route.method == "ANY" {
+        ["get", "post", "put", "patch", "delete"]
+            .into_iter()
+            .map(str::to_string)
+            .collect()
+    } else {
+        vec![route.method.to_ascii_lowercase()]
+    }
+}
+
+fn python_function_node<'tree>(
+    parsed: &'tree ParsedFile,
+    target_name: &str,
+) -> Option<Node<'tree>> {
+    let root = parsed.root_node()?;
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "function_definition"
+            && function_name(parsed, node).as_deref() == Some(target_name)
+        {
+            return Some(node);
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    None
+}
+
+fn django_class_method_nodes<'tree>(
+    parsed: &'tree ParsedFile,
+    class_name: &str,
+    method_names: &[String],
+) -> Vec<Node<'tree>> {
+    let Some(class_node) = python_class_node(parsed, class_name) else {
+        return Vec::new();
+    };
+    let wanted = method_names
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    let mut nodes = Vec::new();
+    let mut stack = vec![class_node];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "function_definition"
+            && let Some(name) = function_name(parsed, node)
+            && wanted.contains(name.as_str())
+        {
+            nodes.push(node);
+        }
+        if node != class_node && is_nested_scope_node(node) {
+            continue;
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    nodes
+}
+
+fn python_class_node<'tree>(parsed: &'tree ParsedFile, class_name: &str) -> Option<Node<'tree>> {
+    let root = parsed.root_node()?;
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "class_definition"
+            && function_name(parsed, node).as_deref() == Some(class_name)
+        {
+            return Some(node);
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    None
+}
+
 fn node_containing_span<'tree>(node: Node<'tree>, span: &Span) -> Option<Node<'tree>> {
     let range = span.byte_range?;
     if node.start_byte() as u64 > range.start || (node.end_byte() as u64) < range.end {
@@ -3067,7 +3231,19 @@ fn is_fastapi_depends(function_text: &str) -> bool {
 fn is_framework_route_call(function_text: &str) -> bool {
     matches!(
         terminal_symbol_name(function_text).as_str(),
-        "get" | "post" | "put" | "patch" | "delete" | "api_route" | "route" | "use"
+        "get"
+            | "post"
+            | "put"
+            | "patch"
+            | "delete"
+            | "api_route"
+            | "route"
+            | "use"
+            | "path"
+            | "re_path"
+            | "include"
+            | "register"
+            | "action"
     )
 }
 
@@ -4221,6 +4397,72 @@ sensitivity:
                 && coverage.risk == RiskLevel::ReviewRequired
                 && !coverage.reviewer_questions.is_empty()
         }));
+    }
+
+    #[test]
+    fn scan_pipeline_includes_django_routes_evidence_and_links() {
+        let target = fixture_path("django");
+        let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        assert_eq!(document.routes.len(), 13);
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Django
+                && route.method == "ANY"
+                && route.path == "/accounts/users/<int:pk>/"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "AccountDetailView")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::DjangoRestFramework
+                && route.method == "POST"
+                && route.path == "/accounts/api/users/{uuid}/disable"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "UserViewSet.disable")
+        }));
+        assert!(document.evidence.iter().any(|evidence| {
+            evidence.evidence_type == EvidenceType::PermissionCheck
+                && evidence
+                    .symbol
+                    .as_ref()
+                    .is_some_and(|symbol| symbol.name == "require_permission")
+        }));
+        assert!(document.links.iter().any(|link| {
+            document.routes.iter().any(|route| {
+                route.id == link.route_id
+                    && route.method == "POST"
+                    && route.path == "/accounts/api/users"
+            }) && link.mutation_id.as_ref().is_some_and(|mutation_id| {
+                document.mutations.iter().any(|mutation| {
+                    &mutation.id == mutation_id
+                        && mutation.library.as_deref() == Some("django_orm")
+                        && mutation.operation == MutationOperation::Create
+                })
+            })
+        }));
+        assert!(document.links.iter().any(|link| {
+            link.route_id == route_by_path(&document, "/accounts").id.as_str()
+                && link.confidence == Confidence::Medium
+                && link.mutation_id.as_ref().is_some()
+        }));
+        for code in [
+            "django_dynamic_include",
+            "django_dynamic_url_path",
+            "drf_dynamic_router_prefix",
+            "drf_dynamic_basename",
+        ] {
+            assert!(
+                document
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.code == code),
+                "missing diagnostic {code}"
+            );
+        }
     }
 
     #[test]

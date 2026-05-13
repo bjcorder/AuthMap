@@ -103,6 +103,7 @@ dependencies = [
  "authmap-core",
  "authmap-parsers",
  "authmap-testkit",
+ "serde_json",
  "tree-sitter",
 ]
 

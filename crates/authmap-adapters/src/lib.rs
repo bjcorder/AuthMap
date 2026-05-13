@@ -7,6 +7,10 @@ use authmap_core::{
 use authmap_parsers::ParsedFile;
 use tree_sitter::{Node, Tree};
 
+mod django;
+
+pub use django::DjangoAdapter;
+
 #[derive(Clone, Debug, Default)]
 pub struct AdapterContext {
     pub enabled_frameworks: Vec<String>,
@@ -64,7 +68,11 @@ pub struct AdapterRegistry {
 impl AdapterRegistry {
     pub fn built_in() -> Self {
         Self {
-            adapters: vec![Box::new(FastApiAdapter), Box::new(ExpressAdapter)],
+            adapters: vec![
+                Box::new(FastApiAdapter),
+                Box::new(DjangoAdapter),
+                Box::new(ExpressAdapter),
+            ],
         }
     }
 
@@ -2020,7 +2028,7 @@ mod tests {
     use authmap_parsers::{ParserBackend, TreeSitterBackend};
     use authmap_testkit::fixture_path;
 
-    use super::{AdapterContext, ExpressAdapter, FastApiAdapter, FrameworkAdapter};
+    use super::{AdapterContext, DjangoAdapter, ExpressAdapter, FastApiAdapter, FrameworkAdapter};
 
     #[test]
     fn discovers_fastapi_routes_from_apps_routers_and_imported_includes() {
@@ -2343,6 +2351,101 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.code == "express_cyclic_mount_router")
         );
+    }
+
+    #[test]
+    fn discovers_django_urlpatterns_drf_routers_and_uncertainty() {
+        let parsed = parse_fixtures(&[
+            "django/project/urls.py",
+            "django/accounts/urls.py",
+            "django/accounts/views.py",
+            "django/accounts/services.py",
+            "django/accounts/models.py",
+        ]);
+        let output = DjangoAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert_eq!(output.routes.len(), 13);
+        assert!(output.routes.iter().all(|route| route.span.is_some()));
+        assert!(output.routes.iter().all(|route| {
+            route
+                .handler
+                .as_ref()
+                .and_then(|handler| handler.span.as_ref())
+                .is_some()
+        }));
+
+        let index = route(&output, "ANY", "/accounts");
+        assert_eq!(index.framework, Framework::Django);
+        assert_eq!(
+            index.handler.as_ref().map(|handler| handler.name.as_str()),
+            Some("index")
+        );
+        assert!(
+            index
+                .source_evidence
+                .iter()
+                .any(|evidence| evidence.mechanism == "django_include")
+        );
+
+        let class_based = route(&output, "ANY", "/accounts/users/<int:pk>/");
+        assert_eq!(
+            class_based
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("AccountDetailView")
+        );
+        assert_eq!(
+            class_based
+                .extensions
+                .get("authmap.django")
+                .and_then(|value| value.get("handler_kind"))
+                .and_then(serde_json::Value::as_str),
+            Some("class_based_view")
+        );
+
+        let create = route(&output, "POST", "/accounts/api/users");
+        assert_eq!(create.framework, Framework::DjangoRestFramework);
+        assert_eq!(
+            create
+                .extensions
+                .get("authmap.django")
+                .and_then(|value| value.get("handler_kind"))
+                .and_then(serde_json::Value::as_str),
+            Some("viewset_standard")
+        );
+
+        let action = route(&output, "POST", "/accounts/api/users/{uuid}/disable");
+        assert_eq!(
+            action
+                .extensions
+                .get("authmap.django")
+                .and_then(|value| value.get("method_name"))
+                .and_then(serde_json::Value::as_str),
+            Some("disable")
+        );
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.path == "<dynamic>" && route.confidence == Confidence::Medium)
+        );
+
+        for code in [
+            "django_dynamic_include",
+            "django_dynamic_url_path",
+            "drf_dynamic_router_prefix",
+            "drf_dynamic_basename",
+            "django_custom_router",
+        ] {
+            assert!(
+                output
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.code == code),
+                "missing diagnostic {code}"
+            );
+        }
     }
 
     #[test]

@@ -14,7 +14,7 @@ without turning omitted-file listing into another unbounded workload.
 
 ## Layout
 
-- `fixtures/fastapi/` and `fixtures/express/` are active route-inventory regression inputs.
+- `fixtures/fastapi/`, `fixtures/django/`, and `fixtures/express/` are active route-inventory regression inputs.
 - `fixtures/mutations/` contains active ORM/data mutation extraction coverage for Prisma, SQLAlchemy, and Django ORM.
 - `fixtures/linking/` contains active route-to-mutation reachability coverage for direct handler mutations, one-hop service calls, and unresolved service-like calls.
 - `fixtures/realistic/` contains compact end-to-end smoke applications that combine routers, imports, auth evidence, service calls, mutations, links, diagnostics, and coverage.
