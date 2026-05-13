@@ -114,6 +114,7 @@ impl EvidenceExtractor for BuiltInEvidenceExtractor {
                 Framework::Django | Framework::DjangoRestFramework => {
                     extract_django_route_evidence(route, &parsed_by_path, &rules)
                 }
+                Framework::NextJs => extract_nextjs_route_evidence(route, &parsed_by_path, &rules),
                 _ => Vec::new(),
             };
             evidence.append(&mut route_evidence);
@@ -199,6 +200,7 @@ impl ReachabilityLinker for BuiltInReachabilityLinker {
                 Framework::Django | Framework::DjangoRestFramework => {
                     django_handler_nodes(parsed, route, handler)
                 }
+                Framework::NextJs => nextjs_handler_nodes(parsed, route, handler),
                 _ => Vec::new(),
             };
             for handler_node in handler_node {
@@ -2771,6 +2773,36 @@ fn extract_django_route_evidence(
     evidence
 }
 
+fn extract_nextjs_route_evidence(
+    route: &authmap_core::Route,
+    parsed_by_path: &BTreeMap<&str, &ParsedFile>,
+    rules: &EvidenceRules,
+) -> Vec<Evidence> {
+    let Some(handler) = &route.handler else {
+        return Vec::new();
+    };
+    let Some(parsed) =
+        route_file(route).and_then(|file| parsed_by_path.get(file.as_str()).copied())
+    else {
+        return Vec::new();
+    };
+
+    let mut evidence = Vec::new();
+    for node in nextjs_handler_nodes(parsed, route, handler) {
+        evidence.extend(extract_calls_from_node(
+            parsed,
+            node,
+            route,
+            rules,
+            "handler_call",
+        ));
+        evidence.extend(extract_guard_condition_evidence(
+            parsed, node, route, handler,
+        ));
+    }
+    evidence
+}
+
 fn extract_calls_from_node(
     parsed: &ParsedFile,
     node: Node<'_>,
@@ -3025,6 +3057,136 @@ fn express_handler_node<'tree>(
                 return Some(node);
             }
             _ => {}
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    None
+}
+
+fn nextjs_handler_nodes<'tree>(
+    parsed: &'tree ParsedFile,
+    route: &authmap_core::Route,
+    handler: &SymbolRef,
+) -> Vec<Node<'tree>> {
+    let Some(metadata) = nextjs_route_metadata(route) else {
+        return js_function_or_value_node(parsed, &handler.name)
+            .into_iter()
+            .collect();
+    };
+    match metadata.export_kind.as_deref() {
+        Some("function") => js_function_declaration_node(parsed, &metadata.export_name)
+            .into_iter()
+            .collect(),
+        Some("const_function") => js_variable_function_value_node(parsed, &metadata.export_name)
+            .into_iter()
+            .collect(),
+        Some("re_export") => js_function_or_value_node(parsed, &handler.name)
+            .into_iter()
+            .collect(),
+        Some("wrapped") => nextjs_wrapped_handler_nodes(parsed, &metadata.export_name, handler),
+        _ => Vec::new(),
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct NextJsRouteMetadata {
+    export_name: String,
+    export_kind: Option<String>,
+}
+
+fn nextjs_route_metadata(route: &authmap_core::Route) -> Option<NextJsRouteMetadata> {
+    let value = route.extensions.get("authmap.nextjs")?;
+    Some(NextJsRouteMetadata {
+        export_name: value
+            .get("export_name")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        export_kind: value
+            .get("export_kind")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+    })
+}
+
+fn nextjs_wrapped_handler_nodes<'tree>(
+    parsed: &'tree ParsedFile,
+    export_name: &str,
+    handler: &SymbolRef,
+) -> Vec<Node<'tree>> {
+    let mut nodes = Vec::new();
+    if let Some(variable) = js_variable_declarator_node(parsed, export_name) {
+        nodes.push(variable);
+        if let Some(value) = variable.child_by_field_name("value")
+            && value.kind() == "call_expression"
+        {
+            nodes.extend(call_argument_nodes(value).into_iter().filter(|arg| {
+                matches!(
+                    arg.kind(),
+                    "arrow_function" | "function" | "function_expression"
+                )
+            }));
+        }
+    }
+    if handler.name != export_name
+        && let Some(node) = js_function_or_value_node(parsed, &handler.name)
+    {
+        nodes.push(node);
+    }
+    nodes
+}
+
+fn js_function_or_value_node<'tree>(parsed: &'tree ParsedFile, name: &str) -> Option<Node<'tree>> {
+    js_function_declaration_node(parsed, name)
+        .or_else(|| js_variable_function_value_node(parsed, name))
+}
+
+fn js_function_declaration_node<'tree>(
+    parsed: &'tree ParsedFile,
+    name: &str,
+) -> Option<Node<'tree>> {
+    let root = parsed.root_node()?;
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "function_declaration"
+            && function_name(parsed, node).as_deref() == Some(name)
+        {
+            return Some(node);
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    None
+}
+
+fn js_variable_function_value_node<'tree>(
+    parsed: &'tree ParsedFile,
+    name: &str,
+) -> Option<Node<'tree>> {
+    let variable = js_variable_declarator_node(parsed, name)?;
+    variable.child_by_field_name("value").filter(|value| {
+        matches!(
+            value.kind(),
+            "arrow_function" | "function" | "function_expression"
+        )
+    })
+}
+
+fn js_variable_declarator_node<'tree>(
+    parsed: &'tree ParsedFile,
+    name: &str,
+) -> Option<Node<'tree>> {
+    let root = parsed.root_node()?;
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "variable_declarator"
+            && node
+                .child_by_field_name("name")
+                .and_then(|name_node| parsed.text_for(name_node))
+                == Some(name)
+        {
+            return Some(node);
         }
         let mut cursor = node.walk();
         stack.extend(node.children(&mut cursor));
@@ -4454,6 +4616,75 @@ sensitivity:
             "django_dynamic_url_path",
             "drf_dynamic_router_prefix",
             "drf_dynamic_basename",
+        ] {
+            assert!(
+                document
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.code == code),
+                "missing diagnostic {code}"
+            );
+        }
+    }
+
+    #[test]
+    fn scan_pipeline_includes_nextjs_routes_evidence_and_links() {
+        let target = fixture_path("nextjs");
+        let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        assert_eq!(document.routes.len(), 9);
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::NextJs
+                && route.method == "GET"
+                && route.path == "/blog/[...slug]"
+                && route.confidence == Confidence::Medium
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::NextJs
+                && route.method == "PUT"
+                && route.path == "/docs/[[...slug]]"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "updateDoc")
+        }));
+        assert!(document.evidence.iter().any(|evidence| {
+            evidence.evidence_type == EvidenceType::PermissionCheck
+                && evidence
+                    .symbol
+                    .as_ref()
+                    .is_some_and(|symbol| symbol.name == "requirePermission")
+        }));
+        assert!(document.evidence.iter().any(|evidence| {
+            evidence.evidence_type == EvidenceType::Authn
+                && evidence
+                    .symbol
+                    .as_ref()
+                    .is_some_and(|symbol| symbol.name == "requireUser")
+        }));
+        assert!(document.links.iter().any(|link| {
+            document.routes.iter().any(|route| {
+                route.id == link.route_id && route.method == "PATCH" && route.path == "/users/[id]"
+            }) && link.mutation_id.as_ref().is_some_and(|mutation_id| {
+                document.mutations.iter().any(|mutation| {
+                    &mutation.id == mutation_id
+                        && mutation.library.as_deref() == Some("prisma")
+                        && mutation.operation == MutationOperation::Update
+                })
+            })
+        }));
+        assert!(document.links.iter().any(|link| {
+            document.routes.iter().any(|route| {
+                route.id == link.route_id
+                    && route.method == "PUT"
+                    && route.path == "/docs/[[...slug]]"
+            }) && link.confidence == Confidence::High
+                && link.mutation_id.as_ref().is_some()
+        }));
+        for code in [
+            "nextjs_unusual_route_segment",
+            "nextjs_dynamic_route_export",
         ] {
             assert!(
                 document

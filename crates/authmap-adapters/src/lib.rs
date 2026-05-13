@@ -8,8 +8,10 @@ use authmap_parsers::ParsedFile;
 use tree_sitter::{Node, Tree};
 
 mod django;
+mod nextjs;
 
 pub use django::DjangoAdapter;
+pub use nextjs::NextJsAdapter;
 
 #[derive(Clone, Debug, Default)]
 pub struct AdapterContext {
@@ -72,6 +74,7 @@ impl AdapterRegistry {
                 Box::new(FastApiAdapter),
                 Box::new(DjangoAdapter),
                 Box::new(ExpressAdapter),
+                Box::new(NextJsAdapter),
             ],
         }
     }
@@ -2028,7 +2031,10 @@ mod tests {
     use authmap_parsers::{ParserBackend, TreeSitterBackend};
     use authmap_testkit::fixture_path;
 
-    use super::{AdapterContext, DjangoAdapter, ExpressAdapter, FastApiAdapter, FrameworkAdapter};
+    use super::{
+        AdapterContext, DjangoAdapter, ExpressAdapter, FastApiAdapter, FrameworkAdapter,
+        NextJsAdapter,
+    };
 
     #[test]
     fn discovers_fastapi_routes_from_apps_routers_and_imported_includes() {
@@ -2437,6 +2443,102 @@ mod tests {
             "drf_dynamic_router_prefix",
             "drf_dynamic_basename",
             "django_custom_router",
+        ] {
+            assert!(
+                output
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.code == code),
+                "missing diagnostic {code}"
+            );
+        }
+    }
+
+    #[test]
+    fn discovers_nextjs_app_router_handlers_segments_and_wrappers() {
+        let parsed = parse_fixtures(&[
+            "nextjs/app/route.ts",
+            "nextjs/app/users/[id]/route.ts",
+            "nextjs/app/blog/[...slug]/route.ts",
+            "nextjs/app/docs/[[...slug]]/route.ts",
+            "nextjs/app/(admin)/reports/route.ts",
+            "nextjs/app/(.)modal/route.ts",
+            "nextjs/app/dynamic-export/route.ts",
+        ]);
+        let output = NextJsAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert_eq!(output.routes.len(), 9);
+        assert!(output.routes.iter().all(|route| route.span.is_some()));
+        assert!(output.routes.iter().all(|route| {
+            route
+                .handler
+                .as_ref()
+                .and_then(|handler| handler.span.as_ref())
+                .is_some()
+        }));
+
+        let root_get = route(&output, "GET", "/");
+        assert_eq!(root_get.framework, Framework::NextJs);
+        assert_eq!(
+            root_get
+                .extensions
+                .get("authmap.nextjs")
+                .and_then(|value| value.get("export_kind"))
+                .and_then(serde_json::Value::as_str),
+            Some("function")
+        );
+
+        let dynamic = route(&output, "PATCH", "/users/[id]");
+        assert_eq!(
+            dynamic
+                .extensions
+                .get("authmap.nextjs")
+                .and_then(|value| value.get("export_kind"))
+                .and_then(serde_json::Value::as_str),
+            Some("const_function")
+        );
+
+        let catch_all = route(&output, "GET", "/blog/[...slug]");
+        assert_eq!(catch_all.confidence, Confidence::Medium);
+        assert_eq!(
+            catch_all
+                .extensions
+                .get("authmap.nextjs")
+                .and_then(|value| value.get("wrapper"))
+                .and_then(serde_json::Value::as_str),
+            Some("withAuth")
+        );
+
+        let optional = route(&output, "PUT", "/docs/[[...slug]]");
+        assert_eq!(
+            optional
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("updateDoc")
+        );
+
+        let grouped = route(&output, "DELETE", "/reports");
+        assert_eq!(
+            grouped
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("handleDelete")
+        );
+
+        let unusual = route(&output, "GET", "/(.)modal");
+        assert_eq!(unusual.confidence, Confidence::Medium);
+        assert!(output.routes.iter().all(|route| {
+            route
+                .source_evidence
+                .iter()
+                .any(|evidence| evidence.mechanism == "nextjs_route_handler_export")
+        }));
+
+        for code in [
+            "nextjs_unusual_route_segment",
+            "nextjs_dynamic_route_export",
         ] {
             assert!(
                 output
