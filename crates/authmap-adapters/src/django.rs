@@ -9,6 +9,8 @@ use tree_sitter::Node;
 
 use crate::{AdapterContext, AdapterOutput, FrameworkAdapter};
 
+const DJANGO_INCLUDE_DEPTH_LIMIT: usize = 64;
+
 #[derive(Clone, Debug, Default)]
 pub struct DjangoAdapter;
 
@@ -75,10 +77,18 @@ struct SymbolDef {
 struct ClassInfo {
     name: String,
     span: Span,
-    bases: Vec<String>,
+    auto_actions: ViewSetAutoActions,
     methods: BTreeMap<String, Span>,
     actions: Vec<ViewSetAction>,
     lookup_field: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum ViewSetAutoActions {
+    #[default]
+    None,
+    Model,
+    ReadOnly,
 }
 
 #[derive(Clone, Debug)]
@@ -88,6 +98,7 @@ struct ViewSetAction {
     detail: bool,
     methods: Vec<String>,
     url_path: Option<String>,
+    dynamic_url_path: bool,
     dynamic_methods: bool,
 }
 
@@ -197,15 +208,18 @@ impl DjangoIndex {
             roots
         };
 
+        let mut include_diagnostics = Vec::new();
         for pattern in roots {
             emit_pattern_routes(
                 &self,
                 pattern,
                 "",
-                Vec::new(),
+                &[],
                 &mut BTreeSet::new(),
                 &mut emitted,
                 &mut seen,
+                &mut include_diagnostics,
+                0,
             );
         }
 
@@ -215,6 +229,7 @@ impl DjangoIndex {
         }
 
         let mut diagnostics = self.diagnostics;
+        diagnostics.extend(include_diagnostics);
         diagnostics.sort_by_key(diagnostic_sort_key);
         AdapterOutput {
             routes: emitted,
@@ -643,10 +658,12 @@ fn emit_pattern_routes(
     index: &DjangoIndex,
     pattern: &UrlPattern,
     prefix: &str,
-    inherited_evidence: Vec<SourceEvidence>,
+    inherited_evidence: &[SourceEvidence],
     active_includes: &mut BTreeSet<String>,
     routes: &mut Vec<Route>,
     seen: &mut BTreeSet<(String, u32, String, String, String)>,
+    diagnostics: &mut Vec<Diagnostic>,
+    depth: usize,
 ) {
     let mut notes = Vec::new();
     let mut confidence = Confidence::High;
@@ -654,6 +671,8 @@ fn emit_pattern_routes(
         confidence = Confidence::Medium;
         notes.push("Django URL path is dynamic and was emitted as <dynamic>".to_string());
         "<dynamic>".to_string()
+    } else if pattern.kind == UrlPatternKind::RePath {
+        normalize_django_regex_path(pattern.path.as_deref().unwrap_or_default())
     } else {
         pattern.path.clone().unwrap_or_default()
     };
@@ -663,12 +682,13 @@ fn emit_pattern_routes(
         join_paths(prefix, &local_path)
     };
     if pattern.kind == UrlPatternKind::RePath {
-        notes.push("Django re_path regex literal preserved as route path".to_string());
+        confidence = Confidence::Medium;
+        notes.push("Django re_path regex literal normalized as route path".to_string());
     }
 
     match &pattern.target {
         PatternTarget::Handler(handler) => {
-            let mut source_evidence = inherited_evidence;
+            let mut source_evidence = inherited_evidence.to_vec();
             source_evidence.push(source_evidence_item(
                 match pattern.kind {
                     UrlPatternKind::Path => "django_urlpattern",
@@ -716,7 +736,7 @@ fn emit_pattern_routes(
             );
         }
         PatternTarget::Include(include) => {
-            let mut include_evidence = inherited_evidence;
+            let mut include_evidence = inherited_evidence.to_vec();
             include_evidence.push(source_evidence_item(
                 "django_include",
                 None,
@@ -728,6 +748,14 @@ fn emit_pattern_routes(
                 return;
             }
             if let Some(file) = &include.file {
+                if depth >= DJANGO_INCLUDE_DEPTH_LIMIT {
+                    diagnostics.push(diagnostic(
+                        diagnostic_codes::DJANGO_INCLUDE_DEPTH_EXCEEDED,
+                        pattern.span.clone(),
+                        "Django include resolution exceeded the maximum static include depth",
+                    ));
+                    return;
+                }
                 if !active_includes.insert(file.clone()) {
                     return;
                 }
@@ -736,10 +764,12 @@ fn emit_pattern_routes(
                         index,
                         child,
                         &full_path,
-                        include_evidence.clone(),
+                        &include_evidence,
                         active_includes,
                         routes,
                         seen,
+                        diagnostics,
+                        depth + 1,
                     );
                 }
                 active_includes.remove(file);
@@ -823,6 +853,12 @@ fn emit_router_routes(
                 confidence = Confidence::Medium;
                 notes.push("DRF action methods are dynamic or missing; emitted as GET".to_string());
             }
+            if action.dynamic_url_path {
+                confidence = Confidence::Medium;
+                notes.push(
+                    "DRF action url_path is dynamic; emitted method name as path".to_string(),
+                );
+            }
             let action_segment = action
                 .url_path
                 .clone()
@@ -861,14 +897,6 @@ struct StandardAction<'a> {
 }
 
 fn standard_viewset_actions(viewset: &ClassInfo) -> Vec<StandardAction<'_>> {
-    let read_only_model_viewset = viewset
-        .bases
-        .iter()
-        .any(|base| base.ends_with("ReadOnlyModelViewSet"));
-    let model_viewset = viewset
-        .bases
-        .iter()
-        .any(|base| base.ends_with("ModelViewSet") && !base.ends_with("ReadOnlyModelViewSet"));
     let candidates = [
         ("list", "GET", false),
         ("create", "POST", false),
@@ -880,8 +908,11 @@ fn standard_viewset_actions(viewset: &ClassInfo) -> Vec<StandardAction<'_>> {
     candidates
         .into_iter()
         .filter_map(|(name, method, detail)| {
-            let standard_for_base =
-                model_viewset || (read_only_model_viewset && matches!(name, "list" | "retrieve"));
+            let standard_for_base = match viewset.auto_actions {
+                ViewSetAutoActions::Model => true,
+                ViewSetAutoActions::ReadOnly => matches!(name, "list" | "retrieve"),
+                ViewSetAutoActions::None => false,
+            };
             if standard_for_base || viewset.methods.contains_key(name) {
                 Some(StandardAction {
                     name,
@@ -999,7 +1030,12 @@ fn collect_symbols(parsed: &ParsedFile, root: Node<'_>, index: &mut DjangoIndex)
                 }
             }
             "class_definition" => {
-                if let Some(class) = class_info(parsed, node) {
+                let imports = index
+                    .imports_by_file
+                    .get(&parsed.source.path)
+                    .cloned()
+                    .unwrap_or_default();
+                if let Some(class) = class_info(parsed, node, &imports, &mut index.diagnostics) {
                     index
                         .classes
                         .insert((parsed.source.path.clone(), class.name.clone()), class);
@@ -1012,7 +1048,12 @@ fn collect_symbols(parsed: &ParsedFile, root: Node<'_>, index: &mut DjangoIndex)
     }
 }
 
-fn class_info(parsed: &ParsedFile, node: Node<'_>) -> Option<ClassInfo> {
+fn class_info(
+    parsed: &ParsedFile,
+    node: Node<'_>,
+    imports: &BTreeMap<String, ImportTarget>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<ClassInfo> {
     let name_node = node.child_by_field_name("name")?;
     let name = parsed.text_for(name_node)?.to_string();
     let mut methods = BTreeMap::new();
@@ -1060,14 +1101,50 @@ fn class_info(parsed: &ParsedFile, node: Node<'_>) -> Option<ClassInfo> {
         }
     }
     let bases = class_bases(parsed, node);
+    let (auto_actions, unresolved_viewset_base) = classify_viewset_bases(&bases, imports);
+    if unresolved_viewset_base {
+        diagnostics.push(diagnostic(
+            diagnostic_codes::DRF_UNRESOLVED_VIEWSET_BASE,
+            parsed.span_for(name_node),
+            "DRF viewset base class could not be resolved to a known framework base",
+        ));
+    }
     Some(ClassInfo {
         name,
         span: parsed.span_for(name_node),
-        bases,
+        auto_actions,
         methods,
         actions,
         lookup_field,
     })
+}
+
+fn classify_viewset_bases(
+    bases: &[String],
+    imports: &BTreeMap<String, ImportTarget>,
+) -> (ViewSetAutoActions, bool) {
+    let mut unresolved_model_like = false;
+    for base in bases {
+        let clean = clean_symbol(base);
+        let resolved_drf_base = imports.get(&clean).is_some_and(|target| {
+            target.module.as_deref() == Some("rest_framework.viewsets")
+                && target
+                    .name
+                    .as_deref()
+                    .is_some_and(|name| matches!(name, "ModelViewSet" | "ReadOnlyModelViewSet"))
+        });
+        if resolved_drf_base {
+            if clean == "ReadOnlyModelViewSet" {
+                return (ViewSetAutoActions::ReadOnly, false);
+            }
+            if clean == "ModelViewSet" {
+                return (ViewSetAutoActions::Model, false);
+            }
+        } else if clean.ends_with("ModelViewSet") {
+            unresolved_model_like = true;
+        }
+    }
+    (ViewSetAutoActions::None, unresolved_model_like)
 }
 
 fn class_bases(parsed: &ParsedFile, node: Node<'_>) -> Vec<String> {
@@ -1106,6 +1183,8 @@ fn viewset_action(
         }
         let methods = keyword_string_list(parsed, call, "methods");
         let dynamic_methods = keyword_exists(parsed, call, "methods") && methods.is_empty();
+        let url_path = keyword_string(parsed, call, "url_path");
+        let dynamic_url_path = keyword_exists(parsed, call, "url_path") && url_path.is_none();
         return Some(ViewSetAction {
             name: action_name.to_string(),
             span: parsed.span_for(name_node),
@@ -1118,7 +1197,8 @@ fn viewset_action(
                     .map(|method| method.to_uppercase())
                     .collect()
             },
-            url_path: keyword_string(parsed, call, "url_path"),
+            url_path,
+            dynamic_url_path,
             dynamic_methods,
         });
     }
@@ -1347,7 +1427,13 @@ fn is_urlpatterns_context(parsed: &ParsedFile, call: Node<'_>) -> bool {
                     .and_then(|left| parsed.text_for(left))
                     .is_some_and(|left| left.trim() == "urlpatterns");
             }
-            "function_definition" | "class_definition" => return false,
+            "function_definition"
+            | "class_definition"
+            | "lambda"
+            | "list_comprehension"
+            | "dictionary_comprehension"
+            | "set_comprehension"
+            | "generator_expression" => return false,
             _ => current = parent,
         }
     }
@@ -1441,6 +1527,27 @@ fn lookup_field(viewset: &ClassInfo) -> String {
         .lookup_field
         .clone()
         .unwrap_or_else(|| "pk".to_string())
+}
+
+fn normalize_django_regex_path(pattern: &str) -> String {
+    let mut value = pattern
+        .trim_start_matches('^')
+        .trim_end_matches('$')
+        .to_string();
+    while let Some(start) = value.find("(?P<") {
+        let name_start = start + 4;
+        let Some(name_end_offset) = value[name_start..].find('>') else {
+            break;
+        };
+        let name_end = name_start + name_end_offset;
+        let Some(group_end_offset) = value[name_end..].find(')') else {
+            break;
+        };
+        let group_end = name_end + group_end_offset;
+        let name = value[name_start..name_end].to_string();
+        value.replace_range(start..=group_end, &format!("{{{name}}}"));
+    }
+    value
 }
 
 fn find_first_kind<'tree>(node: Node<'tree>, kind: &str) -> Option<Node<'tree>> {

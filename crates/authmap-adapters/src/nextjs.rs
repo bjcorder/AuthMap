@@ -184,7 +184,6 @@ fn collect_export_statement(
     diagnostics: &mut Vec<Diagnostic>,
     exports: &mut Vec<RouteExport>,
 ) {
-    let text = parsed.text_for(node).unwrap_or_default();
     for child in named_children(node) {
         match child.kind() {
             "function_declaration" => {
@@ -215,11 +214,11 @@ fn collect_export_statement(
         }
     }
 
-    if text.trim_start().starts_with("export {") {
+    if let Some(specifiers) = export_clause_text(parsed, node) {
         collect_export_clause(
             parsed,
             node,
-            text,
+            specifiers,
             definitions,
             module_index,
             parsed_by_path,
@@ -356,22 +355,21 @@ fn route_export_from_variable(
 fn collect_export_clause(
     parsed: &ParsedFile,
     node: Node<'_>,
-    text: &str,
+    specifiers: &str,
     definitions: &BTreeMap<String, Definition>,
     module_index: &BTreeMap<String, String>,
     parsed_by_path: &BTreeMap<String, &ParsedFile>,
     diagnostics: &mut Vec<Diagnostic>,
     exports: &mut Vec<RouteExport>,
 ) {
-    let Some(specifiers) = text
-        .trim()
-        .strip_prefix("export {")
-        .and_then(|rest| rest.split_once('}').map(|(items, _)| items))
-    else {
+    let specifiers = specifiers.trim();
+    if !specifiers.starts_with('{') || !specifiers.ends_with('}') {
         return;
-    };
-    let external_file = export_module_literal(text)
-        .and_then(|module| resolve_js_module(parsed, module_index, module));
+    }
+    let specifiers = &specifiers[1..specifiers.len() - 1];
+    let external_module = export_module_literal(parsed, node);
+    let external_file =
+        external_module.and_then(|module| resolve_js_module(parsed, module_index, module));
     let external_definitions = external_file
         .as_ref()
         .and_then(|file| parsed_by_path.get(file))
@@ -380,7 +378,8 @@ fn collect_export_clause(
                 .root_node()
                 .map(|root| collect_definitions(external, root))
         });
-    if export_module_literal(text).is_some() && external_file.is_none() {
+    let unresolved_external_module = external_module.is_some() && external_file.is_none();
+    if unresolved_external_module {
         diagnostics.push(diagnostic(
             diagnostic_codes::NEXTJS_EXTERNAL_REEXPORT_UNRESOLVED,
             parsed.span_for(node),
@@ -404,8 +403,8 @@ fn collect_export_clause(
             .as_ref()
             .and_then(|definitions| definitions.get(local))
             .or_else(|| definitions.get(local));
-        let unresolved_external = export_module_literal(text).is_some() && definition.is_none();
-        if unresolved_external {
+        let unresolved_external = external_module.is_some() && definition.is_none();
+        if unresolved_external && !unresolved_external_module {
             diagnostics.push(diagnostic(
                 diagnostic_codes::NEXTJS_EXTERNAL_REEXPORT_UNRESOLVED,
                 parsed.span_for(node),
@@ -438,6 +437,30 @@ fn collect_export_clause(
             },
         });
     }
+}
+
+fn export_clause_text<'a>(parsed: &'a ParsedFile, node: Node<'_>) -> Option<&'a str> {
+    if parsed
+        .text_for(node)
+        .is_some_and(|text| text.trim_start().starts_with("export type"))
+    {
+        return None;
+    }
+    named_children(node)
+        .into_iter()
+        .find(|child| child.kind() == "export_clause")
+        .and_then(|child| parsed.text_for(child))
+        .or_else(|| {
+            parsed.text_for(node).and_then(|text| {
+                text.trim()
+                    .strip_prefix("export")
+                    .and_then(|rest| rest.split_once('}').map(|(items, _)| items))
+                    .map(|items| {
+                        let start = text.find('{').unwrap_or(0);
+                        &text[start..start + items.len() + 2]
+                    })
+            })
+        })
 }
 
 fn collect_definitions(parsed: &ParsedFile, root: Node<'_>) -> BTreeMap<String, Definition> {
@@ -503,16 +526,23 @@ fn strip_js_extension(path: &str) -> Option<&str> {
         .find_map(|extension| path.strip_suffix(extension))
 }
 
-fn export_module_literal(text: &str) -> Option<&str> {
-    let (_, module_part) = text.split_once(" from ")?;
-    Some(
-        module_part
-            .trim()
-            .trim_end_matches(';')
-            .trim()
-            .trim_matches('"')
-            .trim_matches('\''),
-    )
+fn export_module_literal<'a>(parsed: &'a ParsedFile, node: Node<'_>) -> Option<&'a str> {
+    named_children(node)
+        .into_iter()
+        .find(|child| child.kind() == "string")
+        .and_then(|string| js_string_literal(parsed, string))
+}
+
+fn js_string_literal<'a>(parsed: &'a ParsedFile, node: Node<'_>) -> Option<&'a str> {
+    let text = parsed.text_for(node)?.trim();
+    if text.len() < 2 {
+        return None;
+    }
+    let quote = text.as_bytes()[0] as char;
+    if !matches!(quote, '"' | '\'' | '`') || !text.ends_with(quote) {
+        return None;
+    }
+    Some(&text[1..text.len() - 1])
 }
 
 fn resolve_js_module(
@@ -556,7 +586,12 @@ fn normalize_js_module_path(current_dir: &str, module: &str) -> String {
 fn route_path_for_file(path: &str) -> PathInfo {
     let normalized = path.replace('\\', "/");
     let parts = normalized.split('/').collect::<Vec<_>>();
-    let app_index = parts.iter().rposition(|part| *part == "app");
+    let app_indexes = parts
+        .iter()
+        .enumerate()
+        .filter_map(|(index, part)| (*part == "app").then_some(index))
+        .collect::<Vec<_>>();
+    let app_index = app_indexes.first().copied();
     let Some(app_index) = app_index else {
         return PathInfo {
             path: "/".to_string(),
@@ -568,7 +603,20 @@ fn route_path_for_file(path: &str) -> PathInfo {
     let mut confidence = Confidence::High;
     let mut notes = Vec::new();
     let mut diagnostics = Vec::new();
+    if app_indexes.len() > 1 {
+        confidence = Confidence::Medium;
+        notes.push(
+            "Next.js route file path contains nested app segments; first app segment was used"
+                .to_string(),
+        );
+        diagnostics.push(diagnostic(
+            diagnostic_codes::NEXTJS_NESTED_APP_SEGMENT,
+            span_for_path(path),
+            "Next.js route file path contains nested app segments",
+        ));
+    }
     let mut segments = Vec::new();
+    // Drop the final route.* file tail; remaining segments form the route path.
     for segment in parts
         .iter()
         .skip(app_index + 1)
@@ -580,15 +628,18 @@ fn route_path_for_file(path: &str) -> PathInfo {
         if is_unusual_segment(segment) {
             confidence = Confidence::Medium;
             notes.push(format!(
-                "Next.js route segment `{segment}` uses an unusual routing convention"
+                "Next.js route segment `{segment}` uses an unusual routing convention and was normalized for review"
             ));
             diagnostics.push(diagnostic(
                 diagnostic_codes::NEXTJS_UNUSUAL_ROUTE_SEGMENT,
                 span_for_path(path),
-                "Next.js route segment uses an unusual routing convention",
+                "Next.js route segment uses an unusual routing convention; emitted path is normalized for review",
             ));
         }
-        segments.push((*segment).to_string());
+        let segment = normalize_nextjs_segment(segment);
+        if !segment.is_empty() {
+            segments.push(segment);
+        }
     }
     let path = if segments.is_empty() {
         "/".to_string()
@@ -606,7 +657,7 @@ fn route_path_for_file(path: &str) -> PathInfo {
 fn is_next_route_file(path: &str) -> bool {
     let normalized = path.replace('\\', "/");
     let parts = normalized.split('/').collect::<Vec<_>>();
-    parts.contains(&"app")
+    parts.iter().any(|part| *part == "app")
         && matches!(
             parts.last().copied(),
             Some("route.js" | "route.ts" | "route.jsx" | "route.tsx")
@@ -623,6 +674,15 @@ fn is_route_group(segment: &str) -> bool {
 
 fn is_unusual_segment(segment: &str) -> bool {
     segment.starts_with("(.)") || segment.starts_with("(..)") || segment.starts_with("(...)")
+}
+
+fn normalize_nextjs_segment(segment: &str) -> String {
+    for prefix in ["(...)", "(..)", "(.)"] {
+        if let Some(rest) = segment.strip_prefix(prefix) {
+            return rest.to_string();
+        }
+    }
+    segment.to_string()
 }
 
 fn is_http_method(name: &str) -> bool {

@@ -6,6 +6,7 @@ from . import views
 router = DefaultRouter()
 router.register("users", views.UserViewSet, basename="user")
 router.register("readonly", views.ReadOnlyAccountViewSet, basename="readonly")
+router.register("custom-model", views.CustomModelBackedViewSet, basename="custom-model")
 router.register(dynamic_prefix(), views.DynamicViewSet, basename=get_basename())
 
 custom_router = CustomRouter()

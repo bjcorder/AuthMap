@@ -48,6 +48,7 @@ emitting them.
 | `adapter.partial_result` | Adapter emitted partial facts with caveats |
 | `django_custom_router` | DRF custom router behavior could not be resolved statically |
 | `django_dynamic_include` | Django include target is dynamic or missing |
+| `django_include_depth_exceeded` | Django include chain exceeded the maximum static include depth |
 | `django_dynamic_url_path` | Django URL path is dynamic and could not be resolved |
 | `django_unresolved_handler` | Django URL handler could not be resolved statically |
 | `django_unresolved_include` | Django include module could not be resolved statically |
@@ -55,8 +56,10 @@ emitting them.
 | `drf_dynamic_basename` | DRF router basename is dynamic and could not be resolved |
 | `drf_dynamic_router_prefix` | DRF router registration prefix is dynamic and could not be resolved |
 | `drf_unresolved_viewset` | DRF router viewset could not be resolved statically |
+| `drf_unresolved_viewset_base` | DRF viewset base class could not be resolved to a known framework base |
 | `nextjs_dynamic_route_export` | Next.js route handler export value is dynamic or unsupported |
 | `nextjs_external_reexport_unresolved` | Next.js route handler re-export target could not be resolved or analyzed statically |
+| `nextjs_nested_app_segment` | Next.js route file path contains nested `app` segments |
 | `nextjs_unusual_route_segment` | Next.js route segment uses an unusual routing convention |
 | `report.render_failed` | Report rendering failed |
 | `report.write_failed` | Report writing failed |

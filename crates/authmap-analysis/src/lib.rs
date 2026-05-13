@@ -1944,10 +1944,11 @@ fn looks_orm_call(function_text: &str) -> bool {
     lower.starts_with("prisma.")
         || lower.contains(".objects.")
         || lower.starts_with("session.")
-        || matches!(
-            terminal_symbol_name(function_text).as_str(),
-            "update" | "delete" | "text"
-        )
+        || (function_text.contains('.')
+            && matches!(
+                terminal_symbol_name(function_text).as_str(),
+                "update" | "delete" | "text"
+            ))
 }
 
 fn looks_response_or_builtin_call(function_text: &str, terminal_lower: &str) -> bool {
@@ -2154,6 +2155,7 @@ fn resolve_python_module(
     let normalized = parsed.source.path.replace('\\', "/");
     let current_dir = normalized.rsplit_once('/').map_or("", |(dir, _)| dir);
     if module.starts_with('.') {
+        let is_absolute = current_dir.starts_with('/');
         let dots = module.chars().take_while(|ch| *ch == '.').count();
         let remainder = module.trim_start_matches('.');
         let mut parts = current_dir
@@ -2167,7 +2169,13 @@ fn resolve_python_module(
         if !remainder.is_empty() {
             parts.extend(remainder.split('.').map(str::to_string));
         }
-        return module_index.get(&parts.join("/")).cloned();
+        let joined = parts.join("/");
+        let key = if is_absolute {
+            format!("/{joined}")
+        } else {
+            joined
+        };
+        return module_index.get(&key).cloned();
     }
 
     let candidate = module.replace('.', "/");
@@ -3115,25 +3123,27 @@ fn nextjs_wrapped_handler_nodes<'tree>(
     export_name: &str,
     handler: &SymbolRef,
 ) -> Vec<Node<'tree>> {
-    let mut nodes = Vec::new();
+    if handler.name != export_name
+        && let Some(node) = js_function_or_value_node(parsed, &handler.name)
+    {
+        return vec![node];
+    }
     if let Some(variable) = js_variable_declarator_node(parsed, export_name) {
         if let Some(value) = variable.child_by_field_name("value")
             && value.kind() == "call_expression"
         {
-            nodes.extend(call_argument_nodes(value).into_iter().filter(|arg| {
-                matches!(
-                    arg.kind(),
-                    "arrow_function" | "function" | "function_expression"
-                )
-            }));
+            return call_argument_nodes(value)
+                .into_iter()
+                .filter(|arg| {
+                    matches!(
+                        arg.kind(),
+                        "arrow_function" | "function" | "function_expression"
+                    )
+                })
+                .collect();
         }
     }
-    if handler.name != export_name
-        && let Some(node) = js_function_or_value_node(parsed, &handler.name)
-    {
-        nodes.push(node);
-    }
-    nodes
+    Vec::new()
 }
 
 fn js_function_or_value_node<'tree>(parsed: &'tree ParsedFile, name: &str) -> Option<Node<'tree>> {
@@ -3179,6 +3189,18 @@ fn js_variable_declarator_node<'tree>(
     let root = parsed.root_node()?;
     let mut stack = vec![root];
     while let Some(node) = stack.pop() {
+        if node != root
+            && matches!(
+                node.kind(),
+                "arrow_function"
+                    | "function"
+                    | "function_expression"
+                    | "class"
+                    | "class_declaration"
+            )
+        {
+            continue;
+        }
         if node.kind() == "variable_declarator"
             && node
                 .child_by_field_name("name")
@@ -4005,13 +4027,15 @@ mod tests {
     use authmap_config::{ScanConfig, ScanPlan};
     use authmap_core::{
         Confidence, CoverageClass, Evidence, EvidenceType, Framework, Mutation, MutationOperation,
-        ReachabilityLink, RiskLevel, Route, ScanMode, diagnostic_codes,
+        ReachabilityLink, RiskLevel, Route, ScanMode, SourceFile, diagnostic_codes,
     };
+    use authmap_parsers::{ParseStatus, ParsedFile};
     use authmap_testkit::fixture_path;
 
     use super::{
-        classify_coverage, normalize_adapter_evidence, normalize_module_path, route_id_remaps,
-        run_scan, run_scan_with_started_at, suggest_rules, suggest_rules_with_started_at,
+        classify_coverage, normalize_adapter_evidence, normalize_module_path,
+        resolve_python_module, route_id_remaps, run_scan, run_scan_with_started_at, suggest_rules,
+        suggest_rules_with_started_at,
     };
 
     #[test]
@@ -4566,7 +4590,7 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 18);
+        assert_eq!(document.routes.len(), 20);
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::Django
                 && route.method == "ANY"
@@ -4599,6 +4623,27 @@ sensitivity:
                 && route.method == "POST"
                 && route.path == "/accounts/readonly-api/audit/refresh"
         }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::DjangoRestFramework
+                && route.method == "GET"
+                && route.path == "/accounts/api/custom-model"
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::DjangoRestFramework
+                && route.method == "POST"
+                && route.path == "/accounts/api/custom-model/recalculate"
+                && route.confidence == Confidence::Medium
+        }));
+        assert!(!document.routes.iter().any(|route| {
+            route.path.starts_with("/accounts/api/custom-model")
+                && matches!(route.method.as_str(), "PUT" | "PATCH" | "DELETE")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Django
+                && route.method == "ANY"
+                && route.path == "/legacy/{slug}/"
+                && route.confidence == Confidence::Medium
+        }));
         assert!(document.evidence.iter().any(|evidence| {
             evidence.evidence_type == EvidenceType::PermissionCheck
                 && evidence
@@ -4630,6 +4675,7 @@ sensitivity:
             "django_urlpattern_context_uncertain",
             "drf_dynamic_router_prefix",
             "drf_dynamic_basename",
+            "drf_unresolved_viewset_base",
         ] {
             assert!(
                 document
@@ -4647,7 +4693,7 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 14);
+        assert_eq!(document.routes.len(), 16);
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::NextJs
                 && route.method == "GET"
@@ -4679,6 +4725,18 @@ sensitivity:
                 .iter()
                 .any(|route| route.method == "DELETE" && route.path == "/tsx")
         );
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::NextJs
+                && route.method == "GET"
+                && route.path == "/modal"
+                && route.confidence == Confidence::Medium
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::NextJs
+                && route.method == "GET"
+                && route.path == "/nested/app/users"
+                && route.confidence == Confidence::Medium
+        }));
         assert!(document.evidence.iter().any(|evidence| {
             evidence.evidence_type == EvidenceType::PermissionCheck
                 && evidence
@@ -4726,6 +4784,8 @@ sensitivity:
         for code in [
             "nextjs_unusual_route_segment",
             "nextjs_dynamic_route_export",
+            "nextjs_nested_app_segment",
+            "nextjs_external_reexport_unresolved",
         ] {
             assert!(
                 document
@@ -5053,6 +5113,54 @@ export default async function createSession(userId: string) {
     }
 
     #[test]
+    fn reachability_links_bare_update_service_call() {
+        let temp = TestDir::new("bare-update-service");
+        write_file(
+            &temp.path().join("app.py"),
+            r#"
+from fastapi import Depends, FastAPI
+
+from services import update_account
+
+app = FastAPI()
+
+def require_user():
+    return {"id": "user_1"}
+
+@app.post("/accounts/update")
+def route(user=Depends(require_user)):
+    return update_account("acct_1")
+"#,
+        );
+        write_file(
+            &temp.path().join("services.py"),
+            r#"
+from sqlalchemy.orm import Session
+
+class Account:
+    pass
+
+def update_account(account_id: str):
+    session = Session()
+    account = Account()
+    session.add(account)
+    session.commit()
+    return account
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        assert_mutation_link(
+            &document,
+            "/accounts/update",
+            "sqlalchemy",
+            Some("Account"),
+            Confidence::Medium,
+        );
+    }
+
+    #[test]
     fn js_module_normalization_preserves_posix_absolute_roots() {
         assert_eq!(
             normalize_module_path("/tmp/authmap/project/routes", "./service", "/"),
@@ -5061,6 +5169,36 @@ export default async function createSession(userId: string) {
         assert_eq!(
             normalize_module_path("/tmp/authmap/project/routes", "../service", "/"),
             "/tmp/authmap/project/service"
+        );
+    }
+
+    #[test]
+    fn python_relative_import_resolution_preserves_posix_absolute_roots() {
+        let parsed = ParsedFile {
+            source: SourceFile {
+                path: "/home/runner/work/AuthMap/tests/fixtures/django/accounts/views.py"
+                    .to_string(),
+                language: authmap_core::Language::Python,
+                size_bytes: 0,
+                sha256: None,
+                project_hints: Vec::new(),
+                skipped: None,
+            },
+            language: authmap_core::Language::Python,
+            text: String::new(),
+            tree: None,
+            status: ParseStatus::Parsed,
+            diagnostics: Vec::new(),
+        };
+        let mut modules = std::collections::BTreeMap::new();
+        modules.insert(
+            "/home/runner/work/AuthMap/tests/fixtures/django/accounts/services".to_string(),
+            "/home/runner/work/AuthMap/tests/fixtures/django/accounts/services.py".to_string(),
+        );
+
+        assert_eq!(
+            resolve_python_module(&parsed, &modules, ".services").as_deref(),
+            Some("/home/runner/work/AuthMap/tests/fixtures/django/accounts/services.py")
         );
     }
 

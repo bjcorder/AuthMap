@@ -5,6 +5,10 @@ from .models import Account
 from .services import create_account
 
 
+def get_url_path():
+    return "dynamic"
+
+
 def require_permission(user):
     return True
 
@@ -65,6 +69,19 @@ class ReadOnlyAuditViewSet(ReadOnlyModelViewSet):
     @action(detail=False, methods=["post"], url_path="refresh")
     def refresh(self, request):
         return Account.objects.filter(active=True).update(reviewed=True)
+
+
+class MyModelViewSet(ViewSet):
+    pass
+
+
+class CustomModelBackedViewSet(MyModelViewSet):
+    def list(self, request):
+        return []
+
+    @action(detail=False, methods=["post"], url_path=get_url_path())
+    def recalculate(self, request):
+        return []
 
 
 class DynamicViewSet(ViewSet):

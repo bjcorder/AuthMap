@@ -2370,7 +2370,7 @@ mod tests {
         ]);
         let output = DjangoAdapter.discover_routes(&parsed, &AdapterContext::default());
 
-        assert_eq!(output.routes.len(), 18);
+        assert_eq!(output.routes.len(), 20);
         assert!(output.routes.iter().all(|route| route.span.is_some()));
         assert!(output.routes.iter().all(|route| {
             route
@@ -2449,6 +2449,24 @@ mod tests {
             route.method == "POST" && route.path == "/accounts/readonly-api/audit/refresh"
         }));
         assert!(
+            output.routes.iter().any(|route| {
+                route.method == "GET" && route.path == "/accounts/api/custom-model"
+            })
+        );
+        assert!(output.routes.iter().any(|route| {
+            route.method == "POST"
+                && route.path == "/accounts/api/custom-model/recalculate"
+                && route.confidence == Confidence::Medium
+        }));
+        assert!(!output.routes.iter().any(|route| {
+            matches!(route.method.as_str(), "PUT" | "PATCH" | "DELETE")
+                && route.path.starts_with("/accounts/api/custom-model")
+        }));
+        assert_eq!(
+            route(&output, "ANY", "/legacy/{slug}/").path,
+            "/legacy/{slug}/"
+        );
+        assert!(
             !output
                 .routes
                 .iter()
@@ -2468,6 +2486,7 @@ mod tests {
             "drf_dynamic_basename",
             "django_custom_router",
             "django_urlpattern_context_uncertain",
+            "drf_unresolved_viewset_base",
         ] {
             assert!(
                 output
@@ -2495,10 +2514,11 @@ mod tests {
             "nextjs/app/wrapped-named/route.ts",
             "nextjs/app/external/route.ts",
             "nextjs/app/external/handler.ts",
+            "nextjs/app/nested/app/users/route.ts",
         ]);
         let output = NextJsAdapter.discover_routes(&parsed, &AdapterContext::default());
 
-        assert_eq!(output.routes.len(), 14);
+        assert_eq!(output.routes.len(), 16);
         assert!(output.routes.iter().all(|route| route.span.is_some()));
         assert!(output.routes.iter().all(|route| {
             route
@@ -2558,8 +2578,12 @@ mod tests {
             Some("handleDelete")
         );
 
-        let unusual = route(&output, "GET", "/(.)modal");
+        let unusual = route(&output, "GET", "/modal");
         assert_eq!(unusual.confidence, Confidence::Medium);
+        assert_eq!(
+            route(&output, "GET", "/nested/app/users").confidence,
+            Confidence::Medium
+        );
         assert_eq!(route(&output, "HEAD", "/head").framework, Framework::NextJs);
         assert_eq!(
             route(&output, "OPTIONS", "/options").framework,
@@ -2603,6 +2627,8 @@ mod tests {
         for code in [
             "nextjs_unusual_route_segment",
             "nextjs_dynamic_route_export",
+            "nextjs_nested_app_segment",
+            "nextjs_external_reexport_unresolved",
         ] {
             assert!(
                 output
@@ -2612,6 +2638,35 @@ mod tests {
                 "missing diagnostic {code}"
             );
         }
+    }
+
+    #[test]
+    fn django_include_depth_limit_stops_deep_chains() {
+        let mut sources = Vec::new();
+        for index in 0..66 {
+            let path = format!("tests/fixtures/generated_django_depth/urls{index}.py");
+            let text = if index < 65 {
+                format!(
+                    "from django.urls import include, path\nurlpatterns = [path('', include('urls{}'))]\n",
+                    index + 1
+                )
+            } else {
+                "from django.urls import path\n\ndef terminal(request):\n    return {}\n\nurlpatterns = [path('terminal/', terminal)]\n".to_string()
+            };
+            sources.push((path, Language::Python, text));
+        }
+        let parsed = parse_sources(&sources);
+        let output = DjangoAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert!(output.routes.is_empty());
+        assert_eq!(
+            output
+                .diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic.code == "django_include_depth_exceeded")
+                .count(),
+            1
+        );
     }
 
     #[test]
@@ -2670,6 +2725,26 @@ mod tests {
                 backend
                     .parse(&source, &text)
                     .expect("fixture should parse as Python")
+            })
+            .collect()
+    }
+
+    fn parse_sources(sources: &[(String, Language, String)]) -> Vec<authmap_parsers::ParsedFile> {
+        let backend = TreeSitterBackend;
+        sources
+            .iter()
+            .map(|(path, language, text)| {
+                let source = SourceFile {
+                    path: path.clone(),
+                    language: *language,
+                    size_bytes: text.len() as u64,
+                    sha256: None,
+                    project_hints: Vec::new(),
+                    skipped: None,
+                };
+                backend
+                    .parse(&source, text)
+                    .expect("inline fixture should parse")
             })
             .collect()
     }

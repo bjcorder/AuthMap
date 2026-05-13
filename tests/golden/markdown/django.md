@@ -8,11 +8,11 @@
 - Mode: advisory
 - Targets: tests/fixtures/django
 - Source files: 5
-- Routes: 18
+- Routes: 20
 - Evidence entries: 2
 - Mutations: 7
-- Diagnostics: 6
-- Frameworks: django: 5, django_rest_framework: 13
+- Diagnostics: 7
+- Frameworks: django: 5, django_rest_framework: 15
 
 ## Review Required
 
@@ -23,54 +23,58 @@
 | [route_0005](#route-route_0005) | POST /accounts/api/users | risk is high |
 | [route_0006](#route-route_0006) | POST /accounts/api/users/{uuid}/disable | risk is high |
 | [route_0007](#route-route_0007) | PUT /accounts/api/users/{uuid} | risk is high |
-| [route_0010](#route-route_0010) | GET &lt;dynamic&gt; | confidence is medium; DRF router prefix is dynamic and was emitted as &lt;dynamic&gt;; DRF router basename is dynamic |
-| [route_0013](#route-route_0013) | POST /accounts/readonly-api/audit/refresh | risk is high |
-| [route_0014](#route-route_0014) | ANY /accounts | risk is high |
-| [route_0015](#route-route_0015) | ANY /accounts/users/&lt;int:pk&gt;/ | risk is review_required; coverage is unknown_or_dynamic |
-| [route_0016](#route-route_0016) | ANY &lt;dynamic&gt; | confidence is medium; Django URL path is dynamic and was emitted as &lt;dynamic&gt;; risk is high |
-| [route_0017](#route-route_0017) | ANY /status/ | risk is high |
-| [route_0018](#route-route_0018) | ANY /^legacy/(?P&lt;slug&gt;\[-\w\]+)/$ | Django re_path regex literal preserved as route path; risk is high |
-| diagnostic | drf_dynamic_basename | DRF router basename is dynamic and could not be resolved at tests/fixtures/django/accounts/urls.py:9:1 |
-| diagnostic | drf_dynamic_router_prefix | DRF router registration prefix is dynamic and could not be resolved at tests/fixtures/django/accounts/urls.py:9:17 |
+| [route_0011](#route-route_0011) | POST /accounts/api/custom-model/recalculate | confidence is medium; DRF action url_path is dynamic; emitted method name as path; risk is high |
+| [route_0012](#route-route_0012) | GET &lt;dynamic&gt; | confidence is medium; DRF router prefix is dynamic and was emitted as &lt;dynamic&gt;; DRF router basename is dynamic |
+| [route_0015](#route-route_0015) | POST /accounts/readonly-api/audit/refresh | risk is high |
+| [route_0016](#route-route_0016) | ANY /accounts | risk is high |
+| [route_0017](#route-route_0017) | ANY /accounts/users/&lt;int:pk&gt;/ | risk is review_required; coverage is unknown_or_dynamic |
+| [route_0018](#route-route_0018) | ANY &lt;dynamic&gt; | confidence is medium; Django URL path is dynamic and was emitted as &lt;dynamic&gt;; risk is high |
+| [route_0019](#route-route_0019) | ANY /status/ | risk is high |
+| [route_0020](#route-route_0020) | ANY /legacy/{slug}/ | confidence is medium; Django re_path regex literal normalized as route path; risk is high |
 | diagnostic | django_dynamic_include | Django include target is dynamic and could not be resolved at tests/fixtures/django/project/urls.py:10:30 |
-| diagnostic | django_custom_router | DRF custom router behavior could not be resolved statically at tests/fixtures/django/accounts/urls.py:11:17 |
-| diagnostic | django_dynamic_url_path | Django URL path is dynamic and could not be resolved at tests/fixtures/django/accounts/urls.py:20:10 |
-| diagnostic | django_urlpattern_context_uncertain | Django URL helper call is outside a statically recognized urlpatterns context at tests/fixtures/django/accounts/urls.py:29:5 |
+| diagnostic | drf_dynamic_basename | DRF router basename is dynamic and could not be resolved at tests/fixtures/django/accounts/urls.py:10:1 |
+| diagnostic | drf_dynamic_router_prefix | DRF router registration prefix is dynamic and could not be resolved at tests/fixtures/django/accounts/urls.py:10:17 |
+| diagnostic | django_custom_router | DRF custom router behavior could not be resolved statically at tests/fixtures/django/accounts/urls.py:12:17 |
+| diagnostic | django_dynamic_url_path | Django URL path is dynamic and could not be resolved at tests/fixtures/django/accounts/urls.py:21:10 |
+| diagnostic | django_urlpattern_context_uncertain | Django URL helper call is outside a statically recognized urlpatterns context at tests/fixtures/django/accounts/urls.py:30:5 |
+| diagnostic | drf_unresolved_viewset_base | DRF viewset base class could not be resolved to a known framework base at tests/fixtures/django/accounts/views.py:78:7 |
 
 ## Route Inventory
 
 | ID | Framework | Method | Path | Handler | Middleware | Confidence | Coverage | Risk |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [route_0001](#route-route_0001) | django_rest_framework | DELETE | /accounts/api/users/{uuid} | \`UserViewSet.destroy\` (tests/fixtures/django/accounts/views.py:41:7) | none | high | unauthenticated | high |
-| [route_0002](#route-route_0002) | django_rest_framework | GET | /accounts/api/users | \`UserViewSet.list\` (tests/fixtures/django/accounts/views.py:44:9) | none | high | permission_guarded | low |
-| [route_0003](#route-route_0003) | django_rest_framework | GET | /accounts/api/users/{uuid} | \`UserViewSet.retrieve\` (tests/fixtures/django/accounts/views.py:41:7) | none | high | unauthenticated | medium |
-| [route_0004](#route-route_0004) | django_rest_framework | PATCH | /accounts/api/users/{uuid} | \`UserViewSet.partial_update\` (tests/fixtures/django/accounts/views.py:41:7) | none | high | unauthenticated | high |
-| [route_0005](#route-route_0005) | django_rest_framework | POST | /accounts/api/users | \`UserViewSet.create\` (tests/fixtures/django/accounts/views.py:48:9) | none | high | unauthenticated | high |
-| [route_0006](#route-route_0006) | django_rest_framework | POST | /accounts/api/users/{uuid}/disable | \`UserViewSet.disable\` (tests/fixtures/django/accounts/views.py:52:9) | none | high | unauthenticated | high |
-| [route_0007](#route-route_0007) | django_rest_framework | PUT | /accounts/api/users/{uuid} | \`UserViewSet.update\` (tests/fixtures/django/accounts/views.py:41:7) | none | high | unauthenticated | high |
-| [route_0008](#route-route_0008) | django_rest_framework | GET | /accounts/api/readonly | \`ReadOnlyAccountViewSet.list\` (tests/fixtures/django/accounts/views.py:56:7) | none | high | unauthenticated | medium |
-| [route_0009](#route-route_0009) | django_rest_framework | GET | /accounts/api/readonly/{pk} | \`ReadOnlyAccountViewSet.retrieve\` (tests/fixtures/django/accounts/views.py:56:7) | none | high | unauthenticated | medium |
-| [route_0010](#route-route_0010) | django_rest_framework | GET | &lt;dynamic&gt; | \`DynamicViewSet.list\` (tests/fixtures/django/accounts/views.py:71:9) | none | medium | unauthenticated | low |
-| [route_0011](#route-route_0011) | django_rest_framework | GET | /accounts/readonly-api/audit | \`ReadOnlyAuditViewSet.list\` (tests/fixtures/django/accounts/views.py:64:7) | none | high | unauthenticated | medium |
-| [route_0012](#route-route_0012) | django_rest_framework | GET | /accounts/readonly-api/audit/{pk} | \`ReadOnlyAuditViewSet.retrieve\` (tests/fixtures/django/accounts/views.py:64:7) | none | high | unauthenticated | medium |
-| [route_0013](#route-route_0013) | django_rest_framework | POST | /accounts/readonly-api/audit/refresh | \`ReadOnlyAuditViewSet.refresh\` (tests/fixtures/django/accounts/views.py:66:9) | none | high | unauthenticated | high |
-| [route_0014](#route-route_0014) | django | ANY | /accounts | \`index\` (tests/fixtures/django/accounts/views.py:20:5) | none | high | unauthenticated | high |
-| [route_0015](#route-route_0015) | django | ANY | /accounts/users/&lt;int:pk&gt;/ | \`AccountDetailView\` (tests/fixtures/django/accounts/views.py:28:7) | none | high | unknown_or_dynamic | review_required |
-| [route_0016](#route-route_0016) | django | ANY | &lt;dynamic&gt; | \`dynamic_view\` (tests/fixtures/django/accounts/views.py:24:5) | none | medium | unauthenticated | high |
-| [route_0017](#route-route_0017) | django | ANY | /status/ | \`status\` (tests/fixtures/django/accounts/views.py:12:5) | none | high | unauthenticated | high |
-| [route_0018](#route-route_0018) | django | ANY | /^legacy/(?P&lt;slug&gt;\[-\w\]+)/$ | \`legacy_detail\` (tests/fixtures/django/accounts/views.py:16:5) | none | high | unauthenticated | high |
+| [route_0001](#route-route_0001) | django_rest_framework | DELETE | /accounts/api/users/{uuid} | \`UserViewSet.destroy\` (tests/fixtures/django/accounts/views.py:45:7) | none | high | unauthenticated | high |
+| [route_0002](#route-route_0002) | django_rest_framework | GET | /accounts/api/users | \`UserViewSet.list\` (tests/fixtures/django/accounts/views.py:48:9) | none | high | permission_guarded | low |
+| [route_0003](#route-route_0003) | django_rest_framework | GET | /accounts/api/users/{uuid} | \`UserViewSet.retrieve\` (tests/fixtures/django/accounts/views.py:45:7) | none | high | unauthenticated | medium |
+| [route_0004](#route-route_0004) | django_rest_framework | PATCH | /accounts/api/users/{uuid} | \`UserViewSet.partial_update\` (tests/fixtures/django/accounts/views.py:45:7) | none | high | unauthenticated | high |
+| [route_0005](#route-route_0005) | django_rest_framework | POST | /accounts/api/users | \`UserViewSet.create\` (tests/fixtures/django/accounts/views.py:52:9) | none | high | unauthenticated | high |
+| [route_0006](#route-route_0006) | django_rest_framework | POST | /accounts/api/users/{uuid}/disable | \`UserViewSet.disable\` (tests/fixtures/django/accounts/views.py:56:9) | none | high | unauthenticated | high |
+| [route_0007](#route-route_0007) | django_rest_framework | PUT | /accounts/api/users/{uuid} | \`UserViewSet.update\` (tests/fixtures/django/accounts/views.py:45:7) | none | high | unauthenticated | high |
+| [route_0008](#route-route_0008) | django_rest_framework | GET | /accounts/api/readonly | \`ReadOnlyAccountViewSet.list\` (tests/fixtures/django/accounts/views.py:60:7) | none | high | unauthenticated | medium |
+| [route_0009](#route-route_0009) | django_rest_framework | GET | /accounts/api/readonly/{pk} | \`ReadOnlyAccountViewSet.retrieve\` (tests/fixtures/django/accounts/views.py:60:7) | none | high | unauthenticated | medium |
+| [route_0010](#route-route_0010) | django_rest_framework | GET | /accounts/api/custom-model | \`CustomModelBackedViewSet.list\` (tests/fixtures/django/accounts/views.py:79:9) | none | high | unauthenticated | medium |
+| [route_0011](#route-route_0011) | django_rest_framework | POST | /accounts/api/custom-model/recalculate | \`CustomModelBackedViewSet.recalculate\` (tests/fixtures/django/accounts/views.py:83:9) | none | medium | unauthenticated | high |
+| [route_0012](#route-route_0012) | django_rest_framework | GET | &lt;dynamic&gt; | \`DynamicViewSet.list\` (tests/fixtures/django/accounts/views.py:88:9) | none | medium | unauthenticated | low |
+| [route_0013](#route-route_0013) | django_rest_framework | GET | /accounts/readonly-api/audit | \`ReadOnlyAuditViewSet.list\` (tests/fixtures/django/accounts/views.py:68:7) | none | high | unauthenticated | medium |
+| [route_0014](#route-route_0014) | django_rest_framework | GET | /accounts/readonly-api/audit/{pk} | \`ReadOnlyAuditViewSet.retrieve\` (tests/fixtures/django/accounts/views.py:68:7) | none | high | unauthenticated | medium |
+| [route_0015](#route-route_0015) | django_rest_framework | POST | /accounts/readonly-api/audit/refresh | \`ReadOnlyAuditViewSet.refresh\` (tests/fixtures/django/accounts/views.py:70:9) | none | high | unauthenticated | high |
+| [route_0016](#route-route_0016) | django | ANY | /accounts | \`index\` (tests/fixtures/django/accounts/views.py:24:5) | none | high | unauthenticated | high |
+| [route_0017](#route-route_0017) | django | ANY | /accounts/users/&lt;int:pk&gt;/ | \`AccountDetailView\` (tests/fixtures/django/accounts/views.py:32:7) | none | high | unknown_or_dynamic | review_required |
+| [route_0018](#route-route_0018) | django | ANY | &lt;dynamic&gt; | \`dynamic_view\` (tests/fixtures/django/accounts/views.py:28:5) | none | medium | unauthenticated | high |
+| [route_0019](#route-route_0019) | django | ANY | /status/ | \`status\` (tests/fixtures/django/accounts/views.py:16:5) | none | high | unauthenticated | high |
+| [route_0020](#route-route_0020) | django | ANY | /legacy/{slug}/ | \`legacy_detail\` (tests/fixtures/django/accounts/views.py:20:5) | none | medium | unauthenticated | high |
 
 ## Data Mutations
 
 | ID | Operation | Library | Resource | Location | Confidence | Review |
 | --- | --- | --- | --- | --- | --- | --- |
 | mutation_0001 | create | django_orm | Account | tests/fixtures/django/accounts/services.py:5:12 | high | none |
-| mutation_0002 | save | django_orm | Account | tests/fixtures/django/accounts/views.py:34:9 | medium | none |
-| mutation_0003 | delete | django_orm | Account | tests/fixtures/django/accounts/views.py:38:16 | high | none |
-| mutation_0004 | create | django_orm | Account | tests/fixtures/django/accounts/views.py:49:16 | high | none |
-| mutation_0005 | bulk_update | django_orm | Account | tests/fixtures/django/accounts/views.py:53:16 | high | none |
-| mutation_0006 | delete | django_orm | Account | tests/fixtures/django/accounts/views.py:59:20 | high | none |
-| mutation_0007 | bulk_update | django_orm | Account | tests/fixtures/django/accounts/views.py:67:16 | high | none |
+| mutation_0002 | save | django_orm | Account | tests/fixtures/django/accounts/views.py:38:9 | medium | none |
+| mutation_0003 | delete | django_orm | Account | tests/fixtures/django/accounts/views.py:42:16 | high | none |
+| mutation_0004 | create | django_orm | Account | tests/fixtures/django/accounts/views.py:53:16 | high | none |
+| mutation_0005 | bulk_update | django_orm | Account | tests/fixtures/django/accounts/views.py:57:16 | high | none |
+| mutation_0006 | delete | django_orm | Account | tests/fixtures/django/accounts/views.py:63:20 | high | none |
+| mutation_0007 | bulk_update | django_orm | Account | tests/fixtures/django/accounts/views.py:71:16 | high | none |
 
 ## Route Details
 
@@ -78,7 +82,7 @@
 ### route_0001 DELETE `/accounts/api/users/{uuid}`
 
 - Framework: django_rest_framework
-- Handler: `UserViewSet.destroy` (tests/fixtures/django/accounts/views.py:41:7)
+- Handler: `UserViewSet.destroy` (tests/fixtures/django/accounts/views.py:45:7)
 - Route location: tests/fixtures/django/accounts/urls.py:7:1
 - Middleware: none
 - Confidence: high
@@ -95,7 +99,7 @@
 ### route_0002 GET `/accounts/api/users`
 
 - Framework: django_rest_framework
-- Handler: `UserViewSet.list` (tests/fixtures/django/accounts/views.py:44:9)
+- Handler: `UserViewSet.list` (tests/fixtures/django/accounts/views.py:48:9)
 - Route location: tests/fixtures/django/accounts/urls.py:7:1
 - Middleware: none
 - Confidence: high
@@ -105,15 +109,15 @@
 - Reviewer questions:
   - Should this route require ownership or permission checks?
 - Auth evidence:
-  - permission_check `permission_guard` at tests/fixtures/django/accounts/views.py:45:9 (high)
-    - Symbol: `require_permission` (tests/fixtures/django/accounts/views.py:45:9)
+  - permission_check `permission_guard` at tests/fixtures/django/accounts/views.py:49:9 (high)
+    - Symbol: `require_permission` (tests/fixtures/django/accounts/views.py:49:9)
 - Data mutations: none
 
 <a id="route-route_0003"></a>
 ### route_0003 GET `/accounts/api/users/{uuid}`
 
 - Framework: django_rest_framework
-- Handler: `UserViewSet.retrieve` (tests/fixtures/django/accounts/views.py:41:7)
+- Handler: `UserViewSet.retrieve` (tests/fixtures/django/accounts/views.py:45:7)
 - Route location: tests/fixtures/django/accounts/urls.py:7:1
 - Middleware: none
 - Confidence: high
@@ -129,7 +133,7 @@
 ### route_0004 PATCH `/accounts/api/users/{uuid}`
 
 - Framework: django_rest_framework
-- Handler: `UserViewSet.partial_update` (tests/fixtures/django/accounts/views.py:41:7)
+- Handler: `UserViewSet.partial_update` (tests/fixtures/django/accounts/views.py:45:7)
 - Route location: tests/fixtures/django/accounts/urls.py:7:1
 - Middleware: none
 - Confidence: high
@@ -146,7 +150,7 @@
 ### route_0005 POST `/accounts/api/users`
 
 - Framework: django_rest_framework
-- Handler: `UserViewSet.create` (tests/fixtures/django/accounts/views.py:48:9)
+- Handler: `UserViewSet.create` (tests/fixtures/django/accounts/views.py:52:9)
 - Route location: tests/fixtures/django/accounts/urls.py:7:1
 - Middleware: none
 - Confidence: high
@@ -159,13 +163,13 @@
   - Should this state-changing route require more than authentication?
 - Auth evidence: none
 - Data mutations:
-  - create `Account` via `django_orm` at tests/fixtures/django/accounts/views.py:49:16 (high)
+  - create `Account` via `django_orm` at tests/fixtures/django/accounts/views.py:53:16 (high)
 
 <a id="route-route_0006"></a>
 ### route_0006 POST `/accounts/api/users/{uuid}/disable`
 
 - Framework: django_rest_framework
-- Handler: `UserViewSet.disable` (tests/fixtures/django/accounts/views.py:52:9)
+- Handler: `UserViewSet.disable` (tests/fixtures/django/accounts/views.py:56:9)
 - Route location: tests/fixtures/django/accounts/urls.py:7:1
 - Middleware: none
 - Confidence: high
@@ -178,13 +182,13 @@
   - Should this state-changing route require more than authentication?
 - Auth evidence: none
 - Data mutations:
-  - bulk_update `Account` via `django_orm` at tests/fixtures/django/accounts/views.py:53:16 (high)
+  - bulk_update `Account` via `django_orm` at tests/fixtures/django/accounts/views.py:57:16 (high)
 
 <a id="route-route_0007"></a>
 ### route_0007 PUT `/accounts/api/users/{uuid}`
 
 - Framework: django_rest_framework
-- Handler: `UserViewSet.update` (tests/fixtures/django/accounts/views.py:41:7)
+- Handler: `UserViewSet.update` (tests/fixtures/django/accounts/views.py:45:7)
 - Route location: tests/fixtures/django/accounts/urls.py:7:1
 - Middleware: none
 - Confidence: high
@@ -201,7 +205,7 @@
 ### route_0008 GET `/accounts/api/readonly`
 
 - Framework: django_rest_framework
-- Handler: `ReadOnlyAccountViewSet.list` (tests/fixtures/django/accounts/views.py:56:7)
+- Handler: `ReadOnlyAccountViewSet.list` (tests/fixtures/django/accounts/views.py:60:7)
 - Route location: tests/fixtures/django/accounts/urls.py:8:1
 - Middleware: none
 - Confidence: high
@@ -217,7 +221,7 @@
 ### route_0009 GET `/accounts/api/readonly/{pk}`
 
 - Framework: django_rest_framework
-- Handler: `ReadOnlyAccountViewSet.retrieve` (tests/fixtures/django/accounts/views.py:56:7)
+- Handler: `ReadOnlyAccountViewSet.retrieve` (tests/fixtures/django/accounts/views.py:60:7)
 - Route location: tests/fixtures/django/accounts/urls.py:8:1
 - Middleware: none
 - Confidence: high
@@ -230,11 +234,48 @@
 - Data mutations: none
 
 <a id="route-route_0010"></a>
-### route_0010 GET `&lt;dynamic&gt;`
+### route_0010 GET `/accounts/api/custom-model`
 
 - Framework: django_rest_framework
-- Handler: `DynamicViewSet.list` (tests/fixtures/django/accounts/views.py:71:9)
+- Handler: `CustomModelBackedViewSet.list` (tests/fixtures/django/accounts/views.py:79:9)
 - Route location: tests/fixtures/django/accounts/urls.py:9:1
+- Middleware: none
+- Confidence: high
+- Coverage: unauthenticated (medium)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path.
+- Coverage support: sensitivity: account_path
+- Reviewer questions:
+  - Should this route require ownership or permission checks?
+- Auth evidence: none
+- Data mutations: none
+
+<a id="route-route_0011"></a>
+### route_0011 POST `/accounts/api/custom-model/recalculate`
+
+- Framework: django_rest_framework
+- Handler: `CustomModelBackedViewSet.recalculate` (tests/fixtures/django/accounts/views.py:83:9)
+- Route location: tests/fixtures/django/accounts/urls.py:9:1
+- Middleware: none
+- Confidence: medium
+- Coverage: unauthenticated (high)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, unsafe_method.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: sensitivity: account_path, unsafe_method
+- Reviewer questions:
+  - Should this route require ownership or permission checks?
+  - Should this state-changing route require more than authentication?
+- Coverage uncertainty:
+  - Route inventory confidence is not high.
+- Uncertainty notes:
+  - DRF action url_path is dynamic; emitted method name as path
+- Auth evidence: none
+- Data mutations: none
+
+<a id="route-route_0012"></a>
+### route_0012 GET `&lt;dynamic&gt;`
+
+- Framework: django_rest_framework
+- Handler: `DynamicViewSet.list` (tests/fixtures/django/accounts/views.py:88:9)
+- Route location: tests/fixtures/django/accounts/urls.py:10:1
 - Middleware: none
 - Confidence: medium
 - Coverage: unauthenticated (low)
@@ -247,12 +288,12 @@
 - Auth evidence: none
 - Data mutations: none
 
-<a id="route-route_0011"></a>
-### route_0011 GET `/accounts/readonly-api/audit`
+<a id="route-route_0013"></a>
+### route_0013 GET `/accounts/readonly-api/audit`
 
 - Framework: django_rest_framework
-- Handler: `ReadOnlyAuditViewSet.list` (tests/fixtures/django/accounts/views.py:64:7)
-- Route location: tests/fixtures/django/accounts/urls.py:13:1
+- Handler: `ReadOnlyAuditViewSet.list` (tests/fixtures/django/accounts/views.py:68:7)
+- Route location: tests/fixtures/django/accounts/urls.py:14:1
 - Middleware: none
 - Confidence: high
 - Coverage: unauthenticated (medium)
@@ -263,12 +304,12 @@
 - Auth evidence: none
 - Data mutations: none
 
-<a id="route-route_0012"></a>
-### route_0012 GET `/accounts/readonly-api/audit/{pk}`
+<a id="route-route_0014"></a>
+### route_0014 GET `/accounts/readonly-api/audit/{pk}`
 
 - Framework: django_rest_framework
-- Handler: `ReadOnlyAuditViewSet.retrieve` (tests/fixtures/django/accounts/views.py:64:7)
-- Route location: tests/fixtures/django/accounts/urls.py:13:1
+- Handler: `ReadOnlyAuditViewSet.retrieve` (tests/fixtures/django/accounts/views.py:68:7)
+- Route location: tests/fixtures/django/accounts/urls.py:14:1
 - Middleware: none
 - Confidence: high
 - Coverage: unauthenticated (medium)
@@ -279,12 +320,12 @@
 - Auth evidence: none
 - Data mutations: none
 
-<a id="route-route_0013"></a>
-### route_0013 POST `/accounts/readonly-api/audit/refresh`
+<a id="route-route_0015"></a>
+### route_0015 POST `/accounts/readonly-api/audit/refresh`
 
 - Framework: django_rest_framework
-- Handler: `ReadOnlyAuditViewSet.refresh` (tests/fixtures/django/accounts/views.py:66:9)
-- Route location: tests/fixtures/django/accounts/urls.py:13:1
+- Handler: `ReadOnlyAuditViewSet.refresh` (tests/fixtures/django/accounts/views.py:70:9)
+- Route location: tests/fixtures/django/accounts/urls.py:14:1
 - Middleware: none
 - Confidence: high
 - Coverage: unauthenticated (high)
@@ -296,14 +337,14 @@
   - Should this state-changing route require more than authentication?
 - Auth evidence: none
 - Data mutations:
-  - bulk_update `Account` via `django_orm` at tests/fixtures/django/accounts/views.py:67:16 (high)
+  - bulk_update `Account` via `django_orm` at tests/fixtures/django/accounts/views.py:71:16 (high)
 
-<a id="route-route_0014"></a>
-### route_0014 ANY `/accounts`
+<a id="route-route_0016"></a>
+### route_0016 ANY `/accounts`
 
 - Framework: django
-- Handler: `index` (tests/fixtures/django/accounts/views.py:20:5)
-- Route location: tests/fixtures/django/accounts/urls.py:16:5
+- Handler: `index` (tests/fixtures/django/accounts/views.py:24:5)
+- Route location: tests/fixtures/django/accounts/urls.py:17:5
 - Middleware: none
 - Confidence: high
 - Coverage: unauthenticated (high)
@@ -317,12 +358,12 @@
 - Data mutations:
   - create `Account` via `django_orm` at tests/fixtures/django/accounts/services.py:5:12 (high)
 
-<a id="route-route_0015"></a>
-### route_0015 ANY `/accounts/users/&lt;int:pk&gt;/`
+<a id="route-route_0017"></a>
+### route_0017 ANY `/accounts/users/&lt;int:pk&gt;/`
 
 - Framework: django
-- Handler: `AccountDetailView` (tests/fixtures/django/accounts/views.py:28:7)
-- Route location: tests/fixtures/django/accounts/urls.py:17:5
+- Handler: `AccountDetailView` (tests/fixtures/django/accounts/views.py:32:7)
+- Route location: tests/fixtures/django/accounts/urls.py:18:5
 - Middleware: none
 - Confidence: high
 - Coverage: unknown_or_dynamic (review_required)
@@ -337,19 +378,19 @@
   - Dynamic authorization evidence requires review.
   - Low-confidence authorization evidence was detected.
 - Auth evidence:
-  - unknown_dynamic_check `handler_condition` at tests/fixtures/django/accounts/views.py:31:12 (low)
-    - Symbol: `AccountDetailView` (tests/fixtures/django/accounts/views.py:28:7)
+  - unknown_dynamic_check `handler_condition` at tests/fixtures/django/accounts/views.py:35:12 (low)
+    - Symbol: `AccountDetailView` (tests/fixtures/django/accounts/views.py:32:7)
     - Note: Handler condition references user authorization attributes; review required
 - Data mutations:
-  - save `Account` via `django_orm` at tests/fixtures/django/accounts/views.py:34:9 (medium)
-  - delete `Account` via `django_orm` at tests/fixtures/django/accounts/views.py:38:16 (high)
+  - save `Account` via `django_orm` at tests/fixtures/django/accounts/views.py:38:9 (medium)
+  - delete `Account` via `django_orm` at tests/fixtures/django/accounts/views.py:42:16 (high)
 
-<a id="route-route_0016"></a>
-### route_0016 ANY `&lt;dynamic&gt;`
+<a id="route-route_0018"></a>
+### route_0018 ANY `&lt;dynamic&gt;`
 
 - Framework: django
-- Handler: `dynamic_view` (tests/fixtures/django/accounts/views.py:24:5)
-- Route location: tests/fixtures/django/accounts/urls.py:20:5
+- Handler: `dynamic_view` (tests/fixtures/django/accounts/views.py:28:5)
+- Route location: tests/fixtures/django/accounts/urls.py:21:5
 - Middleware: none
 - Confidence: medium
 - Coverage: unauthenticated (high)
@@ -364,11 +405,11 @@
 - Auth evidence: none
 - Data mutations: none
 
-<a id="route-route_0017"></a>
-### route_0017 ANY `/status/`
+<a id="route-route_0019"></a>
+### route_0019 ANY `/status/`
 
 - Framework: django
-- Handler: `status` (tests/fixtures/django/accounts/views.py:12:5)
+- Handler: `status` (tests/fixtures/django/accounts/views.py:16:5)
 - Route location: tests/fixtures/django/project/urls.py:7:5
 - Middleware: none
 - Confidence: high
@@ -380,21 +421,24 @@
 - Auth evidence: none
 - Data mutations: none
 
-<a id="route-route_0018"></a>
-### route_0018 ANY `/^legacy/(?P&lt;slug&gt;\[-\w\]+)/$`
+<a id="route-route_0020"></a>
+### route_0020 ANY `/legacy/{slug}/`
 
 - Framework: django
-- Handler: `legacy_detail` (tests/fixtures/django/accounts/views.py:16:5)
+- Handler: `legacy_detail` (tests/fixtures/django/accounts/views.py:20:5)
 - Route location: tests/fixtures/django/project/urls.py:8:5
 - Middleware: none
-- Confidence: high
+- Confidence: medium
 - Coverage: unauthenticated (high)
-- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): any_method, unsafe_method.; No strong authorization evidence was found for a high-sensitivity route.
-- Coverage support: sensitivity: any_method, unsafe_method
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): any_method, path_param, unsafe_method.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: sensitivity: any_method, path_param, unsafe_method
 - Reviewer questions:
+  - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- Coverage uncertainty:
+  - Route inventory confidence is not high.
 - Uncertainty notes:
-  - Django re_path regex literal preserved as route path
+  - Django re_path regex literal normalized as route path
 - Auth evidence: none
 - Data mutations: none
 
@@ -402,12 +446,13 @@
 
 | Severity | Code | Location | Message |
 | --- | --- | --- | --- |
-| warning | drf_dynamic_basename | tests/fixtures/django/accounts/urls.py:9:1 | DRF router basename is dynamic and could not be resolved |
-| warning | drf_dynamic_router_prefix | tests/fixtures/django/accounts/urls.py:9:17 | DRF router registration prefix is dynamic and could not be resolved |
 | warning | django_dynamic_include | tests/fixtures/django/project/urls.py:10:30 | Django include target is dynamic and could not be resolved |
-| warning | django_custom_router | tests/fixtures/django/accounts/urls.py:11:17 | DRF custom router behavior could not be resolved statically |
-| warning | django_dynamic_url_path | tests/fixtures/django/accounts/urls.py:20:10 | Django URL path is dynamic and could not be resolved |
-| warning | django_urlpattern_context_uncertain | tests/fixtures/django/accounts/urls.py:29:5 | Django URL helper call is outside a statically recognized urlpatterns context |
+| warning | drf_dynamic_basename | tests/fixtures/django/accounts/urls.py:10:1 | DRF router basename is dynamic and could not be resolved |
+| warning | drf_dynamic_router_prefix | tests/fixtures/django/accounts/urls.py:10:17 | DRF router registration prefix is dynamic and could not be resolved |
+| warning | django_custom_router | tests/fixtures/django/accounts/urls.py:12:17 | DRF custom router behavior could not be resolved statically |
+| warning | django_dynamic_url_path | tests/fixtures/django/accounts/urls.py:21:10 | Django URL path is dynamic and could not be resolved |
+| warning | django_urlpattern_context_uncertain | tests/fixtures/django/accounts/urls.py:30:5 | Django URL helper call is outside a statically recognized urlpatterns context |
+| warning | drf_unresolved_viewset_base | tests/fixtures/django/accounts/views.py:78:7 | DRF viewset base class could not be resolved to a known framework base |
 
 ## Skipped Files
 

@@ -7,47 +7,53 @@
 
 - Mode: advisory
 - Targets: tests/fixtures/nextjs
-- Source files: 13
-- Routes: 14
+- Source files: 14
+- Routes: 16
 - Evidence entries: 3
 - Mutations: 7
-- Diagnostics: 2
-- Frameworks: next_js: 14
+- Diagnostics: 4
+- Frameworks: next_js: 16
 
 ## Review Required
 
 | Item | Subject | Reason |
 | --- | --- | --- |
-| [route_0001](#route-route_0001) | GET /(.)modal | confidence is medium; Next.js route segment \`(.)modal\` uses an unusual routing convention |
+| [route_0001](#route-route_0001) | GET /modal | confidence is medium; Next.js route segment \`(.)modal\` uses an unusual routing convention and was normalized for review |
 | [route_0002](#route-route_0002) | DELETE /reports | risk is high |
 | [route_0003](#route-route_0003) | GET /blog/\[...slug\] | confidence is medium; Next.js route handler export is wrapped; wrapper behavior requires review |
 | [route_0004](#route-route_0004) | PUT /docs/\[\[...slug\]\] | confidence is medium; Next.js route handler export is wrapped; wrapper behavior requires review; risk is high |
 | [route_0005](#route-route_0005) | DELETE /dynamic-export | confidence is medium; Next.js route handler export value is dynamic or unsupported; review required; risk is high |
 | [route_0006](#route-route_0006) | POST /external | risk is review_required |
-| [route_0010](#route-route_0010) | POST / | risk is high |
-| [route_0013](#route-route_0013) | PATCH /users/\[id\] | risk is high |
-| [route_0014](#route-route_0014) | PATCH /wrapped-named | confidence is medium; Next.js route handler export is wrapped; wrapper behavior requires review; risk is high |
-| diagnostic | nextjs_unusual_route_segment | Next.js route segment uses an unusual routing convention at tests/fixtures/nextjs/app/(.)modal/route.ts:1:1 |
+| [route_0007](#route-route_0007) | PUT /external | confidence is medium; Next.js route handler re-export target could not be analyzed statically; risk is high |
+| [route_0009](#route-route_0009) | GET /nested/app/users | confidence is medium; Next.js route file path contains nested app segments; first app segment was used |
+| [route_0012](#route-route_0012) | POST / | risk is high |
+| [route_0015](#route-route_0015) | PATCH /users/\[id\] | risk is high |
+| [route_0016](#route-route_0016) | PATCH /wrapped-named | confidence is medium; Next.js route handler export is wrapped; wrapper behavior requires review; risk is high |
+| diagnostic | nextjs_external_reexport_unresolved | Next.js route handler re-export target could not be analyzed statically at tests/fixtures/nextjs/app/external/route.ts:1:1 |
+| diagnostic | nextjs_nested_app_segment | Next.js route file path contains nested app segments at tests/fixtures/nextjs/app/nested/app/users/route.ts:1:1 |
+| diagnostic | nextjs_unusual_route_segment | Next.js route segment uses an unusual routing convention; emitted path is normalized for review at tests/fixtures/nextjs/app/(.)modal/route.ts:1:1 |
 | diagnostic | nextjs_dynamic_route_export | Next.js route handler export value is dynamic or unsupported at tests/fixtures/nextjs/app/dynamic-export/route.ts:3:14 |
 
 ## Route Inventory
 
 | ID | Framework | Method | Path | Handler | Middleware | Confidence | Coverage | Risk |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [route_0001](#route-route_0001) | next_js | GET | /(.)modal | \`GET\` (tests/fixtures/nextjs/app/(.)modal/route.ts:1:17) | none | medium | unauthenticated | low |
+| [route_0001](#route-route_0001) | next_js | GET | /modal | \`GET\` (tests/fixtures/nextjs/app/(.)modal/route.ts:1:17) | none | medium | unauthenticated | low |
 | [route_0002](#route-route_0002) | next_js | DELETE | /reports | \`handleDelete\` (tests/fixtures/nextjs/app/(admin)/reports/route.ts:1:10) | none | high | unauthenticated | high |
 | [route_0003](#route-route_0003) | next_js | GET | /blog/\[...slug\] | \`GET\` (tests/fixtures/nextjs/app/blog/\[...slug\]/route.ts:9:14) | none | medium | permission_guarded | low |
 | [route_0004](#route-route_0004) | next_js | PUT | /docs/\[\[...slug\]\] | \`updateDoc\` (tests/fixtures/nextjs/app/docs/\[\[...slug\]\]/route.ts:9:32) | none | medium | unauthenticated | high |
 | [route_0005](#route-route_0005) | next_js | DELETE | /dynamic-export | \`DELETE\` (tests/fixtures/nextjs/app/dynamic-export/route.ts:3:14) | none | medium | unauthenticated | high |
 | [route_0006](#route-route_0006) | next_js | POST | /external | \`POST\` (tests/fixtures/nextjs/app/external/handler.ts:1:23) | none | high | authn_only | review_required |
-| [route_0007](#route-route_0007) | next_js | HEAD | /head | \`HEAD\` (tests/fixtures/nextjs/app/head/route.js:1:17) | none | high | unauthenticated | low |
-| [route_0008](#route-route_0008) | next_js | OPTIONS | /options | \`OPTIONS\` (tests/fixtures/nextjs/app/options/route.jsx:1:14) | none | high | unauthenticated | low |
-| [route_0009](#route-route_0009) | next_js | GET | / | \`GET\` (tests/fixtures/nextjs/app/route.ts:5:23) | none | high | authn_only | low |
-| [route_0010](#route-route_0010) | next_js | POST | / | \`POST\` (tests/fixtures/nextjs/app/route.ts:10:14) | none | high | unauthenticated | high |
-| [route_0011](#route-route_0011) | next_js | GET | /tsx | \`GET\` (tests/fixtures/nextjs/app/tsx/route.tsx:1:14) | none | high | unauthenticated | low |
-| [route_0012](#route-route_0012) | next_js | GET | /users/\[id\] | \`GET\` (tests/fixtures/nextjs/app/users/\[id\]/route.ts:1:23) | none | high | unauthenticated | medium |
-| [route_0013](#route-route_0013) | next_js | PATCH | /users/\[id\] | \`PATCH\` (tests/fixtures/nextjs/app/users/\[id\]/route.ts:5:14) | none | high | unauthenticated | high |
-| [route_0014](#route-route_0014) | next_js | PATCH | /wrapped-named | \`updateProfile\` (tests/fixtures/nextjs/app/wrapped-named/route.ts:9:34) | none | medium | unauthenticated | high |
+| [route_0007](#route-route_0007) | next_js | PUT | /external | \`missing\` (tests/fixtures/nextjs/app/external/route.ts:1:1) | none | medium | unauthenticated | high |
+| [route_0008](#route-route_0008) | next_js | HEAD | /head | \`HEAD\` (tests/fixtures/nextjs/app/head/route.js:1:17) | none | high | unauthenticated | low |
+| [route_0009](#route-route_0009) | next_js | GET | /nested/app/users | \`GET\` (tests/fixtures/nextjs/app/nested/app/users/route.ts:1:17) | none | medium | unauthenticated | medium |
+| [route_0010](#route-route_0010) | next_js | OPTIONS | /options | \`OPTIONS\` (tests/fixtures/nextjs/app/options/route.jsx:1:14) | none | high | unauthenticated | low |
+| [route_0011](#route-route_0011) | next_js | GET | / | \`GET\` (tests/fixtures/nextjs/app/route.ts:5:23) | none | high | authn_only | low |
+| [route_0012](#route-route_0012) | next_js | POST | / | \`POST\` (tests/fixtures/nextjs/app/route.ts:10:14) | none | high | unauthenticated | high |
+| [route_0013](#route-route_0013) | next_js | GET | /tsx | \`GET\` (tests/fixtures/nextjs/app/tsx/route.tsx:1:14) | none | high | unauthenticated | low |
+| [route_0014](#route-route_0014) | next_js | GET | /users/\[id\] | \`GET\` (tests/fixtures/nextjs/app/users/\[id\]/route.ts:1:23) | none | high | unauthenticated | medium |
+| [route_0015](#route-route_0015) | next_js | PATCH | /users/\[id\] | \`PATCH\` (tests/fixtures/nextjs/app/users/\[id\]/route.ts:5:14) | none | high | unauthenticated | high |
+| [route_0016](#route-route_0016) | next_js | PATCH | /wrapped-named | \`updateProfile\` (tests/fixtures/nextjs/app/wrapped-named/route.ts:9:34) | none | medium | unauthenticated | high |
 
 ## Data Mutations
 
@@ -64,7 +70,7 @@
 ## Route Details
 
 <a id="route-route_0001"></a>
-### route_0001 GET `/(.)modal`
+### route_0001 GET `/modal`
 
 - Framework: next_js
 - Handler: `GET` (tests/fixtures/nextjs/app/(.)modal/route.ts:1:17)
@@ -76,7 +82,7 @@
 - Coverage uncertainty:
   - Route inventory confidence is not high.
 - Uncertainty notes:
-  - Next.js route segment \`(.)modal\` uses an unusual routing convention
+  - Next.js route segment \`(.)modal\` uses an unusual routing convention and was normalized for review
 - Auth evidence: none
 - Data mutations: none
 
@@ -181,7 +187,27 @@
   - create `external` via `prisma` at tests/fixtures/nextjs/app/external/handler.ts:3:10 (high)
 
 <a id="route-route_0007"></a>
-### route_0007 HEAD `/head`
+### route_0007 PUT `/external`
+
+- Framework: next_js
+- Handler: `missing` (tests/fixtures/nextjs/app/external/route.ts:1:1)
+- Route location: tests/fixtures/nextjs/app/external/route.ts:1:1
+- Middleware: none
+- Confidence: medium
+- Coverage: unauthenticated (high)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): unsafe_method.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: sensitivity: unsafe_method
+- Reviewer questions:
+  - Should this state-changing route require more than authentication?
+- Coverage uncertainty:
+  - Route inventory confidence is not high.
+- Uncertainty notes:
+  - Next.js route handler re-export target could not be analyzed statically
+- Auth evidence: none
+- Data mutations: none
+
+<a id="route-route_0008"></a>
+### route_0008 HEAD `/head`
 
 - Framework: next_js
 - Handler: `HEAD` (tests/fixtures/nextjs/app/head/route.js:1:17)
@@ -193,8 +219,28 @@
 - Auth evidence: none
 - Data mutations: none
 
-<a id="route-route_0008"></a>
-### route_0008 OPTIONS `/options`
+<a id="route-route_0009"></a>
+### route_0009 GET `/nested/app/users`
+
+- Framework: next_js
+- Handler: `GET` (tests/fixtures/nextjs/app/nested/app/users/route.ts:1:17)
+- Route location: tests/fixtures/nextjs/app/nested/app/users/route.ts:1:8
+- Middleware: none
+- Confidence: medium
+- Coverage: unauthenticated (medium)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): user_path.
+- Coverage support: sensitivity: user_path
+- Reviewer questions:
+  - Should this route require ownership or permission checks?
+- Coverage uncertainty:
+  - Route inventory confidence is not high.
+- Uncertainty notes:
+  - Next.js route file path contains nested app segments; first app segment was used
+- Auth evidence: none
+- Data mutations: none
+
+<a id="route-route_0010"></a>
+### route_0010 OPTIONS `/options`
 
 - Framework: next_js
 - Handler: `OPTIONS` (tests/fixtures/nextjs/app/options/route.jsx:1:14)
@@ -206,8 +252,8 @@
 - Auth evidence: none
 - Data mutations: none
 
-<a id="route-route_0009"></a>
-### route_0009 GET `/`
+<a id="route-route_0011"></a>
+### route_0011 GET `/`
 
 - Framework: next_js
 - Handler: `GET` (tests/fixtures/nextjs/app/route.ts:5:23)
@@ -222,8 +268,8 @@
     - Symbol: `requireAuth` (tests/fixtures/nextjs/app/route.ts:6:3)
 - Data mutations: none
 
-<a id="route-route_0010"></a>
-### route_0010 POST `/`
+<a id="route-route_0012"></a>
+### route_0012 POST `/`
 
 - Framework: next_js
 - Handler: `POST` (tests/fixtures/nextjs/app/route.ts:10:14)
@@ -240,8 +286,8 @@
 - Data mutations:
   - create `session` via `prisma` at tests/fixtures/nextjs/app/route.ts:11:10 (high)
 
-<a id="route-route_0011"></a>
-### route_0011 GET `/tsx`
+<a id="route-route_0013"></a>
+### route_0013 GET `/tsx`
 
 - Framework: next_js
 - Handler: `GET` (tests/fixtures/nextjs/app/tsx/route.tsx:1:14)
@@ -253,8 +299,8 @@
 - Auth evidence: none
 - Data mutations: none
 
-<a id="route-route_0012"></a>
-### route_0012 GET `/users/\[id\]`
+<a id="route-route_0014"></a>
+### route_0014 GET `/users/\[id\]`
 
 - Framework: next_js
 - Handler: `GET` (tests/fixtures/nextjs/app/users/\[id\]/route.ts:1:23)
@@ -269,8 +315,8 @@
 - Auth evidence: none
 - Data mutations: none
 
-<a id="route-route_0013"></a>
-### route_0013 PATCH `/users/\[id\]`
+<a id="route-route_0015"></a>
+### route_0015 PATCH `/users/\[id\]`
 
 - Framework: next_js
 - Handler: `PATCH` (tests/fixtures/nextjs/app/users/\[id\]/route.ts:5:14)
@@ -288,8 +334,8 @@
 - Data mutations:
   - update `user` via `prisma` at tests/fixtures/nextjs/app/users/\[id\]/route.ts:6:10 (high)
 
-<a id="route-route_0014"></a>
-### route_0014 PATCH `/wrapped-named`
+<a id="route-route_0016"></a>
+### route_0016 PATCH `/wrapped-named`
 
 - Framework: next_js
 - Handler: `updateProfile` (tests/fixtures/nextjs/app/wrapped-named/route.ts:9:34)
@@ -314,7 +360,9 @@
 
 | Severity | Code | Location | Message |
 | --- | --- | --- | --- |
-| warning | nextjs_unusual_route_segment | tests/fixtures/nextjs/app/(.)modal/route.ts:1:1 | Next.js route segment uses an unusual routing convention |
+| warning | nextjs_external_reexport_unresolved | tests/fixtures/nextjs/app/external/route.ts:1:1 | Next.js route handler re-export target could not be analyzed statically |
+| warning | nextjs_nested_app_segment | tests/fixtures/nextjs/app/nested/app/users/route.ts:1:1 | Next.js route file path contains nested app segments |
+| warning | nextjs_unusual_route_segment | tests/fixtures/nextjs/app/(.)modal/route.ts:1:1 | Next.js route segment uses an unusual routing convention; emitted path is normalized for review |
 | warning | nextjs_dynamic_route_export | tests/fixtures/nextjs/app/dynamic-export/route.ts:3:14 | Next.js route handler export value is dynamic or unsupported |
 
 ## Skipped Files
