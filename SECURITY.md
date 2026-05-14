@@ -41,6 +41,10 @@ Please include:
 - reproduction steps using sanitized examples
 - whether any reports or artifacts exposed sensitive data
 
+AuthMap data-handling expectations, report sensitivity, CI artifact behavior,
+SARIF sharing considerations, baseline handling, and redaction limits are
+documented in [docs/DATA_HANDLING.md](docs/DATA_HANDLING.md).
+
 ## Safe harbor
 
 Good-faith research into AuthMap itself is welcome when it avoids privacy harm,

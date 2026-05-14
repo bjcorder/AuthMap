@@ -9,7 +9,8 @@ same summary.
 
 The action is defensive and local-only. It statically scans source files and
 does not run target applications, connect to databases, or perform live attack
-workflows.
+workflows. Privacy, report-sensitivity, artifact, SARIF, baseline, and sharing
+guidance is documented in [DATA_HANDLING.md](DATA_HANDLING.md).
 
 ## Basic Pull Request Workflow
 
@@ -38,7 +39,9 @@ generated during this action run, not the entire output directory. AuthMap
 redacts obvious secrets before writing reports and job summaries, but artifacts
 can still reveal sensitive application structure, routes, file paths, line
 numbers, and review rationale. Treat uploaded reports as sensitive review
-material unless your organization has approved broader sharing.
+material unless your organization has approved broader sharing. Set
+`upload-artifact: "false"` when generated reports should not be published as
+workflow artifacts.
 
 ## Baseline Drift Review
 
@@ -72,7 +75,9 @@ jobs:
 
 SARIF upload is opt-in because GitHub code scanning requires
 `security-events: write`. If `upload-sarif` is true, the action ensures SARIF is
-generated even when it is not listed in `output`.
+generated even when it is not listed in `output`. Uploaded SARIF can expose
+route, source-location, diagnostic, and review-priority details through
+code-scanning surfaces.
 
 ```yaml
 name: AuthMap

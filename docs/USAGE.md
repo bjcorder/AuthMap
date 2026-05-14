@@ -6,7 +6,8 @@ services, or perform live attack workflows.
 
 Use it for defensive, authorized review of code you own or are permitted to
 assess. See [../SECURITY.md](../SECURITY.md) for the project safety boundary and
-finding language.
+finding language, and [DATA_HANDLING.md](DATA_HANDLING.md) for privacy,
+report-sensitivity, CI artifact, SARIF, baseline, and sharing guidance.
 
 ## Installation And Setup
 
@@ -160,7 +161,8 @@ secret-looking assignments, and common token shapes. Redaction is best-effort:
 it reduces accidental exposure risk, but reports can still contain sensitive
 application structure, route names, file paths, line numbers, symbol names,
 classification rationale, and non-obvious secrets. Treat generated artifacts as
-sensitive review material unless your organization has reviewed them.
+sensitive review material unless your organization has reviewed them. See
+[DATA_HANDLING.md](DATA_HANDLING.md) for the complete data-handling guidance.
 
 ## Interpreting Coverage
 
@@ -287,7 +289,9 @@ jobs:
 
 The action writes Markdown output to the job summary and uploads generated
 reports as an artifact by default. SARIF upload is optional and requires
-`security-events: write`. Baseline drift review is also supported.
+`security-events: write`. Baseline drift review is also supported. See
+[DATA_HANDLING.md](DATA_HANDLING.md) before sharing generated CI artifacts or
+enabling SARIF upload.
 
 Full action inputs, outputs, permissions, SARIF upload, and failure behavior are
 documented in [GITHUB_ACTION.md](GITHUB_ACTION.md).

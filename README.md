@@ -54,6 +54,8 @@ Diagnostic categories, stable codes, and CI exit behavior are documented in
 [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md).
 Project configuration, custom authorization rules, and sensitivity labels are
 documented in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+Privacy and data-handling expectations are documented in
+[docs/DATA_HANDLING.md](docs/DATA_HANDLING.md).
 Installation, CLI usage, report interpretation, examples, and limitations are
 documented in [docs/USAGE.md](docs/USAGE.md).
 
@@ -145,8 +147,9 @@ cargo run -p authmap-cli -- scan tests/fixtures/realistic/express \
 Use the generated Markdown for human review and the JSON document for
 automation. AuthMap redacts obvious high-risk values in generated artifacts, but
 reports can still contain sensitive application structure and should be treated
-as review material. SARIF is available for advisory GitHub code-scanning
-integration:
+as review material. See [docs/DATA_HANDLING.md](docs/DATA_HANDLING.md) for
+local analysis, report sensitivity, CI artifact, SARIF, baseline, and sharing
+guidance. SARIF is available for advisory GitHub code-scanning integration:
 
 ```bash
 authmap scan . --format sarif --output authmap.sarif
@@ -246,8 +249,10 @@ jobs:
 ```
 
 The action writes Markdown output to the job summary and uploads generated
-reports as an artifact by default. SARIF upload is optional and requires
-`security-events: write`:
+reports as an artifact by default. These outputs can contain sensitive route,
+source-location, and review evidence; see
+[docs/DATA_HANDLING.md](docs/DATA_HANDLING.md). SARIF upload is optional and
+requires `security-events: write`:
 
 ```yaml
 permissions:
