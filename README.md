@@ -179,7 +179,10 @@ interpretation, limitations, and defensive-use guidance.
 
 ## Local development
 
-AuthMap is implemented as a Rust Cargo workspace. Useful local commands:
+AuthMap is implemented as a Rust Cargo workspace. Supply-chain maintenance,
+lockfile review, dependency audit, license review, and release sanity
+expectations are documented in [docs/SUPPLY_CHAIN.md](docs/SUPPLY_CHAIN.md).
+Useful local commands:
 
 ```bash
 cargo run -p authmap-cli -- --help

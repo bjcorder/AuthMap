@@ -36,3 +36,9 @@ declared MSRV (`1.95`) and current stable Rust. The matrix runs locked
 workspace checks, the full test suite, and a clean `cargo install` smoke test
 for the `authmap` CLI. Documentation-only checks stay in the separate docs
 workflow.
+
+Dependency and workflow changes should follow the supply-chain policy in
+[docs/SUPPLY_CHAIN.md](docs/SUPPLY_CHAIN.md). Keep dependency updates separate
+from unrelated feature work when practical, include intentional `Cargo.lock`
+changes, and review licenses, advisories, build behavior, and GitHub Actions
+permissions before merge.

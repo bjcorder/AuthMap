@@ -41,6 +41,9 @@ jobs:
         run: cargo check --workspace --locked
       - name: Test workspace
         run: cargo test --workspace --all-targets --locked
+      - name: Check CLI package contents
+        if: matrix.os == 'blacksmith-4vcpu-ubuntu-2404' && matrix.rust == 'stable'
+        run: cargo package --list --manifest-path crates/authmap-cli/Cargo.toml --locked
       - name: Install and smoke test CLI
         shell: pwsh
         run: |
