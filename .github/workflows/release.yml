@@ -145,8 +145,10 @@ jobs:
           set -euo pipefail
           if [ "${RUNNER_OS}" = "Windows" ]; then
             ./target/release/authmap.exe --help
+            ./target/release/authmap.exe --version
           else
             ./target/release/authmap --help
+            ./target/release/authmap --version
           fi
       - name: Upload artifact to draft release
         shell: bash

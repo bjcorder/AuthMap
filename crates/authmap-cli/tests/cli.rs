@@ -268,6 +268,63 @@ fn root_help_works() {
 }
 
 #[test]
+fn root_version_includes_package_and_schema_versions() {
+    let output = authmap(&["--version"]);
+
+    assert_exit(&output, 0);
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "authmap 0.1.0 (schema 0.1.0)\n"
+    );
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn cli_package_metadata_is_publish_ready() {
+    let root = repo_root();
+    let workspace_manifest =
+        fs::read_to_string(root.join("Cargo.toml")).expect("workspace manifest should exist");
+    let cli_manifest = fs::read_to_string(root.join("crates/authmap-cli/Cargo.toml"))
+        .expect("CLI manifest should exist");
+
+    for expected in [
+        "license = \"MIT\"",
+        "repository = \"https://github.com/Ozark-Security-Labs/AuthMap\"",
+        "rust-version = \"1.95\"",
+        "readme = \"README.md\"",
+        "homepage = \"https://github.com/Ozark-Security-Labs/AuthMap\"",
+        "documentation = \"https://github.com/Ozark-Security-Labs/AuthMap/tree/main/docs\"",
+        "keywords = [\"authorization\", \"cli\", \"security\", \"static-analysis\"]",
+        "categories = [\"command-line-utilities\", \"development-tools\"]",
+    ] {
+        assert!(
+            workspace_manifest.contains(expected),
+            "workspace manifest missing {expected}"
+        );
+    }
+
+    for expected in [
+        "name = \"authmap-cli\"",
+        "categories.workspace = true",
+        "documentation.workspace = true",
+        "homepage.workspace = true",
+        "keywords.workspace = true",
+        "license.workspace = true",
+        "readme.workspace = true",
+        "repository.workspace = true",
+        "rust-version.workspace = true",
+        "version.workspace = true",
+        "name = \"authmap\"",
+        "path = \"src/main.rs\"",
+    ] {
+        assert!(
+            cli_manifest.contains(expected),
+            "CLI manifest missing {expected}"
+        );
+    }
+}
+
+#[test]
 fn scan_help_works() {
     let output = authmap(&["scan", "--help"]);
 
@@ -325,8 +382,15 @@ fn ci_workflow_defines_cross_platform_rust_matrix_and_install_smoke() {
     assert!(workflow.contains("cargo fmt --all -- --check"));
     assert!(workflow.contains("cargo check --workspace --locked"));
     assert!(workflow.contains("cargo test --workspace --all-targets --locked"));
+    assert!(
+        workflow.contains(
+            "cargo package --list --manifest-path crates/authmap-cli/Cargo.toml --locked"
+        )
+    );
+    assert!(workflow.contains("cargo metadata --no-deps --format-version 1"));
     assert!(workflow.contains("cargo install --path crates/authmap-cli --locked"));
     assert!(workflow.contains("& $authmap --help"));
+    assert!(workflow.contains("& $authmap --version"));
     assert!(workflow.contains("--format json --output $json"));
     assert!(workflow.contains("--format markdown --output $markdown"));
     assert!(workflow.contains("baseline create tests/fixtures/negative/frontend_only"));

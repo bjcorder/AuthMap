@@ -65,19 +65,23 @@ Before creating a release tag, maintainers should verify:
 4. The release commit has passed the normal Rust, docs, action smoke, security, and dependency determinism workflows.
 5. `cargo test --workspace --all-targets --locked` passes locally or in CI.
 6. `cargo package --list --manifest-path crates/authmap-cli/Cargo.toml --locked` shows only intended package contents.
-7. Release artifacts do not include generated reports, local baselines, credentials, or scanned target source code beyond intended package contents.
+7. A clean `cargo install --path crates/authmap-cli --locked` can run `authmap --help` and `authmap --version`.
+8. Release artifacts do not include generated reports, local baselines, credentials, or scanned target source code beyond intended package contents.
 
 ## Automated release workflow
 
 The release workflow runs on `v*` tags and can also be started manually by maintainers. It checks that the tag matches the workspace version, runs locked tests, builds platform binaries, generates SHA-256 checksums, and creates or updates a GitHub Release from the changelog section for that version.
 
-The workflow publishes GitHub Release artifacts only. It does not publish crates to crates.io or any package registry. Registry publishing requires a separate reviewed policy and explicit maintainer approval.
+The workflow publishes GitHub Release artifacts only. It does not publish crates to crates.io or any package registry. Cargo package artifacts are used to review package contents while AuthMap's internal crates remain unpublished. Registry publishing requires a separate reviewed policy and explicit maintainer approval.
 
 Release artifacts should include:
 
 - platform-specific `authmap` binaries packaged as archives;
 - `SHA256SUMS`; and
 - provenance metadata when GitHub artifact attestation support is available in the runner environment.
+
+`authmap --version` prints one deterministic line containing the CLI package
+version and AuthMap schema version.
 
 ## Supported versions
 

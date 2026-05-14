@@ -13,21 +13,26 @@ members = [
 resolver = "3"
 
 [workspace.package]
+categories = ["command-line-utilities", "development-tools"]
+documentation = "https://github.com/Ozark-Security-Labs/AuthMap/tree/main/docs"
 edition = "2024"
+homepage = "https://github.com/Ozark-Security-Labs/AuthMap"
+keywords = ["authorization", "cli", "security", "static-analysis"]
 license = "MIT"
+readme = "README.md"
 repository = "https://github.com/Ozark-Security-Labs/AuthMap"
 rust-version = "1.95"
 version = "0.1.0"
 
 [workspace.dependencies]
-authmap-adapters = { path = "crates/authmap-adapters" }
-authmap-analysis = { path = "crates/authmap-analysis" }
-authmap-config = { path = "crates/authmap-config" }
-authmap-core = { path = "crates/authmap-core" }
-authmap-discovery = { path = "crates/authmap-discovery" }
-authmap-parsers = { path = "crates/authmap-parsers" }
-authmap-report = { path = "crates/authmap-report" }
-authmap-testkit = { path = "crates/authmap-testkit" }
+authmap-adapters = { version = "0.1.0", path = "crates/authmap-adapters" }
+authmap-analysis = { version = "0.1.0", path = "crates/authmap-analysis" }
+authmap-config = { version = "0.1.0", path = "crates/authmap-config" }
+authmap-core = { version = "0.1.0", path = "crates/authmap-core" }
+authmap-discovery = { version = "0.1.0", path = "crates/authmap-discovery" }
+authmap-parsers = { version = "0.1.0", path = "crates/authmap-parsers" }
+authmap-report = { version = "0.1.0", path = "crates/authmap-report" }
+authmap-testkit = { version = "0.1.0", path = "crates/authmap-testkit" }
 clap = { version = "4.5", features = ["derive"] }
 ignore = "0.4"
 miette = { version = "7.6", features = ["fancy"] }

@@ -17,7 +17,8 @@ use thiserror::Error;
 #[derive(Debug, Parser)]
 #[command(
     author,
-    version,
+    name = "authmap",
+    version = CLI_VERSION,
     about = "Authorization coverage mapping for application code."
 )]
 struct Cli {
@@ -166,6 +167,8 @@ enum DiffOutputFormat {
     Markdown,
     Json,
 }
+
+const CLI_VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), " (schema 0.1.0)");
 
 fn main() -> ExitCode {
     match run() {

@@ -130,10 +130,16 @@ AuthMap should classify coverage in reviewable terms:
 
 ```bash
 cargo install --path crates/authmap-cli
+authmap --version
 authmap init --output authmap.yml
 authmap scan . --config authmap.yml --format markdown --output authmap.md
 authmap scan . --config authmap.yml --format json --output authmap.json
 ```
+
+Release archives contain the `authmap` binary for each supported platform. Cargo
+package artifacts are produced for reviewable package contents; registry
+publishing is not enabled yet, so local development installs use the workspace
+path until a registry policy is approved.
 
 Run from source during development with `cargo run -p authmap-cli --`:
 
@@ -188,10 +194,12 @@ Useful local commands:
 
 ```bash
 cargo run -p authmap-cli -- --help
+cargo run -p authmap-cli -- --version
 cargo run -p authmap-cli -- scan . --format json --output authmap.json
 cargo run -p authmap-cli -- scan . --format sarif --output authmap.sarif.json
 cargo test --workspace
-cargo install --path crates/authmap-cli
+cargo package --list --manifest-path crates/authmap-cli/Cargo.toml --locked
+cargo install --path crates/authmap-cli --locked
 ```
 
 SARIF output is intended for GitHub code scanning. It emits advisory

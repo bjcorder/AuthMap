@@ -43,7 +43,9 @@ jobs:
         run: cargo test --workspace --all-targets --locked
       - name: Check CLI package contents
         if: matrix.os == 'blacksmith-4vcpu-ubuntu-2404' && matrix.rust == 'stable'
-        run: cargo package --list --manifest-path crates/authmap-cli/Cargo.toml --locked
+        run: |
+          cargo package --list --manifest-path crates/authmap-cli/Cargo.toml --locked
+          cargo metadata --no-deps --format-version 1
       - name: Install and smoke test CLI
         shell: pwsh
         run: |
@@ -59,6 +61,7 @@ jobs:
           }
 
           & $authmap --help
+          & $authmap --version
 
           $smokeRoot = Join-Path $env:RUNNER_TEMP "authmap-smoke"
           New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null

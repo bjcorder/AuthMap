@@ -11,16 +11,30 @@ report-sensitivity, CI artifact, SARIF, baseline, and sharing guidance.
 
 ## Installation And Setup
 
-From the repository root, install the CLI locally:
+From a tagged GitHub Release, download the archive for your platform, unpack it,
+and place the `authmap` binary on your `PATH`. Verify the install with:
 
 ```sh
-cargo install --path crates/authmap-cli
+authmap --help
+authmap --version
 ```
+
+From the repository root, install the CLI locally for development:
+
+```sh
+cargo install --path crates/authmap-cli --locked
+```
+
+Cargo package artifacts are generated so maintainers can review package
+contents before release. Registry publishing is not enabled yet, so install from
+the workspace path during development and from GitHub Release archives for tagged
+releases.
 
 During development, run the CLI without installing it:
 
 ```sh
 cargo run -p authmap-cli -- --help
+cargo run -p authmap-cli -- --version
 ```
 
 Create a starter configuration file:
