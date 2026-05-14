@@ -192,6 +192,7 @@ dependencies = [
  "authmap-config",
  "authmap-core",
  "jsonschema",
+ "regex",
  "serde",
  "serde_json",
  "thiserror",

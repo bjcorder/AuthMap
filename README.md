@@ -143,7 +143,10 @@ cargo run -p authmap-cli -- scan tests/fixtures/realistic/express \
 ```
 
 Use the generated Markdown for human review and the JSON document for
-automation. SARIF is available for advisory GitHub code-scanning integration:
+automation. AuthMap redacts obvious high-risk values in generated artifacts, but
+reports can still contain sensitive application structure and should be treated
+as review material. SARIF is available for advisory GitHub code-scanning
+integration:
 
 ```bash
 authmap scan . --format sarif --output authmap.sarif

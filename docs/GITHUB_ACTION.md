@@ -34,7 +34,11 @@ jobs:
 
 By default, generated reports are written to `.authmap` and uploaded as the
 `authmap-results` artifact. The artifact upload is limited to the report files
-generated during this action run, not the entire output directory.
+generated during this action run, not the entire output directory. AuthMap
+redacts obvious secrets before writing reports and job summaries, but artifacts
+can still reveal sensitive application structure, routes, file paths, line
+numbers, and review rationale. Treat uploaded reports as sensitive review
+material unless your organization has approved broader sharing.
 
 ## Baseline Drift Review
 

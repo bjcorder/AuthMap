@@ -153,6 +153,15 @@ SARIF is for GitHub code scanning and similar integrations. AuthMap SARIF emits
 advisory authorization coverage alerts and diagnostics. SARIF results should be
 treated as review priorities, not confirmed vulnerabilities.
 
+AuthMap redacts obvious high-risk values before writing JSON, Markdown, SARIF,
+drift reports, rule suggestions, and explain output. Redaction covers common
+authorization headers, credentials in URLs, token-like query parameters,
+secret-looking assignments, and common token shapes. Redaction is best-effort:
+it reduces accidental exposure risk, but reports can still contain sensitive
+application structure, route names, file paths, line numbers, symbol names,
+classification rationale, and non-obvious secrets. Treat generated artifacts as
+sensitive review material unless your organization has reviewed them.
+
 ## Interpreting Coverage
 
 Coverage classes describe the strongest reviewable authorization evidence AuthMap
