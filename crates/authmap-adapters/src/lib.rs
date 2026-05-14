@@ -2363,6 +2363,7 @@ mod tests {
     fn discovers_django_urlpatterns_drf_routers_and_uncertainty() {
         let parsed = parse_fixtures(&[
             "django/project/urls.py",
+            "django/accounts/api_urls.py",
             "django/accounts/urls.py",
             "django/accounts/views.py",
             "django/accounts/services.py",
@@ -2370,7 +2371,7 @@ mod tests {
         ]);
         let output = DjangoAdapter.discover_routes(&parsed, &AdapterContext::default());
 
-        assert_eq!(output.routes.len(), 20);
+        assert_eq!(output.routes.len(), 34);
         assert!(output.routes.iter().all(|route| route.span.is_some()));
         assert!(output.routes.iter().all(|route| {
             route
@@ -2462,6 +2463,58 @@ mod tests {
             matches!(route.method.as_str(), "PUT" | "PATCH" | "DELETE")
                 && route.path.starts_with("/accounts/api/custom-model")
         }));
+        assert!(output.routes.iter().any(|route| {
+            route.method == "DELETE" && route.path == "/accounts/api/inherited/{pk}"
+        }));
+        assert!(output.routes.iter().any(|route| {
+            route.method == "GET" && route.path == "/accounts/api/inherited-readonly/{pk}"
+        }));
+        assert!(!output.routes.iter().any(|route| {
+            matches!(route.method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE")
+                && route.path.starts_with("/accounts/api/inherited-readonly")
+        }));
+        assert!(
+            output.routes.iter().any(|route| {
+                route.method == "POST" && route.path == "/accounts/api/mixin-backed"
+            })
+        );
+        assert!(!output.routes.iter().any(|route| {
+            matches!(route.method.as_str(), "PUT" | "PATCH" | "DELETE")
+                && route.path.starts_with("/accounts/api/mixin-backed")
+        }));
+        assert!(
+            output.routes.iter().any(|route| {
+                route.method == "GET" && route.path == "/exported-api/exported/{pk}"
+            })
+        );
+        let generated_list = route(&output, "ANY", "/accounts/generated");
+        assert_eq!(
+            generated_list
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("GeneratedAccountListView")
+        );
+        assert!(
+            generated_list
+                .source_evidence
+                .iter()
+                .any(|evidence| { evidence.mechanism == "django_generated_include" })
+        );
+        let generated_detail = route(&output, "ANY", "/accounts/generated/<int:pk>/edit");
+        assert_eq!(
+            generated_detail
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("GeneratedAccountEditView")
+        );
+        assert!(
+            generated_detail
+                .source_evidence
+                .iter()
+                .any(|evidence| { evidence.mechanism == "django_model_view_registration" })
+        );
         assert_eq!(
             route(&output, "ANY", "/legacy/{slug}/").path,
             "/legacy/{slug}/"
@@ -2480,13 +2533,12 @@ mod tests {
         );
 
         for code in [
-            "django_dynamic_include",
+            "django_dynamic_include_helper",
             "django_dynamic_url_path",
             "drf_dynamic_router_prefix",
             "drf_dynamic_basename",
             "django_custom_router",
             "django_urlpattern_context_uncertain",
-            "drf_unresolved_viewset_base",
         ] {
             assert!(
                 output
@@ -2496,6 +2548,12 @@ mod tests {
                 "missing diagnostic {code}"
             );
         }
+        assert!(
+            !output
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "drf_unresolved_viewset_base")
+        );
     }
 
     #[test]

@@ -192,6 +192,7 @@ pub mod diagnostic_codes {
     pub const ADAPTER_PARTIAL_RESULT: &str = "adapter.partial_result";
     pub const DJANGO_CUSTOM_ROUTER: &str = "django_custom_router";
     pub const DJANGO_DYNAMIC_INCLUDE: &str = "django_dynamic_include";
+    pub const DJANGO_DYNAMIC_INCLUDE_HELPER: &str = "django_dynamic_include_helper";
     pub const DJANGO_INCLUDE_DEPTH_EXCEEDED: &str = "django_include_depth_exceeded";
     pub const DJANGO_DYNAMIC_URL_PATH: &str = "django_dynamic_url_path";
     pub const DJANGO_UNRESOLVED_HANDLER: &str = "django_unresolved_handler";
@@ -288,6 +289,10 @@ pub const FIRST_PARTY_DIAGNOSTIC_CODES: &[(&str, DiagnosticCategory)] = &[
     ),
     (
         diagnostic_codes::DJANGO_DYNAMIC_INCLUDE,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::DJANGO_DYNAMIC_INCLUDE_HELPER,
         DiagnosticCategory::Adapter,
     ),
     (

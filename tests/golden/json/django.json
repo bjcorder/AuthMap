@@ -11,6 +11,18 @@
   },
   "source_files": [
     {
+      "path": "tests/fixtures/django/accounts/api_urls.py",
+      "language": "python",
+      "size_bytes": 200,
+      "sha256": null,
+      "project_hints": [
+        "django",
+        "django_rest_framework",
+        "django_orm"
+      ],
+      "skipped": null
+    },
+    {
       "path": "tests/fixtures/django/accounts/models.py",
       "language": "python",
       "size_bytes": 24,
@@ -37,7 +49,7 @@
     {
       "path": "tests/fixtures/django/accounts/urls.py",
       "language": "python",
-      "size_bytes": 1076,
+      "size_bytes": 1522,
       "sha256": null,
       "project_hints": [
         "django",
@@ -49,7 +61,7 @@
     {
       "path": "tests/fixtures/django/accounts/views.py",
       "language": "python",
-      "size_bytes": 2056,
+      "size_bytes": 3258,
       "sha256": null,
       "project_hints": [
         "django",
@@ -61,7 +73,43 @@
     {
       "path": "tests/fixtures/django/project/urls.py",
       "language": "python",
-      "size_bytes": 365,
+      "size_bytes": 422,
+      "sha256": null,
+      "project_hints": [
+        "django",
+        "django_rest_framework",
+        "django_orm"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/django/shared/__init__.py",
+      "language": "python",
+      "size_bytes": 1,
+      "sha256": null,
+      "project_hints": [
+        "django",
+        "django_rest_framework",
+        "django_orm"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/django/shared/generic/__init__.py",
+      "language": "python",
+      "size_bytes": 28,
+      "sha256": null,
+      "project_hints": [
+        "django",
+        "django_rest_framework",
+        "django_orm"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/django/shared/generic/object_views.py",
+      "language": "python",
+      "size_bytes": 56,
       "sha256": null,
       "project_hints": [
         "django",
@@ -75,6 +123,208 @@
     {
       "id": "route_0001",
       "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/exported-api/exported",
+      "name": "exported-list",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "ProjectReadOnlyViewSet.list",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 120,
+          "column": 7,
+          "byte_range": {
+            "start": 2834,
+            "end": 2856
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/api_urls.py",
+        "line": 6,
+        "column": 1,
+        "byte_range": {
+          "start": 94,
+          "end": 172
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 10,
+            "column": 5,
+            "byte_range": {
+              "start": 321,
+              "end": 372
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/api_urls.py",
+            "line": 8,
+            "column": 1,
+            "byte_range": {
+              "start": 174,
+              "end": 199
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "ProjectReadOnlyViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 120,
+              "column": 7,
+              "byte_range": {
+                "start": 2834,
+                "end": 2856
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/api_urls.py",
+            "line": 6,
+            "column": 1,
+            "byte_range": {
+              "start": 94,
+              "end": 172
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "exported",
+          "class_name": "ProjectReadOnlyViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "list",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0002",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/exported-api/exported/{pk}",
+      "name": "exported-retrieve",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "ProjectReadOnlyViewSet.retrieve",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 120,
+          "column": 7,
+          "byte_range": {
+            "start": 2834,
+            "end": 2856
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/api_urls.py",
+        "line": 6,
+        "column": 1,
+        "byte_range": {
+          "start": 94,
+          "end": 172
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 10,
+            "column": 5,
+            "byte_range": {
+              "start": 321,
+              "end": 372
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/api_urls.py",
+            "line": 8,
+            "column": 1,
+            "byte_range": {
+              "start": 174,
+              "end": 199
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "ProjectReadOnlyViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 120,
+              "column": 7,
+              "byte_range": {
+                "start": 2834,
+                "end": 2856
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/api_urls.py",
+            "line": 6,
+            "column": 1,
+            "byte_range": {
+              "start": 94,
+              "end": 172
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "exported",
+          "class_name": "ProjectReadOnlyViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "retrieve",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0003",
+      "framework": "django_rest_framework",
       "method": "DELETE",
       "path": "/accounts/api/users/{uuid}",
       "name": "user-destroy",
@@ -84,11 +334,11 @@
         "name": "UserViewSet.destroy",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 45,
+          "line": 64,
           "column": 7,
           "byte_range": {
-            "start": 877,
-            "end": 888
+            "start": 1339,
+            "end": 1350
           }
         }
       },
@@ -122,11 +372,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 19,
+            "line": 22,
             "column": 5,
             "byte_range": {
-              "start": 760,
-              "end": 794
+              "start": 1040,
+              "end": 1074
             }
           },
           "confidence": "high",
@@ -138,11 +388,11 @@
             "name": "UserViewSet",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 45,
+              "line": 64,
               "column": 7,
               "byte_range": {
-                "start": 877,
-                "end": 888
+                "start": 1339,
+                "end": 1350
               }
             }
           },
@@ -174,7 +424,7 @@
       }
     },
     {
-      "id": "route_0002",
+      "id": "route_0004",
       "framework": "django_rest_framework",
       "method": "GET",
       "path": "/accounts/api/users",
@@ -185,11 +435,11 @@
         "name": "UserViewSet.list",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 48,
+          "line": 67,
           "column": 9,
           "byte_range": {
-            "start": 939,
-            "end": 943
+            "start": 1401,
+            "end": 1405
           }
         }
       },
@@ -223,11 +473,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 19,
+            "line": 22,
             "column": 5,
             "byte_range": {
-              "start": 760,
-              "end": 794
+              "start": 1040,
+              "end": 1074
             }
           },
           "confidence": "high",
@@ -239,11 +489,11 @@
             "name": "UserViewSet",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 45,
+              "line": 64,
               "column": 7,
               "byte_range": {
-                "start": 877,
-                "end": 888
+                "start": 1339,
+                "end": 1350
               }
             }
           },
@@ -275,7 +525,7 @@
       }
     },
     {
-      "id": "route_0003",
+      "id": "route_0005",
       "framework": "django_rest_framework",
       "method": "GET",
       "path": "/accounts/api/users/{uuid}",
@@ -286,11 +536,11 @@
         "name": "UserViewSet.retrieve",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 45,
+          "line": 64,
           "column": 7,
           "byte_range": {
-            "start": 877,
-            "end": 888
+            "start": 1339,
+            "end": 1350
           }
         }
       },
@@ -324,11 +574,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 19,
+            "line": 22,
             "column": 5,
             "byte_range": {
-              "start": 760,
-              "end": 794
+              "start": 1040,
+              "end": 1074
             }
           },
           "confidence": "high",
@@ -340,11 +590,11 @@
             "name": "UserViewSet",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 45,
+              "line": 64,
               "column": 7,
               "byte_range": {
-                "start": 877,
-                "end": 888
+                "start": 1339,
+                "end": 1350
               }
             }
           },
@@ -376,7 +626,7 @@
       }
     },
     {
-      "id": "route_0004",
+      "id": "route_0006",
       "framework": "django_rest_framework",
       "method": "PATCH",
       "path": "/accounts/api/users/{uuid}",
@@ -387,11 +637,11 @@
         "name": "UserViewSet.partial_update",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 45,
+          "line": 64,
           "column": 7,
           "byte_range": {
-            "start": 877,
-            "end": 888
+            "start": 1339,
+            "end": 1350
           }
         }
       },
@@ -425,11 +675,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 19,
+            "line": 22,
             "column": 5,
             "byte_range": {
-              "start": 760,
-              "end": 794
+              "start": 1040,
+              "end": 1074
             }
           },
           "confidence": "high",
@@ -441,11 +691,11 @@
             "name": "UserViewSet",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 45,
+              "line": 64,
               "column": 7,
               "byte_range": {
-                "start": 877,
-                "end": 888
+                "start": 1339,
+                "end": 1350
               }
             }
           },
@@ -477,7 +727,7 @@
       }
     },
     {
-      "id": "route_0005",
+      "id": "route_0007",
       "framework": "django_rest_framework",
       "method": "POST",
       "path": "/accounts/api/users",
@@ -488,11 +738,11 @@
         "name": "UserViewSet.create",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 52,
+          "line": 71,
           "column": 9,
           "byte_range": {
-            "start": 1028,
-            "end": 1034
+            "start": 1490,
+            "end": 1496
           }
         }
       },
@@ -526,11 +776,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 19,
+            "line": 22,
             "column": 5,
             "byte_range": {
-              "start": 760,
-              "end": 794
+              "start": 1040,
+              "end": 1074
             }
           },
           "confidence": "high",
@@ -542,11 +792,11 @@
             "name": "UserViewSet",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 45,
+              "line": 64,
               "column": 7,
               "byte_range": {
-                "start": 877,
-                "end": 888
+                "start": 1339,
+                "end": 1350
               }
             }
           },
@@ -578,7 +828,7 @@
       }
     },
     {
-      "id": "route_0006",
+      "id": "route_0008",
       "framework": "django_rest_framework",
       "method": "POST",
       "path": "/accounts/api/users/{uuid}/disable",
@@ -589,11 +839,11 @@
         "name": "UserViewSet.disable",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 56,
+          "line": 75,
           "column": 9,
           "byte_range": {
-            "start": 1190,
-            "end": 1197
+            "start": 1652,
+            "end": 1659
           }
         }
       },
@@ -627,11 +877,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 19,
+            "line": 22,
             "column": 5,
             "byte_range": {
-              "start": 760,
-              "end": 794
+              "start": 1040,
+              "end": 1074
             }
           },
           "confidence": "high",
@@ -643,11 +893,11 @@
             "name": "UserViewSet",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 45,
+              "line": 64,
               "column": 7,
               "byte_range": {
-                "start": 877,
-                "end": 888
+                "start": 1339,
+                "end": 1350
               }
             }
           },
@@ -669,21 +919,21 @@
             "name": "disable",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 56,
+              "line": 75,
               "column": 9,
               "byte_range": {
-                "start": 1190,
-                "end": 1197
+                "start": 1652,
+                "end": 1659
               }
             }
           },
           "span": {
             "file": "tests/fixtures/django/accounts/views.py",
-            "line": 56,
+            "line": 75,
             "column": 9,
             "byte_range": {
-              "start": 1190,
-              "end": 1197
+              "start": 1652,
+              "end": 1659
             }
           },
           "confidence": "high",
@@ -705,7 +955,7 @@
       }
     },
     {
-      "id": "route_0007",
+      "id": "route_0009",
       "framework": "django_rest_framework",
       "method": "PUT",
       "path": "/accounts/api/users/{uuid}",
@@ -716,11 +966,11 @@
         "name": "UserViewSet.update",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 45,
+          "line": 64,
           "column": 7,
           "byte_range": {
-            "start": 877,
-            "end": 888
+            "start": 1339,
+            "end": 1350
           }
         }
       },
@@ -754,11 +1004,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 19,
+            "line": 22,
             "column": 5,
             "byte_range": {
-              "start": 760,
-              "end": 794
+              "start": 1040,
+              "end": 1074
             }
           },
           "confidence": "high",
@@ -770,11 +1020,11 @@
             "name": "UserViewSet",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 45,
+              "line": 64,
               "column": 7,
               "byte_range": {
-                "start": 877,
-                "end": 888
+                "start": 1339,
+                "end": 1350
               }
             }
           },
@@ -806,7 +1056,7 @@
       }
     },
     {
-      "id": "route_0008",
+      "id": "route_0010",
       "framework": "django_rest_framework",
       "method": "GET",
       "path": "/accounts/api/readonly",
@@ -817,11 +1067,11 @@
         "name": "ReadOnlyAccountViewSet.list",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 60,
+          "line": 79,
           "column": 7,
           "byte_range": {
-            "start": 1304,
-            "end": 1326
+            "start": 1766,
+            "end": 1788
           }
         }
       },
@@ -855,11 +1105,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 19,
+            "line": 22,
             "column": 5,
             "byte_range": {
-              "start": 760,
-              "end": 794
+              "start": 1040,
+              "end": 1074
             }
           },
           "confidence": "high",
@@ -871,11 +1121,11 @@
             "name": "ReadOnlyAccountViewSet",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 60,
+              "line": 79,
               "column": 7,
               "byte_range": {
-                "start": 1304,
-                "end": 1326
+                "start": 1766,
+                "end": 1788
               }
             }
           },
@@ -907,7 +1157,7 @@
       }
     },
     {
-      "id": "route_0009",
+      "id": "route_0011",
       "framework": "django_rest_framework",
       "method": "GET",
       "path": "/accounts/api/readonly/{pk}",
@@ -918,11 +1168,11 @@
         "name": "ReadOnlyAccountViewSet.retrieve",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 60,
+          "line": 79,
           "column": 7,
           "byte_range": {
-            "start": 1304,
-            "end": 1326
+            "start": 1766,
+            "end": 1788
           }
         }
       },
@@ -956,11 +1206,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 19,
+            "line": 22,
             "column": 5,
             "byte_range": {
-              "start": 760,
-              "end": 794
+              "start": 1040,
+              "end": 1074
             }
           },
           "confidence": "high",
@@ -972,11 +1222,11 @@
             "name": "ReadOnlyAccountViewSet",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 60,
+              "line": 79,
               "column": 7,
               "byte_range": {
-                "start": 1304,
-                "end": 1326
+                "start": 1766,
+                "end": 1788
               }
             }
           },
@@ -1008,7 +1258,7 @@
       }
     },
     {
-      "id": "route_0010",
+      "id": "route_0012",
       "framework": "django_rest_framework",
       "method": "GET",
       "path": "/accounts/api/custom-model",
@@ -1019,11 +1269,11 @@
         "name": "CustomModelBackedViewSet.list",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 79,
+          "line": 98,
           "column": 9,
           "byte_range": {
-            "start": 1813,
-            "end": 1817
+            "start": 2275,
+            "end": 2279
           }
         }
       },
@@ -1057,11 +1307,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 19,
+            "line": 22,
             "column": 5,
             "byte_range": {
-              "start": 760,
-              "end": 794
+              "start": 1040,
+              "end": 1074
             }
           },
           "confidence": "high",
@@ -1073,11 +1323,11 @@
             "name": "CustomModelBackedViewSet",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 78,
+              "line": 97,
               "column": 7,
               "byte_range": {
-                "start": 1763,
-                "end": 1787
+                "start": 2225,
+                "end": 2249
               }
             }
           },
@@ -1109,7 +1359,7 @@
       }
     },
     {
-      "id": "route_0011",
+      "id": "route_0013",
       "framework": "django_rest_framework",
       "method": "POST",
       "path": "/accounts/api/custom-model/recalculate",
@@ -1120,11 +1370,11 @@
         "name": "CustomModelBackedViewSet.recalculate",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 83,
+          "line": 102,
           "column": 9,
           "byte_range": {
-            "start": 1930,
-            "end": 1941
+            "start": 2392,
+            "end": 2403
           }
         }
       },
@@ -1158,11 +1408,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 19,
+            "line": 22,
             "column": 5,
             "byte_range": {
-              "start": 760,
-              "end": 794
+              "start": 1040,
+              "end": 1074
             }
           },
           "confidence": "high",
@@ -1174,11 +1424,11 @@
             "name": "CustomModelBackedViewSet",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 78,
+              "line": 97,
               "column": 7,
               "byte_range": {
-                "start": 1763,
-                "end": 1787
+                "start": 2225,
+                "end": 2249
               }
             }
           },
@@ -1202,21 +1452,21 @@
             "name": "recalculate",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 83,
+              "line": 102,
               "column": 9,
               "byte_range": {
-                "start": 1930,
-                "end": 1941
+                "start": 2392,
+                "end": 2403
               }
             }
           },
           "span": {
             "file": "tests/fixtures/django/accounts/views.py",
-            "line": 83,
+            "line": 102,
             "column": 9,
             "byte_range": {
-              "start": 1930,
-              "end": 1941
+              "start": 2392,
+              "end": 2403
             }
           },
           "confidence": "medium",
@@ -1242,22 +1492,22 @@
       }
     },
     {
-      "id": "route_0012",
+      "id": "route_0014",
       "framework": "django_rest_framework",
-      "method": "GET",
-      "path": "<dynamic>",
-      "name": null,
+      "method": "DELETE",
+      "path": "/accounts/api/inherited/{pk}",
+      "name": "inherited-destroy",
       "tags": [],
       "middleware": [],
       "handler": {
-        "name": "DynamicViewSet.list",
+        "name": "InheritedProjectViewSet.destroy",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 88,
-          "column": 9,
+          "line": 132,
+          "column": 7,
           "byte_range": {
-            "start": 2017,
-            "end": 2021
+            "start": 3064,
+            "end": 3087
           }
         }
       },
@@ -1267,7 +1517,7 @@
         "column": 1,
         "byte_range": {
           "start": 377,
-          "end": 457
+          "end": 458
         }
       },
       "source_evidence": [
@@ -1291,11 +1541,1021 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 19,
+            "line": 22,
             "column": 5,
             "byte_range": {
-              "start": 760,
-              "end": 794
+              "start": 1040,
+              "end": 1074
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "InheritedProjectViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 132,
+              "column": 7,
+              "byte_range": {
+                "start": 3064,
+                "end": 3087
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 10,
+            "column": 1,
+            "byte_range": {
+              "start": 377,
+              "end": 458
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "inherited",
+          "class_name": "InheritedProjectViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "destroy",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0015",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/accounts/api/inherited",
+      "name": "inherited-list",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "InheritedProjectViewSet.list",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 132,
+          "column": 7,
+          "byte_range": {
+            "start": 3064,
+            "end": 3087
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 10,
+        "column": 1,
+        "byte_range": {
+          "start": 377,
+          "end": 458
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 22,
+            "column": 5,
+            "byte_range": {
+              "start": 1040,
+              "end": 1074
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "InheritedProjectViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 132,
+              "column": 7,
+              "byte_range": {
+                "start": 3064,
+                "end": 3087
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 10,
+            "column": 1,
+            "byte_range": {
+              "start": 377,
+              "end": 458
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "inherited",
+          "class_name": "InheritedProjectViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "list",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0016",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/accounts/api/inherited/{pk}",
+      "name": "inherited-retrieve",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "InheritedProjectViewSet.retrieve",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 132,
+          "column": 7,
+          "byte_range": {
+            "start": 3064,
+            "end": 3087
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 10,
+        "column": 1,
+        "byte_range": {
+          "start": 377,
+          "end": 458
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 22,
+            "column": 5,
+            "byte_range": {
+              "start": 1040,
+              "end": 1074
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "InheritedProjectViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 132,
+              "column": 7,
+              "byte_range": {
+                "start": 3064,
+                "end": 3087
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 10,
+            "column": 1,
+            "byte_range": {
+              "start": 377,
+              "end": 458
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "inherited",
+          "class_name": "InheritedProjectViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "retrieve",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0017",
+      "framework": "django_rest_framework",
+      "method": "PATCH",
+      "path": "/accounts/api/inherited/{pk}",
+      "name": "inherited-partial-update",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "InheritedProjectViewSet.partial_update",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 132,
+          "column": 7,
+          "byte_range": {
+            "start": 3064,
+            "end": 3087
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 10,
+        "column": 1,
+        "byte_range": {
+          "start": 377,
+          "end": 458
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 22,
+            "column": 5,
+            "byte_range": {
+              "start": 1040,
+              "end": 1074
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "InheritedProjectViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 132,
+              "column": 7,
+              "byte_range": {
+                "start": 3064,
+                "end": 3087
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 10,
+            "column": 1,
+            "byte_range": {
+              "start": 377,
+              "end": 458
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "inherited",
+          "class_name": "InheritedProjectViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "partial_update",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0018",
+      "framework": "django_rest_framework",
+      "method": "POST",
+      "path": "/accounts/api/inherited",
+      "name": "inherited-create",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "InheritedProjectViewSet.create",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 132,
+          "column": 7,
+          "byte_range": {
+            "start": 3064,
+            "end": 3087
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 10,
+        "column": 1,
+        "byte_range": {
+          "start": 377,
+          "end": 458
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 22,
+            "column": 5,
+            "byte_range": {
+              "start": 1040,
+              "end": 1074
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "InheritedProjectViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 132,
+              "column": 7,
+              "byte_range": {
+                "start": 3064,
+                "end": 3087
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 10,
+            "column": 1,
+            "byte_range": {
+              "start": 377,
+              "end": 458
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "inherited",
+          "class_name": "InheritedProjectViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "create",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0019",
+      "framework": "django_rest_framework",
+      "method": "PUT",
+      "path": "/accounts/api/inherited/{pk}",
+      "name": "inherited-update",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "InheritedProjectViewSet.update",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 132,
+          "column": 7,
+          "byte_range": {
+            "start": 3064,
+            "end": 3087
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 10,
+        "column": 1,
+        "byte_range": {
+          "start": 377,
+          "end": 458
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 22,
+            "column": 5,
+            "byte_range": {
+              "start": 1040,
+              "end": 1074
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "InheritedProjectViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 132,
+              "column": 7,
+              "byte_range": {
+                "start": 3064,
+                "end": 3087
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 10,
+            "column": 1,
+            "byte_range": {
+              "start": 377,
+              "end": 458
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "inherited",
+          "class_name": "InheritedProjectViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "update",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0020",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/accounts/api/inherited-readonly",
+      "name": "inherited-readonly-list",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "InheritedReadOnlyProjectViewSet.list",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 136,
+          "column": 7,
+          "byte_range": {
+            "start": 3127,
+            "end": 3158
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 11,
+        "column": 1,
+        "byte_range": {
+          "start": 459,
+          "end": 566
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 22,
+            "column": 5,
+            "byte_range": {
+              "start": 1040,
+              "end": 1074
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "InheritedReadOnlyProjectViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 136,
+              "column": 7,
+              "byte_range": {
+                "start": 3127,
+                "end": 3158
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 11,
+            "column": 1,
+            "byte_range": {
+              "start": 459,
+              "end": 566
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "inherited-readonly",
+          "class_name": "InheritedReadOnlyProjectViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "list",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0021",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/accounts/api/inherited-readonly/{pk}",
+      "name": "inherited-readonly-retrieve",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "InheritedReadOnlyProjectViewSet.retrieve",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 136,
+          "column": 7,
+          "byte_range": {
+            "start": 3127,
+            "end": 3158
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 11,
+        "column": 1,
+        "byte_range": {
+          "start": 459,
+          "end": 566
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 22,
+            "column": 5,
+            "byte_range": {
+              "start": 1040,
+              "end": 1074
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "InheritedReadOnlyProjectViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 136,
+              "column": 7,
+              "byte_range": {
+                "start": 3127,
+                "end": 3158
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 11,
+            "column": 1,
+            "byte_range": {
+              "start": 459,
+              "end": 566
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "inherited-readonly",
+          "class_name": "InheritedReadOnlyProjectViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "retrieve",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0022",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "/accounts/api/mixin-backed",
+      "name": "mixin-backed-list",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "MixinBackedProjectViewSet.list",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 140,
+          "column": 7,
+          "byte_range": {
+            "start": 3201,
+            "end": 3226
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 12,
+        "column": 1,
+        "byte_range": {
+          "start": 567,
+          "end": 656
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 22,
+            "column": 5,
+            "byte_range": {
+              "start": 1040,
+              "end": 1074
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "MixinBackedProjectViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 140,
+              "column": 7,
+              "byte_range": {
+                "start": 3201,
+                "end": 3226
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 12,
+            "column": 1,
+            "byte_range": {
+              "start": 567,
+              "end": 656
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "mixin-backed",
+          "class_name": "MixinBackedProjectViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "list",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0023",
+      "framework": "django_rest_framework",
+      "method": "POST",
+      "path": "/accounts/api/mixin-backed",
+      "name": "mixin-backed-create",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "MixinBackedProjectViewSet.create",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 140,
+          "column": 7,
+          "byte_range": {
+            "start": 3201,
+            "end": 3226
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 12,
+        "column": 1,
+        "byte_range": {
+          "start": 567,
+          "end": 656
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 22,
+            "column": 5,
+            "byte_range": {
+              "start": 1040,
+              "end": 1074
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "drf_router_register",
+          "symbol": {
+            "name": "MixinBackedProjectViewSet",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 140,
+              "column": 7,
+              "byte_range": {
+                "start": 3201,
+                "end": 3226
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 12,
+            "column": 1,
+            "byte_range": {
+              "start": 567,
+              "end": 656
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "basename": "mixin-backed",
+          "class_name": "MixinBackedProjectViewSet",
+          "handler_kind": "viewset_standard",
+          "lookup_field": "pk",
+          "method_name": "create",
+          "route_pattern_kind": "drf_router",
+          "router_name": "router"
+        }
+      }
+    },
+    {
+      "id": "route_0024",
+      "framework": "django_rest_framework",
+      "method": "GET",
+      "path": "<dynamic>",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "DynamicViewSet.list",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 107,
+          "column": 9,
+          "byte_range": {
+            "start": 2479,
+            "end": 2483
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/urls.py",
+        "line": 13,
+        "column": 1,
+        "byte_range": {
+          "start": 657,
+          "end": 737
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 22,
+            "column": 5,
+            "byte_range": {
+              "start": 1040,
+              "end": 1074
             }
           },
           "confidence": "high",
@@ -1307,21 +2567,21 @@
             "name": "DynamicViewSet",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 87,
+              "line": 106,
               "column": 7,
               "byte_range": {
-                "start": 1984,
-                "end": 1998
+                "start": 2446,
+                "end": 2460
               }
             }
           },
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 10,
+            "line": 13,
             "column": 1,
             "byte_range": {
-              "start": 377,
-              "end": 457
+              "start": 657,
+              "end": 737
             }
           },
           "confidence": "medium",
@@ -1349,7 +2609,7 @@
       }
     },
     {
-      "id": "route_0013",
+      "id": "route_0025",
       "framework": "django_rest_framework",
       "method": "GET",
       "path": "/accounts/readonly-api/audit",
@@ -1360,21 +2620,21 @@
         "name": "ReadOnlyAuditViewSet.list",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 68,
+          "line": 87,
           "column": 7,
           "byte_range": {
-            "start": 1500,
-            "end": 1520
+            "start": 1962,
+            "end": 1982
           }
         }
       },
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 14,
+        "line": 17,
         "column": 1,
         "byte_range": {
-          "start": 523,
-          "end": 602
+          "start": 803,
+          "end": 882
         }
       },
       "source_evidence": [
@@ -1398,11 +2658,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 20,
+            "line": 23,
             "column": 5,
             "byte_range": {
-              "start": 800,
-              "end": 852
+              "start": 1080,
+              "end": 1132
             }
           },
           "confidence": "high",
@@ -1414,21 +2674,21 @@
             "name": "ReadOnlyAuditViewSet",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 68,
+              "line": 87,
               "column": 7,
               "byte_range": {
-                "start": 1500,
-                "end": 1520
+                "start": 1962,
+                "end": 1982
               }
             }
           },
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 14,
+            "line": 17,
             "column": 1,
             "byte_range": {
-              "start": 523,
-              "end": 602
+              "start": 803,
+              "end": 882
             }
           },
           "confidence": "high",
@@ -1450,7 +2710,7 @@
       }
     },
     {
-      "id": "route_0014",
+      "id": "route_0026",
       "framework": "django_rest_framework",
       "method": "GET",
       "path": "/accounts/readonly-api/audit/{pk}",
@@ -1461,21 +2721,21 @@
         "name": "ReadOnlyAuditViewSet.retrieve",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 68,
+          "line": 87,
           "column": 7,
           "byte_range": {
-            "start": 1500,
-            "end": 1520
+            "start": 1962,
+            "end": 1982
           }
         }
       },
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 14,
+        "line": 17,
         "column": 1,
         "byte_range": {
-          "start": 523,
-          "end": 602
+          "start": 803,
+          "end": 882
         }
       },
       "source_evidence": [
@@ -1499,11 +2759,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 20,
+            "line": 23,
             "column": 5,
             "byte_range": {
-              "start": 800,
-              "end": 852
+              "start": 1080,
+              "end": 1132
             }
           },
           "confidence": "high",
@@ -1515,21 +2775,21 @@
             "name": "ReadOnlyAuditViewSet",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 68,
+              "line": 87,
               "column": 7,
               "byte_range": {
-                "start": 1500,
-                "end": 1520
+                "start": 1962,
+                "end": 1982
               }
             }
           },
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 14,
+            "line": 17,
             "column": 1,
             "byte_range": {
-              "start": 523,
-              "end": 602
+              "start": 803,
+              "end": 882
             }
           },
           "confidence": "high",
@@ -1551,7 +2811,7 @@
       }
     },
     {
-      "id": "route_0015",
+      "id": "route_0027",
       "framework": "django_rest_framework",
       "method": "POST",
       "path": "/accounts/readonly-api/audit/refresh",
@@ -1562,21 +2822,21 @@
         "name": "ReadOnlyAuditViewSet.refresh",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 70,
+          "line": 89,
           "column": 9,
           "byte_range": {
-            "start": 1616,
-            "end": 1623
+            "start": 2078,
+            "end": 2085
           }
         }
       },
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 14,
+        "line": 17,
         "column": 1,
         "byte_range": {
-          "start": 523,
-          "end": 602
+          "start": 803,
+          "end": 882
         }
       },
       "source_evidence": [
@@ -1600,11 +2860,11 @@
           "symbol": null,
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 20,
+            "line": 23,
             "column": 5,
             "byte_range": {
-              "start": 800,
-              "end": 852
+              "start": 1080,
+              "end": 1132
             }
           },
           "confidence": "high",
@@ -1616,21 +2876,21 @@
             "name": "ReadOnlyAuditViewSet",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 68,
+              "line": 87,
               "column": 7,
               "byte_range": {
-                "start": 1500,
-                "end": 1520
+                "start": 1962,
+                "end": 1982
               }
             }
           },
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 14,
+            "line": 17,
             "column": 1,
             "byte_range": {
-              "start": 523,
-              "end": 602
+              "start": 803,
+              "end": 882
             }
           },
           "confidence": "high",
@@ -1642,21 +2902,21 @@
             "name": "refresh",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 70,
+              "line": 89,
               "column": 9,
               "byte_range": {
-                "start": 1616,
-                "end": 1623
+                "start": 2078,
+                "end": 2085
               }
             }
           },
           "span": {
             "file": "tests/fixtures/django/accounts/views.py",
-            "line": 70,
+            "line": 89,
             "column": 9,
             "byte_range": {
-              "start": 1616,
-              "end": 1623
+              "start": 2078,
+              "end": 2085
             }
           },
           "confidence": "high",
@@ -1678,7 +2938,7 @@
       }
     },
     {
-      "id": "route_0016",
+      "id": "route_0028",
       "framework": "django",
       "method": "ANY",
       "path": "/accounts",
@@ -1689,21 +2949,21 @@
         "name": "index",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 24,
+          "line": 33,
           "column": 5,
           "byte_range": {
-            "start": 397,
-            "end": 402
+            "start": 616,
+            "end": 621
           }
         }
       },
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 17,
+        "line": 20,
         "column": 5,
         "byte_range": {
-          "start": 624,
-          "end": 667
+          "start": 904,
+          "end": 947
         }
       },
       "source_evidence": [
@@ -1728,21 +2988,21 @@
             "name": "index",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 24,
+              "line": 33,
               "column": 5,
               "byte_range": {
-                "start": 397,
-                "end": 402
+                "start": 616,
+                "end": 621
               }
             }
           },
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 17,
+            "line": 20,
             "column": 5,
             "byte_range": {
-              "start": 624,
-              "end": 667
+              "start": 904,
+              "end": 947
             }
           },
           "confidence": "high",
@@ -1761,7 +3021,7 @@
       }
     },
     {
-      "id": "route_0017",
+      "id": "route_0029",
       "framework": "django",
       "method": "ANY",
       "path": "/accounts/users/<int:pk>/",
@@ -1772,21 +3032,21 @@
         "name": "AccountDetailView",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 32,
+          "line": 41,
           "column": 7,
           "byte_range": {
-            "start": 527,
-            "end": 544
+            "start": 746,
+            "end": 763
           }
         }
       },
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 18,
+        "line": 21,
         "column": 5,
         "byte_range": {
-          "start": 673,
-          "end": 754
+          "start": 953,
+          "end": 1034
         }
       },
       "source_evidence": [
@@ -1811,21 +3071,21 @@
             "name": "AccountDetailView",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 32,
+              "line": 41,
               "column": 7,
               "byte_range": {
-                "start": 527,
-                "end": 544
+                "start": 746,
+                "end": 763
               }
             }
           },
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 18,
+            "line": 21,
             "column": 5,
             "byte_range": {
-              "start": 673,
-              "end": 754
+              "start": 953,
+              "end": 1034
             }
           },
           "confidence": "high",
@@ -1844,7 +3104,7 @@
       }
     },
     {
-      "id": "route_0018",
+      "id": "route_0030",
       "framework": "django",
       "method": "ANY",
       "path": "<dynamic>",
@@ -1855,21 +3115,21 @@
         "name": "dynamic_view",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 28,
+          "line": 37,
           "column": 5,
           "byte_range": {
-            "start": 467,
-            "end": 479
+            "start": 686,
+            "end": 698
           }
         }
       },
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 21,
+        "line": 26,
         "column": 5,
         "byte_range": {
-          "start": 858,
-          "end": 916
+          "start": 1305,
+          "end": 1363
         }
       },
       "source_evidence": [
@@ -1894,21 +3154,21 @@
             "name": "dynamic_view",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 28,
+              "line": 37,
               "column": 5,
               "byte_range": {
-                "start": 467,
-                "end": 479
+                "start": 686,
+                "end": 698
               }
             }
           },
           "span": {
             "file": "tests/fixtures/django/accounts/urls.py",
-            "line": 21,
+            "line": 26,
             "column": 5,
             "byte_range": {
-              "start": 858,
-              "end": 916
+              "start": 1305,
+              "end": 1363
             }
           },
           "confidence": "medium",
@@ -1931,7 +3191,267 @@
       }
     },
     {
-      "id": "route_0019",
+      "id": "route_0031",
+      "framework": "django",
+      "method": "ANY",
+      "path": "/accounts/generated",
+      "name": "list",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "GeneratedAccountListView",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 55,
+          "column": 7,
+          "byte_range": {
+            "start": 1157,
+            "end": 1181
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 54,
+        "column": 2,
+        "byte_range": {
+          "start": 1091,
+          "end": 1150
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 24,
+            "column": 5,
+            "byte_range": {
+              "start": 1138,
+              "end": 1218
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_generated_include",
+          "symbol": {
+            "name": "get_model_urls",
+            "span": {
+              "file": "tests/fixtures/django/accounts/urls.py",
+              "line": 24,
+              "column": 32,
+              "byte_range": {
+                "start": 1165,
+                "end": 1216
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 24,
+            "column": 32,
+            "byte_range": {
+              "start": 1165,
+              "end": 1216
+            }
+          },
+          "confidence": "medium",
+          "notes": [
+            "Generated include expanded from get_model_urls(accounts, account, detail=false)"
+          ]
+        },
+        {
+          "mechanism": "django_model_view_registration",
+          "symbol": {
+            "name": "GeneratedAccountListView",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 55,
+              "column": 7,
+              "byte_range": {
+                "start": 1157,
+                "end": 1181
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 54,
+            "column": 2,
+            "byte_range": {
+              "start": 1091,
+              "end": 1150
+            }
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "confidence": "medium",
+      "notes": [
+        "Route emitted from statically matched generated URL helper"
+      ],
+      "extensions": {
+        "authmap.django": {
+          "class_name": "GeneratedAccountListView",
+          "generated_helper": "get_model_urls",
+          "handler_kind": "class_based_view",
+          "method_name": null,
+          "model_name": "account",
+          "route_pattern_kind": "generated_include"
+        }
+      }
+    },
+    {
+      "id": "route_0032",
+      "framework": "django",
+      "method": "ANY",
+      "path": "/accounts/generated/<int:pk>/edit",
+      "name": "edit",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "GeneratedAccountEditView",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 60,
+          "column": 7,
+          "byte_range": {
+            "start": 1272,
+            "end": 1296
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 59,
+        "column": 2,
+        "byte_range": {
+          "start": 1216,
+          "end": 1265
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/project/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 275,
+              "end": 315
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_include",
+          "symbol": null,
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 25,
+            "column": 5,
+            "byte_range": {
+              "start": 1224,
+              "end": 1299
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        },
+        {
+          "mechanism": "django_generated_include",
+          "symbol": {
+            "name": "get_model_urls",
+            "span": {
+              "file": "tests/fixtures/django/accounts/urls.py",
+              "line": 25,
+              "column": 41,
+              "byte_range": {
+                "start": 1260,
+                "end": 1297
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/urls.py",
+            "line": 25,
+            "column": 41,
+            "byte_range": {
+              "start": 1260,
+              "end": 1297
+            }
+          },
+          "confidence": "medium",
+          "notes": [
+            "Generated include expanded from get_model_urls(accounts, account, detail=true)"
+          ]
+        },
+        {
+          "mechanism": "django_model_view_registration",
+          "symbol": {
+            "name": "GeneratedAccountEditView",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 60,
+              "column": 7,
+              "byte_range": {
+                "start": 1272,
+                "end": 1296
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 59,
+            "column": 2,
+            "byte_range": {
+              "start": 1216,
+              "end": 1265
+            }
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "confidence": "medium",
+      "notes": [
+        "Route emitted from statically matched generated URL helper"
+      ],
+      "extensions": {
+        "authmap.django": {
+          "class_name": "GeneratedAccountEditView",
+          "generated_helper": "get_model_urls",
+          "handler_kind": "class_based_view",
+          "method_name": null,
+          "model_name": "account",
+          "route_pattern_kind": "generated_include"
+        }
+      }
+    },
+    {
+      "id": "route_0033",
       "framework": "django",
       "method": "ANY",
       "path": "/status/",
@@ -1942,11 +3462,11 @@
         "name": "status",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 16,
+          "line": 25,
           "column": 5,
           "byte_range": {
-            "start": 288,
-            "end": 294
+            "start": 507,
+            "end": 513
           }
         }
       },
@@ -1966,11 +3486,11 @@
             "name": "status",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 16,
+              "line": 25,
               "column": 5,
               "byte_range": {
-                "start": 288,
-                "end": 294
+                "start": 507,
+                "end": 513
               }
             }
           },
@@ -1999,7 +3519,7 @@
       }
     },
     {
-      "id": "route_0020",
+      "id": "route_0034",
       "framework": "django",
       "method": "ANY",
       "path": "/legacy/{slug}/",
@@ -2010,11 +3530,11 @@
         "name": "legacy_detail",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 20,
+          "line": 29,
           "column": 5,
           "byte_range": {
-            "start": 335,
-            "end": 348
+            "start": 554,
+            "end": 567
           }
         }
       },
@@ -2034,11 +3554,11 @@
             "name": "legacy_detail",
             "span": {
               "file": "tests/fixtures/django/accounts/views.py",
-              "line": 20,
+              "line": 29,
               "column": 5,
               "byte_range": {
-                "start": 335,
-                "end": 348
+                "start": 554,
+                "end": 567
               }
             }
           },
@@ -2074,28 +3594,28 @@
   "evidence": [
     {
       "id": "evidence_0001",
-      "route_id": "route_0002",
+      "route_id": "route_0001",
       "evidence_type": "permission_check",
-      "mechanism": "permission_guard",
+      "mechanism": "drf_permission_classes",
       "symbol": {
-        "name": "require_permission",
+        "name": "permission_classes",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 49,
-          "column": 9,
+          "line": 121,
+          "column": 5,
           "byte_range": {
-            "start": 968,
-            "end": 986
+            "start": 2884,
+            "end": 2930
           }
         }
       },
       "span": {
         "file": "tests/fixtures/django/accounts/views.py",
-        "line": 49,
-        "column": 9,
+        "line": 121,
+        "column": 5,
         "byte_range": {
-          "start": 968,
-          "end": 1000
+          "start": 2884,
+          "end": 2930
         }
       },
       "confidence": "high",
@@ -2103,33 +3623,835 @@
     },
     {
       "id": "evidence_0002",
+      "route_id": "route_0002",
+      "evidence_type": "permission_check",
+      "mechanism": "drf_permission_classes",
+      "symbol": {
+        "name": "permission_classes",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 121,
+          "column": 5,
+          "byte_range": {
+            "start": 2884,
+            "end": 2930
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 121,
+        "column": 5,
+        "byte_range": {
+          "start": 2884,
+          "end": 2930
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0003",
+      "route_id": "route_0004",
+      "evidence_type": "permission_check",
+      "mechanism": "permission_guard",
+      "symbol": {
+        "name": "require_permission",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 68,
+          "column": 9,
+          "byte_range": {
+            "start": 1430,
+            "end": 1448
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 68,
+        "column": 9,
+        "byte_range": {
+          "start": 1430,
+          "end": 1462
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0004",
+      "route_id": "route_0014",
+      "evidence_type": "authn",
+      "mechanism": "drf_permission_classes",
+      "symbol": {
+        "name": "IsAuthenticated",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 112,
+          "column": 5,
+          "byte_range": {
+            "start": 2565,
+            "end": 2603
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 112,
+        "column": 5,
+        "byte_range": {
+          "start": 2565,
+          "end": 2603
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0005",
+      "route_id": "route_0014",
+      "evidence_type": "authn",
+      "mechanism": "django_authenticated_user_check",
+      "symbol": {
+        "name": "is_authenticated",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 115,
+          "column": 12,
+          "byte_range": {
+            "start": 2665,
+            "end": 2694
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 115,
+        "column": 12,
+        "byte_range": {
+          "start": 2665,
+          "end": 2694
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0006",
+      "route_id": "route_0014",
+      "evidence_type": "permission_check",
+      "mechanism": "django_queryset_restrict",
+      "symbol": {
+        "name": "restrict",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 116,
+          "column": 29,
+          "byte_range": {
+            "start": 2724,
+            "end": 2768
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 116,
+        "column": 29,
+        "byte_range": {
+          "start": 2724,
+          "end": 2768
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0007",
+      "route_id": "route_0015",
+      "evidence_type": "authn",
+      "mechanism": "drf_permission_classes",
+      "symbol": {
+        "name": "IsAuthenticated",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 112,
+          "column": 5,
+          "byte_range": {
+            "start": 2565,
+            "end": 2603
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 112,
+        "column": 5,
+        "byte_range": {
+          "start": 2565,
+          "end": 2603
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0008",
+      "route_id": "route_0015",
+      "evidence_type": "authn",
+      "mechanism": "django_authenticated_user_check",
+      "symbol": {
+        "name": "is_authenticated",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 115,
+          "column": 12,
+          "byte_range": {
+            "start": 2665,
+            "end": 2694
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 115,
+        "column": 12,
+        "byte_range": {
+          "start": 2665,
+          "end": 2694
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0009",
+      "route_id": "route_0015",
+      "evidence_type": "permission_check",
+      "mechanism": "django_queryset_restrict",
+      "symbol": {
+        "name": "restrict",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 116,
+          "column": 29,
+          "byte_range": {
+            "start": 2724,
+            "end": 2768
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 116,
+        "column": 29,
+        "byte_range": {
+          "start": 2724,
+          "end": 2768
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0010",
+      "route_id": "route_0016",
+      "evidence_type": "authn",
+      "mechanism": "drf_permission_classes",
+      "symbol": {
+        "name": "IsAuthenticated",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 112,
+          "column": 5,
+          "byte_range": {
+            "start": 2565,
+            "end": 2603
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 112,
+        "column": 5,
+        "byte_range": {
+          "start": 2565,
+          "end": 2603
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0011",
+      "route_id": "route_0016",
+      "evidence_type": "authn",
+      "mechanism": "django_authenticated_user_check",
+      "symbol": {
+        "name": "is_authenticated",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 115,
+          "column": 12,
+          "byte_range": {
+            "start": 2665,
+            "end": 2694
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 115,
+        "column": 12,
+        "byte_range": {
+          "start": 2665,
+          "end": 2694
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0012",
+      "route_id": "route_0016",
+      "evidence_type": "permission_check",
+      "mechanism": "django_queryset_restrict",
+      "symbol": {
+        "name": "restrict",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 116,
+          "column": 29,
+          "byte_range": {
+            "start": 2724,
+            "end": 2768
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 116,
+        "column": 29,
+        "byte_range": {
+          "start": 2724,
+          "end": 2768
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0013",
       "route_id": "route_0017",
+      "evidence_type": "authn",
+      "mechanism": "drf_permission_classes",
+      "symbol": {
+        "name": "IsAuthenticated",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 112,
+          "column": 5,
+          "byte_range": {
+            "start": 2565,
+            "end": 2603
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 112,
+        "column": 5,
+        "byte_range": {
+          "start": 2565,
+          "end": 2603
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0014",
+      "route_id": "route_0017",
+      "evidence_type": "authn",
+      "mechanism": "django_authenticated_user_check",
+      "symbol": {
+        "name": "is_authenticated",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 115,
+          "column": 12,
+          "byte_range": {
+            "start": 2665,
+            "end": 2694
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 115,
+        "column": 12,
+        "byte_range": {
+          "start": 2665,
+          "end": 2694
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0015",
+      "route_id": "route_0017",
+      "evidence_type": "permission_check",
+      "mechanism": "django_queryset_restrict",
+      "symbol": {
+        "name": "restrict",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 116,
+          "column": 29,
+          "byte_range": {
+            "start": 2724,
+            "end": 2768
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 116,
+        "column": 29,
+        "byte_range": {
+          "start": 2724,
+          "end": 2768
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0016",
+      "route_id": "route_0018",
+      "evidence_type": "authn",
+      "mechanism": "drf_permission_classes",
+      "symbol": {
+        "name": "IsAuthenticated",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 112,
+          "column": 5,
+          "byte_range": {
+            "start": 2565,
+            "end": 2603
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 112,
+        "column": 5,
+        "byte_range": {
+          "start": 2565,
+          "end": 2603
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0017",
+      "route_id": "route_0018",
+      "evidence_type": "authn",
+      "mechanism": "django_authenticated_user_check",
+      "symbol": {
+        "name": "is_authenticated",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 115,
+          "column": 12,
+          "byte_range": {
+            "start": 2665,
+            "end": 2694
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 115,
+        "column": 12,
+        "byte_range": {
+          "start": 2665,
+          "end": 2694
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0018",
+      "route_id": "route_0018",
+      "evidence_type": "permission_check",
+      "mechanism": "django_queryset_restrict",
+      "symbol": {
+        "name": "restrict",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 116,
+          "column": 29,
+          "byte_range": {
+            "start": 2724,
+            "end": 2768
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 116,
+        "column": 29,
+        "byte_range": {
+          "start": 2724,
+          "end": 2768
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0019",
+      "route_id": "route_0019",
+      "evidence_type": "authn",
+      "mechanism": "drf_permission_classes",
+      "symbol": {
+        "name": "IsAuthenticated",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 112,
+          "column": 5,
+          "byte_range": {
+            "start": 2565,
+            "end": 2603
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 112,
+        "column": 5,
+        "byte_range": {
+          "start": 2565,
+          "end": 2603
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0020",
+      "route_id": "route_0019",
+      "evidence_type": "authn",
+      "mechanism": "django_authenticated_user_check",
+      "symbol": {
+        "name": "is_authenticated",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 115,
+          "column": 12,
+          "byte_range": {
+            "start": 2665,
+            "end": 2694
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 115,
+        "column": 12,
+        "byte_range": {
+          "start": 2665,
+          "end": 2694
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0021",
+      "route_id": "route_0019",
+      "evidence_type": "permission_check",
+      "mechanism": "django_queryset_restrict",
+      "symbol": {
+        "name": "restrict",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 116,
+          "column": 29,
+          "byte_range": {
+            "start": 2724,
+            "end": 2768
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 116,
+        "column": 29,
+        "byte_range": {
+          "start": 2724,
+          "end": 2768
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0022",
+      "route_id": "route_0020",
+      "evidence_type": "permission_check",
+      "mechanism": "drf_permission_classes",
+      "symbol": {
+        "name": "permission_classes",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 121,
+          "column": 5,
+          "byte_range": {
+            "start": 2884,
+            "end": 2930
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 121,
+        "column": 5,
+        "byte_range": {
+          "start": 2884,
+          "end": 2930
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectReadOnlyViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0023",
+      "route_id": "route_0021",
+      "evidence_type": "permission_check",
+      "mechanism": "drf_permission_classes",
+      "symbol": {
+        "name": "permission_classes",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 121,
+          "column": 5,
+          "byte_range": {
+            "start": 2884,
+            "end": 2930
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 121,
+        "column": 5,
+        "byte_range": {
+          "start": 2884,
+          "end": 2930
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectReadOnlyViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0024",
+      "route_id": "route_0029",
       "evidence_type": "unknown_dynamic_check",
       "mechanism": "handler_condition",
       "symbol": {
         "name": "AccountDetailView",
         "span": {
           "file": "tests/fixtures/django/accounts/views.py",
-          "line": 32,
+          "line": 41,
           "column": 7,
           "byte_range": {
-            "start": 527,
-            "end": 544
+            "start": 746,
+            "end": 763
           }
         }
       },
       "span": {
         "file": "tests/fixtures/django/accounts/views.py",
-        "line": 35,
+        "line": 44,
         "column": 12,
         "byte_range": {
-          "start": 634,
-          "end": 662
+          "start": 853,
+          "end": 881
         }
       },
       "confidence": "low",
       "notes": [
         "Handler condition references user authorization attributes; review required"
+      ]
+    },
+    {
+      "id": "evidence_0025",
+      "route_id": "route_0031",
+      "evidence_type": "authn",
+      "mechanism": "drf_permission_classes",
+      "symbol": {
+        "name": "IsAuthenticated",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 112,
+          "column": 5,
+          "byte_range": {
+            "start": 2565,
+            "end": 2603
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 112,
+        "column": 5,
+        "byte_range": {
+          "start": 2565,
+          "end": 2603
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0026",
+      "route_id": "route_0031",
+      "evidence_type": "authn",
+      "mechanism": "django_authenticated_user_check",
+      "symbol": {
+        "name": "is_authenticated",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 115,
+          "column": 12,
+          "byte_range": {
+            "start": 2665,
+            "end": 2694
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 115,
+        "column": 12,
+        "byte_range": {
+          "start": 2665,
+          "end": 2694
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0027",
+      "route_id": "route_0031",
+      "evidence_type": "permission_check",
+      "mechanism": "django_queryset_restrict",
+      "symbol": {
+        "name": "restrict",
+        "span": {
+          "file": "tests/fixtures/django/accounts/views.py",
+          "line": 116,
+          "column": 29,
+          "byte_range": {
+            "start": 2724,
+            "end": 2768
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/accounts/views.py",
+        "line": 116,
+        "column": 29,
+        "byte_range": {
+          "start": 2724,
+          "end": 2768
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ProjectModelViewSet"
+      ]
+    },
+    {
+      "id": "evidence_0028",
+      "route_id": "route_0032",
+      "evidence_type": "permission_check",
+      "mechanism": "django_permission_mixin",
+      "symbol": {
+        "name": "PermissionRequiredMixin",
+        "span": {
+          "file": "tests/fixtures/django/shared/generic/object_views.py",
+          "line": 1,
+          "column": 7,
+          "byte_range": {
+            "start": 6,
+            "end": 20
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/shared/generic/object_views.py",
+        "line": 1,
+        "column": 7,
+        "byte_range": {
+          "start": 6,
+          "end": 20
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Authorization evidence inherited from ObjectEditView"
       ]
     }
   ],
@@ -2158,11 +4480,11 @@
       "resource": "Account",
       "span": {
         "file": "tests/fixtures/django/accounts/views.py",
-        "line": 38,
+        "line": 47,
         "column": 9,
         "byte_range": {
-          "start": 741,
-          "end": 755
+          "start": 960,
+          "end": 974
         }
       },
       "confidence": "medium",
@@ -2175,11 +4497,11 @@
       "resource": "Account",
       "span": {
         "file": "tests/fixtures/django/accounts/views.py",
-        "line": 42,
+        "line": 51,
         "column": 16,
         "byte_range": {
-          "start": 830,
-          "end": 868
+          "start": 1049,
+          "end": 1087
         }
       },
       "confidence": "high",
@@ -2192,11 +4514,11 @@
       "resource": "Account",
       "span": {
         "file": "tests/fixtures/django/accounts/views.py",
-        "line": 53,
+        "line": 72,
         "column": 16,
         "byte_range": {
-          "start": 1066,
-          "end": 1117
+          "start": 1528,
+          "end": 1579
         }
       },
       "confidence": "high",
@@ -2209,11 +4531,11 @@
       "resource": "Account",
       "span": {
         "file": "tests/fixtures/django/accounts/views.py",
-        "line": 57,
+        "line": 76,
         "column": 16,
         "byte_range": {
-          "start": 1240,
-          "end": 1295
+          "start": 1702,
+          "end": 1757
         }
       },
       "confidence": "high",
@@ -2226,11 +4548,11 @@
       "resource": "Account",
       "span": {
         "file": "tests/fixtures/django/accounts/views.py",
-        "line": 63,
+        "line": 82,
         "column": 20,
         "byte_range": {
-          "start": 1422,
-          "end": 1467
+          "start": 1884,
+          "end": 1929
         }
       },
       "confidence": "high",
@@ -2243,11 +4565,11 @@
       "resource": "Account",
       "span": {
         "file": "tests/fixtures/django/accounts/views.py",
-        "line": 71,
+        "line": 90,
         "column": 16,
         "byte_range": {
-          "start": 1655,
-          "end": 1712
+          "start": 2117,
+          "end": 2174
         }
       },
       "confidence": "high",
@@ -2257,7 +4579,7 @@
   "links": [
     {
       "id": "link_0001",
-      "route_id": "route_0005",
+      "route_id": "route_0007",
       "mutation_id": "mutation_0004",
       "evidence_id": null,
       "confidence": "high",
@@ -2267,7 +4589,7 @@
     },
     {
       "id": "link_0002",
-      "route_id": "route_0006",
+      "route_id": "route_0008",
       "mutation_id": "mutation_0005",
       "evidence_id": null,
       "confidence": "high",
@@ -2277,7 +4599,7 @@
     },
     {
       "id": "link_0003",
-      "route_id": "route_0015",
+      "route_id": "route_0027",
       "mutation_id": "mutation_0007",
       "evidence_id": null,
       "confidence": "high",
@@ -2287,7 +4609,7 @@
     },
     {
       "id": "link_0004",
-      "route_id": "route_0016",
+      "route_id": "route_0028",
       "mutation_id": "mutation_0001",
       "evidence_id": null,
       "confidence": "medium",
@@ -2297,7 +4619,7 @@
     },
     {
       "id": "link_0005",
-      "route_id": "route_0017",
+      "route_id": "route_0029",
       "mutation_id": null,
       "evidence_id": null,
       "confidence": "low",
@@ -2308,12 +4630,12 @@
         "authmap.reachability": {
           "call_span": {
             "byte_range": {
-              "end": 755,
-              "start": 741
+              "end": 974,
+              "start": 960
             },
             "column": 9,
             "file": "tests/fixtures/django/accounts/views.py",
-            "line": 38
+            "line": 47
           },
           "call_target": "account.save",
           "reason": "unresolved_service_call"
@@ -2322,7 +4644,7 @@
     },
     {
       "id": "link_0006",
-      "route_id": "route_0017",
+      "route_id": "route_0029",
       "mutation_id": "mutation_0002",
       "evidence_id": null,
       "confidence": "high",
@@ -2332,7 +4654,7 @@
     },
     {
       "id": "link_0007",
-      "route_id": "route_0017",
+      "route_id": "route_0029",
       "mutation_id": "mutation_0003",
       "evidence_id": null,
       "confidence": "high",
@@ -2344,6 +4666,53 @@
   "coverage": [
     {
       "route_id": "route_0001",
+      "class": "permission_guarded",
+      "risk": "low",
+      "rationale": [
+        "1 strong authorization evidence item(s) support permission_guarded coverage."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0001"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0002",
+      "class": "permission_guarded",
+      "risk": "low",
+      "rationale": [
+        "1 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): path_param."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0002"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "path_param"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0003",
       "class": "unauthenticated",
       "risk": "high",
       "rationale": [
@@ -2372,7 +4741,7 @@
       }
     },
     {
-      "route_id": "route_0002",
+      "route_id": "route_0004",
       "class": "permission_guarded",
       "risk": "low",
       "rationale": [
@@ -2386,7 +4755,7 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0001"
+            "evidence_0003"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -2399,7 +4768,7 @@
       }
     },
     {
-      "route_id": "route_0003",
+      "route_id": "route_0005",
       "class": "unauthenticated",
       "risk": "medium",
       "rationale": [
@@ -2425,7 +4794,7 @@
       }
     },
     {
-      "route_id": "route_0004",
+      "route_id": "route_0006",
       "class": "unauthenticated",
       "risk": "high",
       "rationale": [
@@ -2454,7 +4823,7 @@
       }
     },
     {
-      "route_id": "route_0005",
+      "route_id": "route_0007",
       "class": "unauthenticated",
       "risk": "high",
       "rationale": [
@@ -2489,7 +4858,7 @@
       }
     },
     {
-      "route_id": "route_0006",
+      "route_id": "route_0008",
       "class": "unauthenticated",
       "risk": "high",
       "rationale": [
@@ -2525,7 +4894,7 @@
       }
     },
     {
-      "route_id": "route_0007",
+      "route_id": "route_0009",
       "class": "unauthenticated",
       "risk": "high",
       "rationale": [
@@ -2548,55 +4917,6 @@
             "path_param",
             "unsafe_method",
             "user_path"
-          ],
-          "weak_evidence_ids": []
-        }
-      }
-    },
-    {
-      "route_id": "route_0008",
-      "class": "unauthenticated",
-      "risk": "medium",
-      "rationale": [
-        "No authorization evidence was detected.",
-        "Sensitive route modifier(s): account_path."
-      ],
-      "reviewer_questions": [
-        "Should this route require ownership or permission checks?"
-      ],
-      "uncertainty_reasons": [],
-      "extensions": {
-        "authmap.coverage": {
-          "evidence_ids": [],
-          "link_ids": [],
-          "mutation_ids": [],
-          "sensitivity_reasons": [
-            "account_path"
-          ],
-          "weak_evidence_ids": []
-        }
-      }
-    },
-    {
-      "route_id": "route_0009",
-      "class": "unauthenticated",
-      "risk": "medium",
-      "rationale": [
-        "No authorization evidence was detected.",
-        "Sensitive route modifier(s): account_path, path_param."
-      ],
-      "reviewer_questions": [
-        "Should this route require ownership or permission checks?"
-      ],
-      "uncertainty_reasons": [],
-      "extensions": {
-        "authmap.coverage": {
-          "evidence_ids": [],
-          "link_ids": [],
-          "mutation_ids": [],
-          "sensitivity_reasons": [
-            "account_path",
-            "path_param"
           ],
           "weak_evidence_ids": []
         }
@@ -2629,6 +4949,55 @@
     {
       "route_id": "route_0011",
       "class": "unauthenticated",
+      "risk": "medium",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path, path_param."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "path_param"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0012",
+      "class": "unauthenticated",
+      "risk": "medium",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0013",
+      "class": "unauthenticated",
       "risk": "high",
       "rationale": [
         "No authorization evidence was detected.",
@@ -2656,28 +5025,240 @@
       }
     },
     {
-      "route_id": "route_0012",
-      "class": "unauthenticated",
+      "route_id": "route_0014",
+      "class": "permission_guarded",
       "risk": "low",
       "rationale": [
-        "No authorization evidence was detected."
+        "3 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): account_path, path_param, unsafe_method."
       ],
-      "reviewer_questions": [],
-      "uncertainty_reasons": [
-        "Route inventory confidence is not high."
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
       ],
+      "uncertainty_reasons": [],
       "extensions": {
         "authmap.coverage": {
-          "evidence_ids": [],
+          "evidence_ids": [
+            "evidence_0004",
+            "evidence_0005",
+            "evidence_0006"
+          ],
           "link_ids": [],
           "mutation_ids": [],
-          "sensitivity_reasons": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "path_param",
+            "unsafe_method"
+          ],
           "weak_evidence_ids": []
         }
       }
     },
     {
-      "route_id": "route_0013",
+      "route_id": "route_0015",
+      "class": "permission_guarded",
+      "risk": "low",
+      "rationale": [
+        "3 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): account_path."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0007",
+            "evidence_0008",
+            "evidence_0009"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0016",
+      "class": "permission_guarded",
+      "risk": "low",
+      "rationale": [
+        "3 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): account_path, path_param."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0010",
+            "evidence_0011",
+            "evidence_0012"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "path_param"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0017",
+      "class": "permission_guarded",
+      "risk": "low",
+      "rationale": [
+        "3 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): account_path, path_param, unsafe_method."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0013",
+            "evidence_0014",
+            "evidence_0015"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "path_param",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0018",
+      "class": "permission_guarded",
+      "risk": "low",
+      "rationale": [
+        "3 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): account_path, unsafe_method."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0016",
+            "evidence_0017",
+            "evidence_0018"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0019",
+      "class": "permission_guarded",
+      "risk": "low",
+      "rationale": [
+        "3 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): account_path, path_param, unsafe_method."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0019",
+            "evidence_0020",
+            "evidence_0021"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "path_param",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0020",
+      "class": "permission_guarded",
+      "risk": "low",
+      "rationale": [
+        "1 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): account_path."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0022"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0021",
+      "class": "permission_guarded",
+      "risk": "low",
+      "rationale": [
+        "1 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): account_path, path_param."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0023"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "path_param"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0022",
       "class": "unauthenticated",
       "risk": "medium",
       "rationale": [
@@ -2701,7 +5282,79 @@
       }
     },
     {
-      "route_id": "route_0014",
+      "route_id": "route_0023",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path, unsafe_method.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0024",
+      "class": "unauthenticated",
+      "risk": "low",
+      "rationale": [
+        "No authorization evidence was detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0025",
+      "class": "unauthenticated",
+      "risk": "medium",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): account_path."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0026",
       "class": "unauthenticated",
       "risk": "medium",
       "rationale": [
@@ -2726,7 +5379,7 @@
       }
     },
     {
-      "route_id": "route_0015",
+      "route_id": "route_0027",
       "class": "unauthenticated",
       "risk": "high",
       "rationale": [
@@ -2760,7 +5413,7 @@
       }
     },
     {
-      "route_id": "route_0016",
+      "route_id": "route_0028",
       "class": "unauthenticated",
       "risk": "high",
       "rationale": [
@@ -2795,7 +5448,7 @@
       }
     },
     {
-      "route_id": "route_0017",
+      "route_id": "route_0029",
       "class": "unknown_or_dynamic",
       "risk": "review_required",
       "rationale": [
@@ -2816,7 +5469,7 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0002"
+            "evidence_0024"
           ],
           "link_ids": [
             "link_0005",
@@ -2836,13 +5489,13 @@
             "user_path"
           ],
           "weak_evidence_ids": [
-            "evidence_0002"
+            "evidence_0024"
           ]
         }
       }
     },
     {
-      "route_id": "route_0018",
+      "route_id": "route_0030",
       "class": "unauthenticated",
       "risk": "high",
       "rationale": [
@@ -2870,7 +5523,72 @@
       }
     },
     {
-      "route_id": "route_0019",
+      "route_id": "route_0031",
+      "class": "permission_guarded",
+      "risk": "low",
+      "rationale": [
+        "3 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): account_path, any_method, unsafe_method."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0025",
+            "evidence_0026",
+            "evidence_0027"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "any_method",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0032",
+      "class": "permission_guarded",
+      "risk": "low",
+      "rationale": [
+        "1 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): account_path, any_method, path_param, unsafe_method."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0028"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "account_path",
+            "any_method",
+            "path_param",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0033",
       "class": "unauthenticated",
       "risk": "high",
       "rationale": [
@@ -2896,7 +5614,7 @@
       }
     },
     {
-      "route_id": "route_0020",
+      "route_id": "route_0034",
       "class": "unauthenticated",
       "risk": "high",
       "rationale": [
@@ -2934,30 +5652,30 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 12,
+        "line": 15,
         "column": 17,
         "byte_range": {
-          "start": 475,
-          "end": 489
+          "start": 755,
+          "end": 769
         }
       },
       "message": "DRF custom router behavior could not be resolved statically"
     },
     {
       "category": "adapter",
-      "code": "django_dynamic_include",
+      "code": "django_dynamic_include_helper",
       "severity": "warning",
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/django/project/urls.py",
-        "line": 10,
+        "line": 11,
         "column": 30,
         "byte_range": {
-          "start": 346,
-          "end": 359
+          "start": 403,
+          "end": 416
         }
       },
-      "message": "Django include target is dynamic and could not be resolved"
+      "message": "Django include helper could not be expanded statically: helper=get_urlconf; positional=[]; keywords=[]"
     },
     {
       "category": "adapter",
@@ -2966,11 +5684,11 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 21,
+        "line": 26,
         "column": 10,
         "byte_range": {
-          "start": 863,
-          "end": 874
+          "start": 1310,
+          "end": 1321
         }
       },
       "message": "Django URL path is dynamic and could not be resolved"
@@ -2982,11 +5700,11 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 30,
+        "line": 34,
         "column": 5,
         "byte_range": {
-          "start": 1015,
-          "end": 1072
+          "start": 1461,
+          "end": 1518
         }
       },
       "message": "Django URL helper call is outside a statically recognized urlpatterns context"
@@ -2998,11 +5716,11 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 10,
+        "line": 13,
         "column": 1,
         "byte_range": {
-          "start": 377,
-          "end": 457
+          "start": 657,
+          "end": 737
         }
       },
       "message": "DRF router basename is dynamic and could not be resolved"
@@ -3014,30 +5732,14 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/django/accounts/urls.py",
-        "line": 10,
+        "line": 13,
         "column": 17,
         "byte_range": {
-          "start": 393,
-          "end": 409
+          "start": 673,
+          "end": 689
         }
       },
       "message": "DRF router registration prefix is dynamic and could not be resolved"
-    },
-    {
-      "category": "adapter",
-      "code": "drf_unresolved_viewset_base",
-      "severity": "warning",
-      "recoverability": "recoverable",
-      "span": {
-        "file": "tests/fixtures/django/accounts/views.py",
-        "line": 78,
-        "column": 7,
-        "byte_range": {
-          "start": 1763,
-          "end": 1787
-        }
-      },
-      "message": "DRF viewset base class could not be resolved to a known framework base"
     }
   ]
 }

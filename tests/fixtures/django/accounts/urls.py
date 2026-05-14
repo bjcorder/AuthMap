@@ -7,6 +7,9 @@ router = DefaultRouter()
 router.register("users", views.UserViewSet, basename="user")
 router.register("readonly", views.ReadOnlyAccountViewSet, basename="readonly")
 router.register("custom-model", views.CustomModelBackedViewSet, basename="custom-model")
+router.register("inherited", views.InheritedProjectViewSet, basename="inherited")
+router.register("inherited-readonly", views.InheritedReadOnlyProjectViewSet, basename="inherited-readonly")
+router.register("mixin-backed", views.MixinBackedProjectViewSet, basename="mixin-backed")
 router.register(dynamic_prefix(), views.DynamicViewSet, basename=get_basename())
 
 custom_router = CustomRouter()
@@ -18,9 +21,10 @@ urlpatterns = [
     path("users/<int:pk>/", views.AccountDetailView.as_view(), name="account_detail"),
     path("api/", include(router.urls)),
     path("readonly-api/", include(readonly_router.urls)),
+    path("generated/", include(get_model_urls("accounts", "account", detail=False))),
+    path("generated/<int:pk>/", include(get_model_urls("accounts", "account"))),
     path(make_path(), views.dynamic_view, name="dynamic_view"),
 ]
-
 
 def path(route, view, **kwargs):
     return (route, view, kwargs)

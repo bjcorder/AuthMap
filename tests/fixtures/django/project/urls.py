@@ -7,5 +7,6 @@ urlpatterns = [
     path("status/", views.status, name="status"),
     re_path(r"^legacy/(?P<slug>[-\w]+)/$", views.legacy_detail, name="legacy_detail"),
     path("accounts/", include(account_urls)),
+    path("exported-api/", include("accounts.api_urls")),
     path("dynamic/", include(get_urlconf())),
 ]

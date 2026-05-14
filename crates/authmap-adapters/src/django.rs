@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 use authmap_core::{
     Confidence, Diagnostic, DiagnosticCategory, DiagnosticSeverity, Framework, Recoverability,
@@ -10,6 +11,7 @@ use tree_sitter::Node;
 use crate::{AdapterContext, AdapterOutput, FrameworkAdapter};
 
 const DJANGO_INCLUDE_DEPTH_LIMIT: usize = 64;
+const DJANGO_CLASS_RESOLUTION_DEPTH_LIMIT: usize = 64;
 
 #[derive(Clone, Debug, Default)]
 pub struct DjangoAdapter;
@@ -41,6 +43,8 @@ impl FrameworkAdapter for DjangoAdapter {
             };
             collect_symbols(parsed, root, &mut index);
         }
+
+        index.resolve_viewset_classes();
 
         for parsed in parsed_files
             .iter()
@@ -75,20 +79,76 @@ struct SymbolDef {
 
 #[derive(Clone, Debug)]
 struct ClassInfo {
+    file: String,
     name: String,
     span: Span,
+    bases: Vec<String>,
     auto_actions: ViewSetAutoActions,
     methods: BTreeMap<String, Span>,
     actions: Vec<ViewSetAction>,
     lookup_field: Option<String>,
+    unresolved_viewset_base: bool,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum ViewSetAutoActions {
-    #[default]
-    None,
-    Model,
-    ReadOnly,
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct ViewSetAutoActions {
+    list: bool,
+    create: bool,
+    retrieve: bool,
+    update: bool,
+    partial_update: bool,
+    destroy: bool,
+}
+
+impl ViewSetAutoActions {
+    fn model() -> Self {
+        Self {
+            list: true,
+            create: true,
+            retrieve: true,
+            update: true,
+            partial_update: true,
+            destroy: true,
+        }
+    }
+
+    fn read_only() -> Self {
+        Self {
+            list: true,
+            retrieve: true,
+            ..Self::default()
+        }
+    }
+
+    fn merge(&mut self, other: &Self) {
+        self.list |= other.list;
+        self.create |= other.create;
+        self.retrieve |= other.retrieve;
+        self.update |= other.update;
+        self.partial_update |= other.partial_update;
+        self.destroy |= other.destroy;
+    }
+
+    fn contains(&self, action: &str) -> bool {
+        match action {
+            "list" => self.list,
+            "create" => self.create,
+            "retrieve" => self.retrieve,
+            "update" => self.update,
+            "partial_update" => self.partial_update,
+            "destroy" => self.destroy,
+            _ => false,
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        !self.list
+            && !self.create
+            && !self.retrieve
+            && !self.update
+            && !self.partial_update
+            && !self.destroy
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -144,7 +204,28 @@ enum HandlerKind {
 struct IncludeTarget {
     file: Option<String>,
     router_name: Option<String>,
+    generated: Option<GeneratedInclude>,
     dynamic: bool,
+}
+
+#[derive(Clone, Debug)]
+struct GeneratedInclude {
+    helper: String,
+    app_label: String,
+    model_name: String,
+    detail: bool,
+    span: Span,
+}
+
+#[derive(Clone, Debug)]
+struct ModelViewRegistration {
+    app_label: Option<String>,
+    model_name: String,
+    detail: bool,
+    path: String,
+    name: Option<String>,
+    handler: HandlerTarget,
+    span: Span,
 }
 
 #[derive(Clone, Debug)]
@@ -182,10 +263,116 @@ struct DjangoIndex {
     patterns: Vec<UrlPattern>,
     routers: BTreeMap<(String, String), RouterBinding>,
     registrations: Vec<RouterRegistration>,
+    model_views: Vec<ModelViewRegistration>,
     diagnostics: Vec<Diagnostic>,
 }
 
 impl DjangoIndex {
+    fn resolve_viewset_classes(&mut self) {
+        let keys = self.classes.keys().cloned().collect::<Vec<_>>();
+        let mut resolved = BTreeMap::new();
+        for key in keys {
+            let mut active = BTreeSet::new();
+            let actions = self.resolve_class_actions(&key, &mut active, 0);
+            resolved.insert(key, actions);
+        }
+        for (key, actions) in resolved {
+            let resolves_viewset_base = self.classes.get(&key).is_some_and(|class| {
+                self.class_resolves_viewset_base(class, &mut BTreeSet::new(), 0)
+            });
+            if let Some(class) = self.classes.get_mut(&key) {
+                class.auto_actions = actions;
+                class.unresolved_viewset_base =
+                    class.unresolved_viewset_base && !resolves_viewset_base;
+            }
+        }
+    }
+
+    fn resolve_class_actions(
+        &self,
+        key: &(String, String),
+        active: &mut BTreeSet<(String, String)>,
+        depth: usize,
+    ) -> ViewSetAutoActions {
+        if depth >= DJANGO_CLASS_RESOLUTION_DEPTH_LIMIT || !active.insert(key.clone()) {
+            return ViewSetAutoActions::default();
+        }
+        let Some(class) = self.classes.get(key) else {
+            active.remove(key);
+            return ViewSetAutoActions::default();
+        };
+        let mut actions = ViewSetAutoActions::default();
+        for base in &class.bases {
+            let base_actions = self.resolve_base_actions(&class.file, base, active, depth + 1);
+            actions.merge(&base_actions);
+        }
+        active.remove(key);
+        actions
+    }
+
+    fn resolve_base_actions(
+        &self,
+        file: &str,
+        base: &str,
+        active: &mut BTreeSet<(String, String)>,
+        depth: usize,
+    ) -> ViewSetAutoActions {
+        if let Some(actions) = builtin_drf_base_actions(base) {
+            return actions;
+        }
+        if let Some(key) = self.resolve_class_key(file, base) {
+            return self.resolve_class_actions(&key, active, depth);
+        }
+        ViewSetAutoActions::default()
+    }
+
+    fn resolve_class_key(&self, file: &str, symbol: &str) -> Option<(String, String)> {
+        if let Some((object, member)) = symbol.rsplit_once('.')
+            && let Some(target) = self.imports_by_file.get(file)?.get(object)
+            && let Some(file) = target.file.clone()
+        {
+            let key = (file, clean_symbol(member));
+            return self.classes.contains_key(&key).then_some(key);
+        }
+        let name = clean_symbol(symbol);
+        let local_key = (file.to_string(), name.clone());
+        if self.classes.contains_key(&local_key) {
+            return Some(local_key);
+        }
+        if let Some(target) = self.imports_by_file.get(file)?.get(&name)
+            && let Some(file) = target.file.clone()
+        {
+            let target_name = target.name.clone().unwrap_or(name);
+            let key = (file, target_name);
+            return self.classes.contains_key(&key).then_some(key);
+        }
+        None
+    }
+
+    fn class_resolves_viewset_base(
+        &self,
+        class: &ClassInfo,
+        active: &mut BTreeSet<(String, String)>,
+        depth: usize,
+    ) -> bool {
+        if depth >= DJANGO_CLASS_RESOLUTION_DEPTH_LIMIT
+            || !active.insert((class.file.clone(), class.name.clone()))
+        {
+            return false;
+        }
+        let resolved = class.bases.iter().any(|base| {
+            builtin_drf_base_actions(base).is_some()
+                || self
+                    .resolve_class_key(&class.file, base)
+                    .and_then(|key| self.classes.get(&key))
+                    .is_some_and(|base_class| {
+                        self.class_resolves_viewset_base(base_class, active, depth + 1)
+                    })
+        });
+        active.remove(&(class.file.clone(), class.name.clone()));
+        resolved
+    }
+
     fn into_output(self) -> AdapterOutput {
         let mut emitted = Vec::new();
         let mut seen = BTreeSet::<(String, u32, String, String, String)>::new();
@@ -276,6 +463,21 @@ impl<'a> DjangoCollector<'a> {
         let Some((left, _right)) = assignment_sides(self.parsed, node) else {
             return;
         };
+        if left.trim() == "urlpatterns"
+            && let Some(right) = assignment_right_node(node)
+            && let Some(include) = self.router_urls_include(right)
+        {
+            self.index.patterns.push(UrlPattern {
+                file: self.parsed.source.path.clone(),
+                kind: UrlPatternKind::Path,
+                path: Some(String::new()),
+                dynamic_path: false,
+                name: None,
+                target: PatternTarget::Include(include),
+                span: self.parsed.span_for(node),
+            });
+            return;
+        }
         let Some(call) = node
             .child_by_field_name("right")
             .and_then(|right| find_first_kind(right, "call"))
@@ -390,6 +592,7 @@ impl<'a> DjangoCollector<'a> {
             return IncludeTarget {
                 file: None,
                 router_name: None,
+                generated: None,
                 dynamic: true,
             };
         };
@@ -403,6 +606,7 @@ impl<'a> DjangoCollector<'a> {
             return IncludeTarget {
                 file: None,
                 router_name: None,
+                generated: None,
                 dynamic: true,
             };
         };
@@ -418,6 +622,7 @@ impl<'a> DjangoCollector<'a> {
             return IncludeTarget {
                 file,
                 router_name: None,
+                generated: None,
                 dynamic: false,
             };
         }
@@ -427,6 +632,7 @@ impl<'a> DjangoCollector<'a> {
             return IncludeTarget {
                 file: None,
                 router_name: Some(router_name),
+                generated: None,
                 dynamic: false,
             };
         }
@@ -435,15 +641,41 @@ impl<'a> DjangoCollector<'a> {
                 return IncludeTarget {
                     file: Some(file),
                     router_name: None,
+                    generated: None,
                     dynamic: false,
                 };
             }
+        }
+        if first.kind() == "call" {
+            if let Some(generated) = generated_include(self.parsed, first) {
+                return IncludeTarget {
+                    file: None,
+                    router_name: None,
+                    generated: Some(generated),
+                    dynamic: false,
+                };
+            }
+            self.index.diagnostics.push(diagnostic(
+                diagnostic_codes::DJANGO_DYNAMIC_INCLUDE_HELPER,
+                self.parsed.span_for(first),
+                &format!(
+                    "Django include helper could not be expanded statically: {}",
+                    include_helper_description(self.parsed, first)
+                ),
+            ));
+            return IncludeTarget {
+                file: None,
+                router_name: None,
+                generated: None,
+                dynamic: true,
+            };
         }
         let symbol = self.parsed.text_for(first).unwrap_or_default().trim();
         if let Some(target) = self.resolve_import(symbol) {
             return IncludeTarget {
                 file: target.file,
                 router_name: None,
+                generated: None,
                 dynamic: false,
             };
         }
@@ -455,6 +687,7 @@ impl<'a> DjangoCollector<'a> {
         IncludeTarget {
             file: None,
             router_name: None,
+            generated: None,
             dynamic: true,
         }
     }
@@ -464,6 +697,7 @@ impl<'a> DjangoCollector<'a> {
         (attr == "urls").then_some(IncludeTarget {
             file: None,
             router_name: Some(router_name),
+            generated: None,
             dynamic: false,
         })
     }
@@ -540,6 +774,14 @@ impl<'a> DjangoCollector<'a> {
                 diagnostic_codes::DRF_UNRESOLVED_VIEWSET,
                 self.parsed.span_for(args[1]),
                 "DRF router viewset could not be resolved statically",
+            ));
+        } else if viewset.as_ref().is_some_and(|viewset| {
+            viewset.unresolved_viewset_base && viewset.auto_actions.is_empty()
+        }) {
+            self.index.diagnostics.push(diagnostic(
+                diagnostic_codes::DRF_UNRESOLVED_VIEWSET_BASE,
+                self.parsed.span_for(args[1]),
+                "DRF viewset base class could not be resolved to a known framework base",
             ));
         }
         let basename = keyword_string(self.parsed, call, "basename");
@@ -780,12 +1022,102 @@ fn emit_pattern_routes(
                     &pattern.file,
                     router_name,
                     &full_path,
+                    include_evidence.clone(),
+                    routes,
+                    seen,
+                );
+            }
+            if let Some(generated) = &include.generated {
+                emit_generated_include_routes(
+                    index,
+                    generated,
+                    &full_path,
                     include_evidence,
                     routes,
                     seen,
                 );
             }
         }
+    }
+}
+
+fn emit_generated_include_routes(
+    index: &DjangoIndex,
+    generated: &GeneratedInclude,
+    prefix: &str,
+    inherited_evidence: Vec<SourceEvidence>,
+    routes: &mut Vec<Route>,
+    seen: &mut BTreeSet<(String, u32, String, String, String)>,
+) {
+    for registration in index.model_views.iter().filter(|registration| {
+        registration.model_name == generated.model_name
+            && registration.detail == generated.detail
+            && registration
+                .app_label
+                .as_deref()
+                .is_none_or(|app_label| app_label == generated.app_label)
+    }) {
+        let mut source_evidence = inherited_evidence.clone();
+        source_evidence.push(source_evidence_item(
+            "django_generated_include",
+            Some(SymbolRef {
+                name: generated.helper.clone(),
+                span: Some(generated.span.clone()),
+            }),
+            generated.span.clone(),
+            Confidence::Medium,
+            vec![format!(
+                "Generated include expanded from {}({}, {}, detail={})",
+                generated.helper, generated.app_label, generated.model_name, generated.detail
+            )],
+        ));
+        source_evidence.push(source_evidence_item(
+            "django_model_view_registration",
+            Some(SymbolRef {
+                name: registration.handler.name.clone(),
+                span: Some(registration.handler.span.clone()),
+            }),
+            registration.span.clone(),
+            Confidence::Medium,
+            Vec::new(),
+        ));
+        let full_path = join_paths(prefix, &registration.path);
+        let mut extensions = authmap_core::ExtensionMap::new();
+        extensions.insert(
+            "authmap.django".to_string(),
+            serde_json::json!({
+                "route_pattern_kind": "generated_include",
+                "handler_kind": handler_kind_name(registration.handler.kind),
+                "class_name": registration.handler.class_name,
+                "method_name": registration.handler.method_name,
+                "generated_helper": generated.helper,
+                "model_name": generated.model_name,
+            }),
+        );
+        push_route_unique(
+            routes,
+            seen,
+            Route {
+                id: String::new(),
+                framework: Framework::Django,
+                method: "ANY".to_string(),
+                path: full_path,
+                name: registration.name.clone(),
+                tags: Vec::new(),
+                middleware: Vec::new(),
+                handler: Some(SymbolRef {
+                    name: registration.handler.name.clone(),
+                    span: Some(registration.handler.span.clone()),
+                }),
+                span: Some(registration.span.clone()),
+                source_evidence,
+                confidence: Confidence::Medium,
+                notes: vec![
+                    "Route emitted from statically matched generated URL helper".to_string(),
+                ],
+                extensions,
+            },
+        );
     }
 }
 
@@ -908,11 +1240,7 @@ fn standard_viewset_actions(viewset: &ClassInfo) -> Vec<StandardAction<'_>> {
     candidates
         .into_iter()
         .filter_map(|(name, method, detail)| {
-            let standard_for_base = match viewset.auto_actions {
-                ViewSetAutoActions::Model => true,
-                ViewSetAutoActions::ReadOnly => matches!(name, "list" | "retrieve"),
-                ViewSetAutoActions::None => false,
-            };
+            let standard_for_base = viewset.auto_actions.contains(name);
             if standard_for_base || viewset.methods.contains_key(name) {
                 Some(StandardAction {
                     name,
@@ -1016,6 +1344,9 @@ fn collect_symbols(parsed: &ParsedFile, root: Node<'_>, index: &mut DjangoIndex)
     let mut stack = vec![root];
     while let Some(node) = stack.pop() {
         match node.kind() {
+            "decorated_definition" => {
+                collect_model_view_registration(parsed, node, index);
+            }
             "function_definition" => {
                 if let Some(name_node) = node.child_by_field_name("name")
                     && let Some(name) = parsed.text_for(name_node)
@@ -1030,12 +1361,7 @@ fn collect_symbols(parsed: &ParsedFile, root: Node<'_>, index: &mut DjangoIndex)
                 }
             }
             "class_definition" => {
-                let imports = index
-                    .imports_by_file
-                    .get(&parsed.source.path)
-                    .cloned()
-                    .unwrap_or_default();
-                if let Some(class) = class_info(parsed, node, &imports, &mut index.diagnostics) {
+                if let Some(class) = class_info(parsed, node) {
                     index
                         .classes
                         .insert((parsed.source.path.clone(), class.name.clone()), class);
@@ -1048,12 +1374,73 @@ fn collect_symbols(parsed: &ParsedFile, root: Node<'_>, index: &mut DjangoIndex)
     }
 }
 
-fn class_info(
+fn collect_model_view_registration(
     parsed: &ParsedFile,
-    node: Node<'_>,
-    imports: &BTreeMap<String, ImportTarget>,
-    diagnostics: &mut Vec<Diagnostic>,
-) -> Option<ClassInfo> {
+    decorated: Node<'_>,
+    index: &mut DjangoIndex,
+) {
+    let Some(definition) = find_direct_child_kind(decorated, "class_definition")
+        .or_else(|| find_direct_child_kind(decorated, "function_definition"))
+    else {
+        return;
+    };
+    let Some(name_node) = definition.child_by_field_name("name") else {
+        return;
+    };
+    let Some(name) = parsed.text_for(name_node).map(str::to_string) else {
+        return;
+    };
+    let (kind, class_name, method_name) = if definition.kind() == "class_definition" {
+        (HandlerKind::ClassBasedView, Some(name.clone()), None)
+    } else {
+        (HandlerKind::Function, None, None)
+    };
+    let mut cursor = decorated.walk();
+    for decorator in decorated
+        .children(&mut cursor)
+        .filter(|child| child.kind() == "decorator")
+    {
+        let Some(call) = find_first_kind(decorator, "call") else {
+            continue;
+        };
+        let Some(function) = call.child_by_field_name("function") else {
+            continue;
+        };
+        if terminal_name(parsed, function).as_deref() != Some("register_model_view") {
+            continue;
+        }
+        let args = call_argument_nodes(call);
+        let Some(model) = args
+            .first()
+            .and_then(|arg| parsed.text_for(*arg))
+            .map(clean_symbol)
+        else {
+            continue;
+        };
+        let view_name = args.get(1).and_then(|arg| string_literal(parsed, *arg));
+        let path = keyword_string(parsed, call, "path")
+            .or_else(|| view_name.clone())
+            .unwrap_or_default();
+        let detail = keyword_bool(parsed, call, "detail").unwrap_or(true);
+        index.model_views.push(ModelViewRegistration {
+            app_label: infer_python_app_label(parsed),
+            model_name: model.to_ascii_lowercase(),
+            detail,
+            path,
+            name: view_name,
+            handler: HandlerTarget {
+                name: name.clone(),
+                span: parsed.span_for(name_node),
+                kind,
+                class_name: class_name.clone(),
+                method_name: method_name.clone(),
+            },
+            span: parsed.span_for(call),
+        });
+    }
+}
+
+fn class_info(parsed: &ParsedFile, node: Node<'_>) -> Option<ClassInfo> {
     let name_node = node.child_by_field_name("name")?;
     let name = parsed.text_for(name_node)?.to_string();
     let mut methods = BTreeMap::new();
@@ -1101,50 +1488,51 @@ fn class_info(
         }
     }
     let bases = class_bases(parsed, node);
-    let (auto_actions, unresolved_viewset_base) = classify_viewset_bases(&bases, imports);
-    if unresolved_viewset_base {
-        diagnostics.push(diagnostic(
-            diagnostic_codes::DRF_UNRESOLVED_VIEWSET_BASE,
-            parsed.span_for(name_node),
-            "DRF viewset base class could not be resolved to a known framework base",
-        ));
-    }
     Some(ClassInfo {
+        file: parsed.source.path.clone(),
         name,
         span: parsed.span_for(name_node),
-        auto_actions,
+        bases: bases.clone(),
+        auto_actions: ViewSetAutoActions::default(),
         methods,
         actions,
         lookup_field,
+        unresolved_viewset_base: bases.iter().any(|base| {
+            let clean = clean_symbol(base);
+            clean.ends_with("ModelViewSet") || clean.ends_with("ViewSet")
+        }),
     })
 }
 
-fn classify_viewset_bases(
-    bases: &[String],
-    imports: &BTreeMap<String, ImportTarget>,
-) -> (ViewSetAutoActions, bool) {
-    let mut unresolved_model_like = false;
-    for base in bases {
-        let clean = clean_symbol(base);
-        let resolved_drf_base = imports.get(&clean).is_some_and(|target| {
-            target.module.as_deref() == Some("rest_framework.viewsets")
-                && target
-                    .name
-                    .as_deref()
-                    .is_some_and(|name| matches!(name, "ModelViewSet" | "ReadOnlyModelViewSet"))
-        });
-        if resolved_drf_base {
-            if clean == "ReadOnlyModelViewSet" {
-                return (ViewSetAutoActions::ReadOnly, false);
-            }
-            if clean == "ModelViewSet" {
-                return (ViewSetAutoActions::Model, false);
-            }
-        } else if clean.ends_with("ModelViewSet") {
-            unresolved_model_like = true;
-        }
+fn builtin_drf_base_actions(base: &str) -> Option<ViewSetAutoActions> {
+    let clean = clean_symbol(base);
+    match clean.as_str() {
+        "ModelViewSet" => Some(ViewSetAutoActions::model()),
+        "ReadOnlyModelViewSet" => Some(ViewSetAutoActions::read_only()),
+        "ListModelMixin" => Some(ViewSetAutoActions {
+            list: true,
+            ..ViewSetAutoActions::default()
+        }),
+        "CreateModelMixin" => Some(ViewSetAutoActions {
+            create: true,
+            ..ViewSetAutoActions::default()
+        }),
+        "RetrieveModelMixin" => Some(ViewSetAutoActions {
+            retrieve: true,
+            ..ViewSetAutoActions::default()
+        }),
+        "UpdateModelMixin" => Some(ViewSetAutoActions {
+            update: true,
+            partial_update: true,
+            ..ViewSetAutoActions::default()
+        }),
+        "DestroyModelMixin" => Some(ViewSetAutoActions {
+            destroy: true,
+            ..ViewSetAutoActions::default()
+        }),
+        "GenericViewSet" | "ViewSet" => Some(ViewSetAutoActions::default()),
+        _ => None,
     }
-    (ViewSetAutoActions::None, unresolved_model_like)
 }
 
 fn class_bases(parsed: &ParsedFile, node: Node<'_>) -> Vec<String> {
@@ -1416,6 +1804,86 @@ fn include_call<'tree>(parsed: &ParsedFile, node: Node<'tree>) -> Option<Node<'t
     None
 }
 
+fn include_helper_description(parsed: &ParsedFile, call: Node<'_>) -> String {
+    let helper = call
+        .child_by_field_name("function")
+        .and_then(|function| parsed.text_for(function))
+        .unwrap_or("<unknown>");
+    let mut positional = Vec::new();
+    let mut keywords = Vec::new();
+    if let Some(arguments) = call.child_by_field_name("arguments") {
+        let mut cursor = arguments.walk();
+        for child in arguments
+            .children(&mut cursor)
+            .filter(|child| child.is_named())
+        {
+            match child.kind() {
+                "keyword_argument" => {
+                    let name = child
+                        .child_by_field_name("name")
+                        .and_then(|name| parsed.text_for(name))
+                        .unwrap_or("<unknown>");
+                    let value = child
+                        .child_by_field_name("value")
+                        .and_then(|value| literal_summary(parsed, value))
+                        .unwrap_or_else(|| "<dynamic>".to_string());
+                    keywords.push(format!("{name}={value}"));
+                }
+                _ => {
+                    positional.push(
+                        literal_summary(parsed, child).unwrap_or_else(|| "<dynamic>".to_string()),
+                    );
+                }
+            }
+        }
+    }
+    format!(
+        "helper={helper}; positional=[{}]; keywords=[{}]",
+        positional.join(", "),
+        keywords.join(", ")
+    )
+}
+
+fn generated_include(parsed: &ParsedFile, call: Node<'_>) -> Option<GeneratedInclude> {
+    let helper = call
+        .child_by_field_name("function")
+        .and_then(|function| parsed.text_for(function))
+        .map(terminal_symbol_name)?;
+    if helper != "get_model_urls" {
+        return None;
+    }
+    let args = call_argument_nodes(call);
+    let app_label = args.first().and_then(|arg| string_literal(parsed, *arg))?;
+    let model_name = args.get(1).and_then(|arg| string_literal(parsed, *arg))?;
+    let detail = keyword_bool(parsed, call, "detail").unwrap_or(true);
+    Some(GeneratedInclude {
+        helper,
+        app_label,
+        model_name: model_name.to_ascii_lowercase(),
+        detail,
+        span: parsed.span_for(call),
+    })
+}
+
+fn infer_python_app_label(parsed: &ParsedFile) -> Option<String> {
+    Path::new(&parsed.source.path)
+        .parent()
+        .and_then(Path::file_name)
+        .and_then(|name| name.to_str())
+        .map(str::to_string)
+}
+
+fn literal_summary(parsed: &ParsedFile, node: Node<'_>) -> Option<String> {
+    if let Some(value) = string_literal(parsed, node) {
+        return Some(format!("{value:?}"));
+    }
+    match parsed.text_for(node)?.trim() {
+        "True" | "False" | "None" => Some(parsed.text_for(node)?.trim().to_string()),
+        text if text.chars().all(|ch| ch.is_ascii_digit()) => Some(text.to_string()),
+        _ => None,
+    }
+}
+
 fn is_urlpatterns_context(parsed: &ParsedFile, call: Node<'_>) -> bool {
     let mut current = call;
     while let Some(parent) = current.parent() {
@@ -1579,6 +2047,10 @@ fn terminal_name(parsed: &ParsedFile, node: Node<'_>) -> Option<String> {
     parsed
         .text_for(node)
         .and_then(|text| text.rsplit('.').next().map(str::to_string))
+}
+
+fn terminal_symbol_name(text: &str) -> String {
+    text.rsplit(['.', ':']).next().unwrap_or(text).to_string()
 }
 
 fn attribute_target(parsed: &ParsedFile, node: Node<'_>) -> Option<(String, String)> {
