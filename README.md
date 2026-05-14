@@ -27,11 +27,12 @@ Authorization bugs are often inventory failures before they are coding failures.
 
 If reviewers can see the effective authorization surface of an application, they can spot missing checks, misplaced controls, and high-risk drift earlier.
 
-## Initial scope
+## Current scope
 
-AuthMap will start as a local CLI and CI-friendly analyzer that produces a structured authorization map.
+AuthMap is a local CLI and CI-friendly analyzer that produces a structured
+authorization map.
 
-Initial targets:
+Current built-in targets:
 
 - FastAPI
 - Django and Django REST Framework
@@ -40,7 +41,7 @@ Initial targets:
 - Common middleware/decorator/guard patterns
 - ORM mutation evidence for SQLAlchemy, Django ORM, and Prisma
 
-Initial outputs:
+Current outputs:
 
 - Markdown report
 - JSON authorization map
@@ -53,6 +54,8 @@ Diagnostic categories, stable codes, and CI exit behavior are documented in
 [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md).
 Project configuration, custom authorization rules, and sensitivity labels are
 documented in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+Installation, CLI usage, report interpretation, examples, and limitations are
+documented in [docs/USAGE.md](docs/USAGE.md).
 
 ## Example report shape
 
@@ -121,17 +124,29 @@ AuthMap should classify coverage in reviewable terms:
 - admin_guarded
 - unknown_or_dynamic
 
-## CLI sketch
+## Quickstart
 
 ```bash
-authmap init
-authmap scan --format markdown --output authmap.md
-authmap scan --format json --output authmap.json
-authmap baseline create . --output authmap.baseline.json
-authmap diff --base authmap.baseline.json --head authmap.json
-authmap diff main...HEAD --target .
-authmap explain ROUTE_OR_FINDING_ID
-authmap rules suggest
+cargo install --path crates/authmap-cli
+authmap init --output authmap.yml
+authmap scan . --config authmap.yml --format markdown --output authmap.md
+authmap scan . --config authmap.yml --format json --output authmap.json
+```
+
+Run from source during development with `cargo run -p authmap-cli --`:
+
+```bash
+cargo run -p authmap-cli -- scan tests/fixtures/realistic/fastapi \
+  --format markdown --output authmap.md
+cargo run -p authmap-cli -- scan tests/fixtures/realistic/express \
+  --format json --output authmap.json
+```
+
+Use the generated Markdown for human review and the JSON document for
+automation. SARIF is available for advisory GitHub code-scanning integration:
+
+```bash
+authmap scan . --format sarif --output authmap.sarif
 ```
 
 `authmap explain <id>` reads `authmap.json` by default, or another AuthMap JSON
@@ -143,6 +158,18 @@ than a confirmed vulnerability.
 project-specific guard names. It prints Markdown by default, supports
 `--format json`, `--output <path>`, and `--config <path>`, and never modifies
 `authmap.yml`.
+
+Baselines and diffs support pull request review:
+
+```bash
+authmap baseline create . --output authmap.baseline.json
+authmap scan . --format json --output authmap.json
+authmap diff --base authmap.baseline.json --head authmap.json --format markdown
+authmap diff main...HEAD --target .
+```
+
+See [docs/USAGE.md](docs/USAGE.md) for end-to-end examples, output
+interpretation, limitations, and defensive-use guidance.
 
 ## Local development
 
@@ -285,6 +312,10 @@ AuthMap is not intended to:
 - replace human security review
 - claim vulnerabilities without evidence
 - require running the target application
+
+See [SECURITY.md](SECURITY.md) for authorized-use boundaries and finding
+language. AuthMap reports review prompts and evidence-backed hypotheses unless a
+finding is mechanically proven.
 
 ## Status
 
