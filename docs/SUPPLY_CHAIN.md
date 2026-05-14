@@ -49,7 +49,7 @@ When adding a new direct dependency, reviewers should check the dependency's dec
 
 ## Release artifact sanity checks
 
-Before publishing public packages or release artifacts, maintainers should verify that CI has completed successfully on the release commit and that the locked install smoke test passes for the `authmap` CLI. The smoke test installs from `crates/authmap-cli`, runs `authmap --help`, and generates JSON, Markdown, baseline, and diff outputs against a static fixture.
+The release process and compatibility policy are documented in [RELEASES.md](RELEASES.md). Before publishing public packages or release artifacts, maintainers should verify that CI has completed successfully on the release commit and that the locked install smoke test passes for the `authmap` CLI. The smoke test installs from `crates/authmap-cli`, runs `authmap --help`, and generates JSON, Markdown, baseline, and diff outputs against a static fixture.
 
 For a manual pre-release check, run:
 
@@ -57,6 +57,7 @@ For a manual pre-release check, run:
 cargo test --workspace --all-targets --locked
 cargo install --path crates/authmap-cli --locked --root /tmp/authmap-install --debug --force
 /tmp/authmap-install/bin/authmap --help
+cargo package --list --manifest-path crates/authmap-cli/Cargo.toml --locked
 ```
 
-Release artifacts should not include generated reports, local baselines, credentials, or target application source code beyond what is intentionally packaged by Cargo.
+Tagged release automation should generate platform archives, `SHA256SUMS`, and provenance metadata when GitHub artifact attestation support is available. Release artifacts should not include generated reports, local baselines, credentials, or target application source code beyond what is intentionally packaged by Cargo.

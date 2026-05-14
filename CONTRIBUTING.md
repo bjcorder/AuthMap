@@ -38,7 +38,14 @@ for the `authmap` CLI. Documentation-only checks stay in the separate docs
 workflow.
 
 Dependency and workflow changes should follow the supply-chain policy in
-[docs/SUPPLY_CHAIN.md](docs/SUPPLY_CHAIN.md). Keep dependency updates separate
-from unrelated feature work when practical, include intentional `Cargo.lock`
+[docs/SUPPLY_CHAIN.md](docs/SUPPLY_CHAIN.md). Release-facing changes should
+follow the versioning and changelog policy in
+[docs/RELEASES.md](docs/RELEASES.md). Keep dependency updates separate from
+unrelated feature work when practical, include intentional `Cargo.lock`
 changes, and review licenses, advisories, build behavior, and GitHub Actions
 permissions before merge.
+
+Update [CHANGELOG.md](CHANGELOG.md) for user-visible CLI, schema,
+configuration, report, GitHub Action, documentation, or release-process
+changes. Call out schema compatibility notes when the AuthMap JSON contract or
+schema-facing behavior changes.

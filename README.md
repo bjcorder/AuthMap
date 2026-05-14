@@ -182,6 +182,8 @@ interpretation, limitations, and defensive-use guidance.
 AuthMap is implemented as a Rust Cargo workspace. Supply-chain maintenance,
 lockfile review, dependency audit, license review, and release sanity
 expectations are documented in [docs/SUPPLY_CHAIN.md](docs/SUPPLY_CHAIN.md).
+Versioning, changelog, compatibility, and tagged release expectations are
+documented in [docs/RELEASES.md](docs/RELEASES.md).
 Useful local commands:
 
 ```bash

@@ -3,8 +3,10 @@
 ## Supported versions
 
 AuthMap is pre-1.0 and early-stage. Security fixes are currently made on the
-default branch until formal releases begin. Once releases exist, this section
-will describe supported release lines.
+default branch and normally released from the latest pre-1.0 line unless release
+notes say otherwise. Versioning, release, and pre-1.0 compatibility expectations
+are documented in [docs/RELEASES.md](docs/RELEASES.md). Once 1.0 support lines
+exist, this section will describe supported release lines.
 
 ## Intended use
 
