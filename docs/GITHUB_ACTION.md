@@ -9,7 +9,8 @@ same summary.
 
 The action is defensive and local-only. It statically scans source files and
 does not run target applications, connect to databases, or perform live attack
-workflows.
+workflows. Privacy, report-sensitivity, artifact, SARIF, baseline, and sharing
+guidance is documented in [DATA_HANDLING.md](DATA_HANDLING.md).
 
 ## Basic Pull Request Workflow
 
@@ -26,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Ozark-Security-Labs/AuthMap@v0
+      - uses: Ozark-Security-Labs/AuthMap@v1
         with:
           mode: advisory
           output: markdown,json
@@ -34,14 +35,23 @@ jobs:
 
 By default, generated reports are written to `.authmap` and uploaded as the
 `authmap-results` artifact. The artifact upload is limited to the report files
-generated during this action run, not the entire output directory.
+generated during this action run, not the entire output directory. AuthMap
+redacts obvious secrets before writing reports and job summaries, but artifacts
+can still reveal sensitive application structure, routes, file paths, line
+numbers, and review rationale. Treat uploaded reports as sensitive review
+material unless your organization has approved broader sharing. Set
+`upload-artifact: "false"` when generated reports should not be published as
+workflow artifacts.
 
 ## Baseline Drift Review
 
-Provide a checked-in or downloaded AuthMap JSON baseline to review
-authorization drift in pull requests. The action writes `authmap.diff.json` and
-`authmap.diff.md` into the output directory and uploads them with the other
-reports when artifact upload is enabled.
+Provide an AuthMap JSON baseline to review authorization drift in pull requests.
+When a pull request base SHA is available, the action reads the baseline from
+that trusted base commit instead of the PR checkout so a PR cannot mask drift by
+changing its own baseline file. Set `baseline-ref` to a protected branch, tag, or
+commit SHA when another trusted baseline source is required. The action writes
+`authmap.diff.json` and `authmap.diff.md` into the output directory and uploads
+them with the other reports when artifact upload is enabled.
 
 ```yaml
 name: AuthMap drift
@@ -56,7 +66,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Ozark-Security-Labs/AuthMap@v0
+      - uses: Ozark-Security-Labs/AuthMap@v1
         with:
           mode: enforce
           output: markdown,json
@@ -68,7 +78,9 @@ jobs:
 
 SARIF upload is opt-in because GitHub code scanning requires
 `security-events: write`. If `upload-sarif` is true, the action ensures SARIF is
-generated even when it is not listed in `output`.
+generated even when it is not listed in `output`. Uploaded SARIF can expose
+route, source-location, diagnostic, and review-priority details through
+code-scanning surfaces.
 
 ```yaml
 name: AuthMap
@@ -84,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Ozark-Security-Labs/AuthMap@v0
+      - uses: Ozark-Security-Labs/AuthMap@v1
         with:
           mode: advisory
           output: markdown,json,sarif
@@ -104,7 +116,8 @@ the generated SARIF file as an artifact instead.
 | `output` | `markdown,json` | Comma-separated report formats. Supported values are `markdown`, `json`, and `sarif`. |
 | `target` | `.` | Target path to scan, relative to the checked-out repository workspace. |
 | `config` | empty | Optional `authmap.yml` path, relative to the checked-out repository workspace. |
-| `baseline` | empty | Optional AuthMap JSON baseline path, relative to the checked-out repository workspace. When set, the action generates a current JSON map, runs `authmap diff --base ... --head ...`, and appends drift Markdown to the job summary. |
+| `baseline` | empty | Optional AuthMap JSON baseline path, relative to the checked-out repository workspace or trusted `baseline-ref`. When set, the action generates a current JSON map, runs `authmap diff --base ... --head ...`, and appends drift Markdown to the job summary. |
+| `baseline-ref` | pull request base SHA when available | Optional trusted git ref used to read the baseline file, such as a protected branch, tag, or commit SHA. |
 | `fail-on` | empty | Optional comma-separated drift categories that override `drift.fail_on` for baseline diffs. |
 | `output-directory` | `.authmap` | Workspace-relative directory where generated reports are written. The workspace root itself is rejected. |
 | `upload-artifact` | `true` | Upload generated reports with `actions/upload-artifact`. |
@@ -137,7 +150,8 @@ or missing baselines, fail with the CLI exit code.
 Path-like action inputs (`target`, `config`, `baseline`, and
 `output-directory`) are workspace-relative only. Absolute paths, parent
 directory components, empty path components, control characters, and
-`output-directory: .` are rejected before AuthMap runs. The baseline must be an
-existing AuthMap JSON document; create one with
-`authmap baseline create . --output authmap.baseline.json` and commit or
-restore it before the action runs.
+`output-directory: .` are rejected before AuthMap runs. `baseline-ref` must be a
+git ref, tag, or commit SHA without whitespace, control characters, or a leading
+`-`. The baseline must be an existing AuthMap JSON document; create one with
+`authmap baseline create . --output authmap.baseline.json` and commit or restore
+it on the trusted baseline ref before the action runs.

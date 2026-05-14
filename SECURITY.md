@@ -2,9 +2,10 @@
 
 ## Supported versions
 
-AuthMap is pre-1.0 and early-stage. Security fixes are currently made on the
-default branch until formal releases begin. Once releases exist, this section
-will describe supported release lines.
+AuthMap 1.x is the supported stable release line. Security fixes are normally
+released from the default branch into the latest 1.x patch release unless
+release notes describe a different support window. Versioning, release, and
+compatibility expectations are documented in [docs/RELEASES.md](docs/RELEASES.md).
 
 ## Intended use
 
@@ -40,6 +41,10 @@ Please include:
 - impact summary
 - reproduction steps using sanitized examples
 - whether any reports or artifacts exposed sensitive data
+
+AuthMap data-handling expectations, report sensitivity, CI artifact behavior,
+SARIF sharing considerations, baseline handling, and redaction limits are
+documented in [docs/DATA_HANDLING.md](docs/DATA_HANDLING.md).
 
 ## Safe harbor
 

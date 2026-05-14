@@ -1,0 +1,229 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish, such as v1.0.0.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.release-context.outputs.tag }}
+      version: ${{ steps.release-context.outputs.version }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+      - id: release-context
+        name: Validate release tag and workspace version
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            tag="${INPUT_TAG}"
+            git fetch --tags --force origin "refs/tags/${tag}:refs/tags/${tag}"
+            git checkout --detach "${tag}"
+          fi
+
+          case "${tag}" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "Release tag must look like vMAJOR.MINOR.PATCH" >&2; exit 1 ;;
+          esac
+
+          version="$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(p["version"] for p in data["packages"] if p["name"] == "authmap-cli"))')"
+          if [ "${tag#v}" != "${version}" ]; then
+            echo "Tag ${tag} does not match workspace package version ${version}" >&2
+            exit 1
+          fi
+
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+      - name: Extract release notes
+        shell: bash
+        env:
+          VERSION: ${{ steps.release-context.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > release-notes.md
+          from pathlib import Path
+          import os
+          import re
+          import sys
+
+          version = os.environ["VERSION"]
+          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          pattern = re.compile(rf"^## {re.escape(version)}(?:\\s+-.*)?$", re.MULTILINE)
+          match = pattern.search(changelog)
+          if not match:
+              print(f"CHANGELOG.md does not contain a section for {version}", file=sys.stderr)
+              sys.exit(1)
+          next_match = re.search(r"^## ", changelog[match.end():], re.MULTILINE)
+          end = match.end() + next_match.start() if next_match else len(changelog)
+          notes = changelog[match.end():end].strip()
+          if not notes:
+              print(f"CHANGELOG.md section for {version} is empty", file=sys.stderr)
+              sys.exit(1)
+          print(notes)
+          PY
+      - name: Create or update draft GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release-context.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release edit "${TAG}" --draft=true --title "AuthMap ${TAG}" --notes-file release-notes.md
+          else
+            gh release create "${TAG}" --draft --verify-tag --title "AuthMap ${TAG}" --notes-file release-notes.md
+          fi
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - blacksmith-4vcpu-ubuntu-2404
+          - blacksmith-6vcpu-macos-latest
+          - blacksmith-4vcpu-windows-2025
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    env:
+      CARGO_TERM_COLOR: always
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+        with:
+          toolchain: "1.95"
+      - name: Test workspace
+        run: cargo test --workspace --all-targets --locked
+      - name: Build CLI
+        run: cargo build --package authmap-cli --bin authmap --release --locked
+      - name: Package artifact
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist package
+          host="$(rustc -vV | awk '/^host: / { print $2 }')"
+          base="authmap-${RELEASE_VERSION}-${host}"
+          mkdir -p "package/${base}"
+          cp README.md LICENSE "package/${base}/"
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            cp target/release/authmap.exe "package/${base}/authmap.exe"
+            (cd package && powershell -NoProfile -Command "Compress-Archive -Path '${base}' -DestinationPath '../dist/${base}.zip' -Force")
+            artifact="dist/${base}.zip"
+          else
+            cp target/release/authmap "package/${base}/authmap"
+            tar -C package -czf "dist/${base}.tar.gz" "${base}"
+            artifact="dist/${base}.tar.gz"
+          fi
+          echo "artifact=${artifact}" >> "${GITHUB_OUTPUT}"
+      - name: Smoke test packaged CLI
+        shell: bash
+        env:
+          ARTIFACT: ${{ steps.package.outputs.artifact }}
+        run: |
+          set -euo pipefail
+          smoke_dir="${RUNNER_TEMP}/authmap-release-smoke"
+          rm -rf "${smoke_dir}"
+          mkdir -p "${smoke_dir}"
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            powershell -NoProfile -Command "Expand-Archive -Path '${ARTIFACT}' -DestinationPath '${smoke_dir}' -Force"
+            authmap_bin="$(find "${smoke_dir}" -name authmap.exe -type f | head -n 1)"
+          else
+            tar -C "${smoke_dir}" -xzf "${ARTIFACT}"
+            authmap_bin="$(find "${smoke_dir}" -name authmap -type f | head -n 1)"
+          fi
+          if [ -z "${authmap_bin}" ]; then
+            echo "packaged authmap binary was not found" >&2
+            exit 1
+          fi
+          "${authmap_bin}" --help
+          "${authmap_bin}" --version
+
+          report_dir="${smoke_dir}/reports"
+          mkdir -p "${report_dir}"
+          "${authmap_bin}" scan tests/fixtures/negative/frontend_only --format json --output "${report_dir}/authmap.json"
+          "${authmap_bin}" scan tests/fixtures/negative/frontend_only --format markdown --output "${report_dir}/authmap.md"
+          "${authmap_bin}" scan tests/fixtures/negative/frontend_only --format sarif --output "${report_dir}/authmap.sarif"
+          "${authmap_bin}" baseline create tests/fixtures/negative/frontend_only --output "${report_dir}/authmap.baseline.json"
+          "${authmap_bin}" diff --base "${report_dir}/authmap.baseline.json" --head "${report_dir}/authmap.json" --format json --output "${report_dir}/authmap.diff.json"
+      - name: Upload artifact to draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT: ${{ steps.package.outputs.artifact }}
+        run: gh release upload "${RELEASE_TAG}" "${ARTIFACT}" --clobber
+
+  finalize:
+    needs:
+      - prepare
+      - build
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - name: Download release artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "${RELEASE_TAG}" --dir dist --pattern 'authmap-*'
+      - name: Generate SHA-256 checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum authmap-* > SHA256SUMS)
+      - name: Upload checksums
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${RELEASE_TAG}" dist/SHA256SUMS --clobber
+      - name: Attest release artifacts when supported
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh attestation sign --help >/dev/null 2>&1; then
+            for artifact in dist/authmap-* dist/SHA256SUMS; do
+              gh attestation sign "${artifact}" --repo "${GITHUB_REPOSITORY}"
+            done
+          else
+            echo "gh attestation sign is not available on this runner"
+          fi
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${RELEASE_TAG}" --draft=false

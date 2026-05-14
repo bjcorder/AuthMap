@@ -1,8 +1,13 @@
 [package]
 name = "authmap-cli"
+categories.workspace = true
 description = "AuthMap command-line interface."
+documentation.workspace = true
 edition.workspace = true
+homepage.workspace = true
+keywords.workspace = true
 license.workspace = true
+readme.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 version.workspace = true

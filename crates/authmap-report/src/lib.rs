@@ -3,6 +3,7 @@ use std::fmt::Write as _;
 use std::fs::{self, OpenOptions};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use authmap_analysis::{
     DriftChange, DriftChangeKind, DriftChangeSeverity, DriftComparison, DriftReport,
@@ -13,7 +14,8 @@ use authmap_core::{
     EvidenceType, Framework, Mutation, MutationOperation, ReachabilityLink, RiskLevel,
     SCHEMA_VERSION, ScanMode, SourceFile, Span, SymbolRef,
 };
-use serde_json::{Value, json};
+use regex::{Captures, Regex};
+use serde_json::{Map, Value, json};
 use thiserror::Error;
 
 pub trait Reporter: Send + Sync {
@@ -38,7 +40,9 @@ impl Reporter for JsonReporter {
     }
 
     fn render(&self, document: &AuthMapDocument) -> Result<String, ReportError> {
-        serde_json::to_string_pretty(document).map_err(ReportError::Json)
+        let mut value = serde_json::to_value(document).map_err(ReportError::Json)?;
+        redact_json_value(&mut value);
+        serde_json::to_string_pretty(&value).map_err(ReportError::Json)
     }
 }
 
@@ -787,11 +791,15 @@ pub fn render_rule_suggestions_markdown(report: &RuleSuggestionReport) -> String
 }
 
 pub fn render_rule_suggestions_json(report: &RuleSuggestionReport) -> Result<String, ReportError> {
-    serde_json::to_string_pretty(report).map_err(ReportError::Json)
+    let mut value = serde_json::to_value(report).map_err(ReportError::Json)?;
+    redact_json_value(&mut value);
+    serde_json::to_string_pretty(&value).map_err(ReportError::Json)
 }
 
 pub fn render_drift_json(report: &DriftReport) -> Result<String, ReportError> {
-    serde_json::to_string_pretty(report).map_err(ReportError::Json)
+    let mut value = serde_json::to_value(report).map_err(ReportError::Json)?;
+    redact_json_value(&mut value);
+    serde_json::to_string_pretty(&value).map_err(ReportError::Json)
 }
 
 pub fn render_drift_markdown(report: &DriftReport) -> String {
@@ -979,7 +987,7 @@ fn render_named_markdown_list(output: &mut String, label: &str, items: &[String]
 }
 
 fn yaml_string(value: &str) -> String {
-    serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_string())
+    serde_json::to_string(&redact_sensitive_text(value)).unwrap_or_else(|_| "\"\"".to_string())
 }
 
 pub fn render_explain(document: &AuthMapDocument, id: &str) -> Result<String, ExplainError> {
@@ -1724,8 +1732,9 @@ fn escape_table(input: &str) -> String {
 }
 
 fn escape_inline(input: &str) -> String {
+    let redacted = redact_sensitive_text(input);
     let mut sanitized = String::new();
-    for ch in input.chars() {
+    for ch in redacted.chars() {
         match ch {
             '\n' => sanitized.push_str("\\n"),
             '\r' => sanitized.push_str("\\r"),
@@ -1893,6 +1902,8 @@ impl Reporter for SarifReporter {
                 }
             ]
         });
+        let mut sarif = sarif;
+        redact_json_value(&mut sarif);
         serde_json::to_string_pretty(&sarif).map_err(ReportError::Json)
     }
 }
@@ -2248,7 +2259,7 @@ fn sarif_location(span: &Span) -> Value {
     json!({
         "physicalLocation": {
             "artifactLocation": {
-                "uri": span.file
+                "uri": redact_sensitive_text(&span.file)
             },
             "region": sarif_region(span)
         }
@@ -2283,7 +2294,203 @@ fn enum_value<T: serde::Serialize>(value: &T) -> String {
 }
 
 pub fn redact_sensitive_text(input: &str) -> String {
-    input.replace("Authorization:", "Authorization: [REDACTED]")
+    if input.is_empty() {
+        return String::new();
+    }
+
+    let mut redacted = input.to_string();
+    for pattern in redaction_patterns() {
+        redacted = pattern.apply(&redacted);
+    }
+    redacted
+}
+
+fn redact_json_value(value: &mut Value) {
+    redact_json_value_for_key(value, None);
+}
+
+fn redact_json_value_for_key(value: &mut Value, key: Option<&str>) {
+    match value {
+        Value::String(text) => {
+            if !is_stable_identifier_key(key) || contains_sensitive_marker(text) {
+                *text = redact_sensitive_text(text);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                redact_json_value_for_key(item, key);
+            }
+        }
+        Value::Object(map) => redact_json_object(map),
+        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+    }
+}
+
+fn redact_json_object(map: &mut Map<String, Value>) {
+    for (key, value) in map {
+        let nested_key = Some(key.as_str());
+        if is_numeric_location_key(key) {
+            continue;
+        }
+        redact_json_value_for_key(value, nested_key);
+    }
+}
+
+fn is_stable_identifier_key(key: Option<&str>) -> bool {
+    matches!(
+        key,
+        Some(
+            "id" | "route_id"
+                | "base_route_id"
+                | "head_route_id"
+                | "evidence_id"
+                | "mutation_id"
+                | "link_id"
+                | "evidence_ids"
+                | "weak_evidence_ids"
+                | "mutation_ids"
+                | "link_ids"
+                | "schema_version"
+                | "tool_version"
+        )
+    )
+}
+
+fn is_numeric_location_key(key: &str) -> bool {
+    matches!(key, "region")
+}
+
+fn contains_sensitive_marker(input: &str) -> bool {
+    let lower = input.to_ascii_lowercase();
+    [
+        "authorization",
+        "api_key",
+        "apikey",
+        "access_token",
+        "refresh_token",
+        "password",
+        "passwd",
+        "secret",
+        "credential",
+        "client_secret",
+        "bearer ",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker))
+}
+
+struct RedactionPattern {
+    regex: Regex,
+    replacement: RedactionReplacement,
+}
+
+enum RedactionReplacement {
+    Static(&'static str),
+    SecretValue,
+    QuotedSecretValue,
+    Header,
+    UrlCredential,
+    QueryValue,
+}
+
+impl RedactionPattern {
+    fn apply(&self, input: &str) -> String {
+        match self.replacement {
+            RedactionReplacement::Static(replacement) => {
+                self.regex.replace_all(input, replacement).into_owned()
+            }
+            RedactionReplacement::SecretValue => self
+                .regex
+                .replace_all(input, |captures: &Captures<'_>| {
+                    format!(
+                        "{}[REDACTED]",
+                        captures.get(1).map_or("", |item| item.as_str())
+                    )
+                })
+                .into_owned(),
+            RedactionReplacement::QuotedSecretValue => self
+                .regex
+                .replace_all(input, |captures: &Captures<'_>| {
+                    format!(
+                        "{}{}[REDACTED]{}",
+                        captures.get(1).map_or("", |item| item.as_str()),
+                        captures.get(2).map_or("", |item| item.as_str()),
+                        captures.get(4).map_or("", |item| item.as_str())
+                    )
+                })
+                .into_owned(),
+            RedactionReplacement::Header => self
+                .regex
+                .replace_all(input, |captures: &Captures<'_>| {
+                    format!(
+                        "{}[REDACTED]",
+                        captures.get(1).map_or("", |item| item.as_str())
+                    )
+                })
+                .into_owned(),
+            RedactionReplacement::UrlCredential => self
+                .regex
+                .replace_all(input, |captures: &Captures<'_>| {
+                    format!(
+                        "{}[REDACTED]@",
+                        captures.get(1).map_or("", |item| item.as_str())
+                    )
+                })
+                .into_owned(),
+            RedactionReplacement::QueryValue => self
+                .regex
+                .replace_all(input, |captures: &Captures<'_>| {
+                    format!(
+                        "{}[REDACTED]",
+                        captures.get(1).map_or("", |item| item.as_str())
+                    )
+                })
+                .into_owned(),
+        }
+    }
+}
+
+fn redaction_patterns() -> &'static [RedactionPattern] {
+    static PATTERNS: OnceLock<Vec<RedactionPattern>> = OnceLock::new();
+    PATTERNS.get_or_init(|| {
+        vec![
+            RedactionPattern {
+                regex: Regex::new(r"(?i)\b(authorization\s*:\s*)(?:bearer|basic)?\s*[^\s,;|]+")
+                    .expect("authorization header redaction regex should compile"),
+                replacement: RedactionReplacement::Header,
+            },
+            RedactionPattern {
+                regex: Regex::new(r#"(?i)\b([A-Za-z0-9_.-]*(?:api[_-]?key|token|secret|password|passwd|pwd|credential|client[_-]?secret|access[_-]?key)[A-Za-z0-9_.-]*\s*[:=]\s*)([\"'])([^\"']+)([\"'])"#)
+                    .expect("quoted secret assignment redaction regex should compile"),
+                replacement: RedactionReplacement::QuotedSecretValue,
+            },
+            RedactionPattern {
+                regex: Regex::new(r#"(?i)\b([A-Za-z0-9_.-]*(?:api[_-]?key|token|secret|password|passwd|pwd|credential|client[_-]?secret|access[_-]?key)[A-Za-z0-9_.-]*\s*[:=]\s*)[^\s,;&|/\"']+"#)
+                    .expect("secret assignment redaction regex should compile"),
+                replacement: RedactionReplacement::SecretValue,
+            },
+            RedactionPattern {
+                regex: Regex::new(r"(?i)([?&](?:api[_-]?key|token|access_token|refresh_token|password|passwd|pwd|secret|client_secret)=)[^&#/\s]+")
+                    .expect("query secret redaction regex should compile"),
+                replacement: RedactionReplacement::QueryValue,
+            },
+            RedactionPattern {
+                regex: Regex::new(r"\b([A-Za-z][A-Za-z0-9+.-]*://)[^/@\s:]+:[^/@\s]+@")
+                    .expect("URL credential redaction regex should compile"),
+                replacement: RedactionReplacement::UrlCredential,
+            },
+            RedactionPattern {
+                regex: Regex::new(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")
+                    .expect("JWT redaction regex should compile"),
+                replacement: RedactionReplacement::Static("[REDACTED]"),
+            },
+            RedactionPattern {
+                regex: Regex::new(r"\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9]{20,})\b")
+                    .expect("known token redaction regex should compile"),
+                replacement: RedactionReplacement::Static("[REDACTED]"),
+            },
+        ]
+    })
 }
 
 pub fn write_atomic(path: &Path, contents: &str) -> Result<(), ReportError> {
@@ -2349,10 +2556,10 @@ mod tests {
         RuleSuggestion, RuleSuggestionExample, RuleSuggestionMatch, RuleSuggestionReport,
     };
     use authmap_core::{
-        AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticCategory,
-        DiagnosticSeverity, Evidence, EvidenceType, ExtensionMap, Framework, Mutation,
-        MutationOperation, ReachabilityLink, Recoverability, RiskLevel, Route, ScanMetadata,
-        SkipReason, SourceFile, Span, SymbolRef, diagnostic_codes,
+        AuthMapDocument, ByteRange, Confidence, Coverage, CoverageClass, Diagnostic,
+        DiagnosticCategory, DiagnosticSeverity, Evidence, EvidenceType, ExtensionMap, Framework,
+        Mutation, MutationOperation, ReachabilityLink, Recoverability, RiskLevel, Route,
+        ScanMetadata, SkipReason, SourceFile, Span, SymbolRef, diagnostic_codes,
     };
 
     #[test]
@@ -2413,6 +2620,227 @@ mod tests {
         );
         assert_eq!(escape_inline("# heading\rnext"), "\\# heading\\rnext");
         assert_eq!(escape_table("a|b\nc"), "a\\|b\\nc");
+    }
+
+    #[test]
+    fn redacts_common_secret_shapes_without_removing_review_context() {
+        let cases = [
+            (
+                "Authorization: Bearer abcdefghijklmnopqrstuvwxyz",
+                "Authorization: [REDACTED]",
+            ),
+            (
+                "DATABASE_URL=postgres://alice:swordfish@db.internal/app",
+                "DATABASE_URL=postgres://[REDACTED]@db.internal/app",
+            ),
+            (
+                "api_key=sk-abcdefghijklmnopqrstuvwxyz",
+                "api_key=[REDACTED]",
+            ),
+            (
+                "GET /callback?token=abcdef1234567890&state=ok",
+                "GET /callback?token=[REDACTED]&state=ok",
+            ),
+            (
+                "password = 'correct horse battery staple'",
+                "password = '[REDACTED]'",
+            ),
+            (
+                "jwt eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signaturetoken",
+                "jwt [REDACTED]",
+            ),
+        ];
+
+        for (input, expected) in cases {
+            assert_eq!(redact_sensitive_text(input), expected);
+        }
+        assert_eq!(
+            redact_sensitive_text("GET /accounts/:accountId"),
+            "GET /accounts/:accountId"
+        );
+    }
+
+    #[test]
+    fn redacts_sensitive_span_paths_in_json_and_sarif() {
+        let mut document = synthetic_document();
+        document.diagnostics.push(Diagnostic {
+            category: DiagnosticCategory::Parser,
+            code: "secret_path".to_string(),
+            severity: DiagnosticSeverity::Warning,
+            recoverability: Recoverability::Recoverable,
+            span: Some(Span {
+                file: "src/callback?access_token=super-secret-token/app.py".to_string(),
+                line: 7,
+                column: 3,
+                byte_range: Some(ByteRange {
+                    start: 100,
+                    end: 120,
+                }),
+            }),
+            message: "diagnostic with sensitive path".to_string(),
+        });
+
+        let json = JsonReporter.render(&document).expect("JSON should render");
+        let sarif = SarifReporter
+            .render(&document)
+            .expect("SARIF should render");
+
+        for output in [&json, &sarif] {
+            assert!(output.contains("access_token=[REDACTED]"));
+            assert!(!output.contains("super-secret-token"));
+            assert!(output.contains("src/callback"));
+            assert!(output.contains("app.py"));
+            assert!(output.contains("7"));
+        }
+    }
+
+    #[test]
+    fn redacts_markdown_json_sarif_and_explain_outputs() {
+        let mut document = document_with_sarif_coverage_data();
+        let route = document
+            .routes
+            .iter_mut()
+            .find(|route| route.id == "route.authn_only")
+            .expect("authn-only route should exist");
+        route.path = "/accounts?access_token=super-secret-token".to_string();
+        route.notes = vec!["Authorization: Bearer abcdefghijklmnopqrstuvwxyz".to_string()];
+        route.handler = Some(SymbolRef {
+            name: "handlerWithApiKey".to_string(),
+            span: Some(Span {
+                file: "src/authn.py".to_string(),
+                line: 20,
+                column: 5,
+                byte_range: None,
+            }),
+        });
+        document.evidence.push(Evidence {
+            id: "evidence.secret".to_string(),
+            route_id: Some("route.authn_only".to_string()),
+            evidence_type: EvidenceType::Authn,
+            mechanism: "api_key=sk-abcdefghijklmnopqrstuvwxyz".to_string(),
+            symbol: None,
+            span: Some(Span {
+                file: "src/authn.py".to_string(),
+                line: 21,
+                column: 9,
+                byte_range: None,
+            }),
+            confidence: Confidence::High,
+            notes: vec!["password = 'correct horse battery staple'".to_string()],
+            extensions: ExtensionMap::new(),
+        });
+        document.diagnostics.push(Diagnostic {
+            category: DiagnosticCategory::Parser,
+            code: "secret_diagnostic".to_string(),
+            severity: DiagnosticSeverity::Warning,
+            recoverability: Recoverability::Recoverable,
+            span: Some(Span {
+                file: "src/authn.py".to_string(),
+                line: 22,
+                column: 1,
+                byte_range: None,
+            }),
+            message: "DATABASE_URL=postgres://alice:swordfish@db.internal/app".to_string(),
+        });
+
+        let markdown = MarkdownReporter
+            .render(&document)
+            .expect("markdown should render");
+        let json = JsonReporter.render(&document).expect("json should render");
+        let sarif = SarifReporter
+            .render(&document)
+            .expect("sarif should render");
+        let explain = render_explain(&document, "route.authn_only").expect("route should explain");
+
+        for output in [&markdown, &json, &sarif, &explain] {
+            assert!(
+                output.contains("REDACTED"),
+                "output should show redaction: {output}"
+            );
+            assert!(!output.contains("super-secret-token"));
+            assert!(!output.contains("abcdefghijklmnopqrstuvwxyz"));
+            assert!(!output.contains("swordfish"));
+            assert!(!output.contains("correct horse battery staple"));
+            assert!(output.contains("route.authn_only"));
+            assert!(output.contains("src/authn.py"));
+        }
+
+        let json_value: Value = serde_json::from_str(&json).expect("redacted JSON should parse");
+        let routes = json_value["routes"]
+            .as_array()
+            .expect("routes should remain an array");
+        assert!(routes.iter().any(|route| route["id"] == "route.authn_only"));
+    }
+
+    #[test]
+    fn redacts_drift_and_rule_suggestion_json_and_markdown() {
+        let mut drift = DriftReport {
+            schema_version: "authmap.diff/0.1.0".to_string(),
+            report_type: "authmap.diff".to_string(),
+            metadata: authmap_analysis::DriftMetadata {
+                mode: ScanMode::Advisory,
+                base: authmap_analysis::DriftInputMetadata {
+                    label: "base".to_string(),
+                    schema_version: SCHEMA_VERSION.to_string(),
+                    target_roots: vec!["src".to_string()],
+                },
+                head: authmap_analysis::DriftInputMetadata {
+                    label: "head".to_string(),
+                    schema_version: SCHEMA_VERSION.to_string(),
+                    target_roots: vec!["src".to_string()],
+                },
+                config: authmap_analysis::DriftConfigMetadata::none(),
+                fail_on: Vec::new(),
+            },
+            summary: authmap_analysis::DriftSummary {
+                total_changes: 1,
+                ..authmap_analysis::DriftSummary::default()
+            },
+            changes: vec![DriftChange {
+                id: "change_0001".to_string(),
+                kind: DriftChangeKind::AddedRoute,
+                severity: DriftChangeSeverity::Warning,
+                route_key: "GET /callback?token=abcdef1234567890".to_string(),
+                base_route_id: None,
+                head_route_id: Some("route_0001".to_string()),
+                message: "Added route GET /callback?token=abcdef1234567890".to_string(),
+                direction: None,
+                before: json!(null),
+                after: json!({ "path": "/callback?token=abcdef1234567890" }),
+                evidence_ids: Vec::new(),
+                weak_evidence_ids: Vec::new(),
+                mutation_ids: Vec::new(),
+                link_ids: Vec::new(),
+                sensitivity_reasons: Vec::new(),
+                reviewer_questions: vec![
+                    "Should password = 'correct horse battery staple' be stored?".to_string(),
+                ],
+                fail_category: None,
+                enforcement_blocking: false,
+            }],
+            diagnostics: Vec::new(),
+        };
+        let mut suggestions = rule_suggestion_report();
+        suggestions.suggestions[0].mechanism = "api_key=sk-abcdefghijklmnopqrstuvwxyz".to_string();
+        suggestions.suggestions[0].rationale =
+            vec!["Authorization: Bearer abcdefghijklmnopqrstuvwxyz".to_string()];
+
+        let outputs = [
+            render_drift_markdown(&drift),
+            render_drift_json(&drift).expect("drift JSON should render"),
+            render_rule_suggestions_markdown(&suggestions),
+            render_rule_suggestions_json(&suggestions).expect("rule suggestion JSON should render"),
+        ];
+
+        for output in outputs {
+            assert!(output.contains("REDACTED"));
+            assert!(!output.contains("abcdef1234567890"));
+            assert!(!output.contains("abcdefghijklmnopqrstuvwxyz"));
+            assert!(!output.contains("correct horse battery staple"));
+        }
+
+        drift.changes[0].route_key = "GET /accounts/:accountId".to_string();
+        assert!(render_drift_markdown(&drift).contains("/accounts/:accountId"));
     }
 
     #[test]

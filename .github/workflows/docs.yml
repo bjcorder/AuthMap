@@ -16,9 +16,12 @@ jobs:
       - name: Verify expected docs exist
         run: |
           test -s README.md
+          test -s CHANGELOG.md
           test -s docs/PRODUCT_BRIEF.md
           test -s docs/ARCHITECTURE.md
           test -s docs/GITHUB_ACTION.md
           test -s docs/ROADMAP.md
+          test -s docs/SUPPLY_CHAIN.md
+          test -s docs/RELEASES.md
           test -s SECURITY.md
           test -s CONTRIBUTING.md

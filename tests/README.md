@@ -19,7 +19,7 @@ without turning omitted-file listing into another unbounded workload.
 - `fixtures/linking/` contains active route-to-mutation reachability coverage for direct handler mutations, one-hop service calls, and unresolved service-like calls.
 - `fixtures/realistic/` contains compact end-to-end smoke applications that combine routers, imports, auth evidence, service calls, mutations, links, diagnostics, and coverage.
 - `fixtures/negative/` contains source patterns that must not produce backend route, evidence, mutation, link, or coverage facts.
-- `fixtures/pending/` contains representative snippets for future extractor work. These files are intentionally not active snapshot inputs until the matching extractor or classifier issue implements those facts.
+- `fixtures/pending/` contains representative snippets for future extractor work. These files are intentionally not active snapshot inputs until the matching extractor or classifier issue implements those facts. For v1.0.0, supported mutation patterns have active coverage in `fixtures/mutations/`; pending auth snippets remain out of snapshot coverage because standalone guard helpers and framework-specific role/tenant classifier refinements are documented post-v1 scope rather than release-blocking behavior.
 - `golden/json/` stores normalized JSON snapshots from the full analysis pipeline.
 - `golden/markdown/` stores normalized Markdown snapshots from the reporter.
 

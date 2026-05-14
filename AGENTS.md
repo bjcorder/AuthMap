@@ -6,7 +6,7 @@ Guidance for AI coding agents working in this repository.
 
 AuthMap is a defensive product-security tool for statically mapping authorization coverage across application routes, handlers, service methods, and data mutations. It should not execute target applications, connect to databases, or perform live attack workflows.
 
-The repository is a Rust Cargo workspace. The canonical AuthMap JSON contract lives in `schemas/authmap.schema.json` and is documented in `docs/SCHEMA.md`.
+The repository is a Rust Cargo workspace using Rust 2024. The canonical AuthMap JSON contract lives in `schemas/authmap.schema.json` and is documented in `docs/SCHEMA.md`. Project configuration is loaded from optional `authmap.yml` files and documented in `docs/CONFIGURATION.md`.
 
 ## Safety Boundary
 
@@ -22,11 +22,13 @@ The repository is a Rust Cargo workspace. The canonical AuthMap JSON contract li
 - `crates/authmap-parsers`: Tree-sitter parsing and source spans.
 - `crates/authmap-adapters`: framework route/evidence adapters.
 - `crates/authmap-analysis`: scan orchestration, evidence rules, mutation extraction, linking, coverage classification.
+- `crates/authmap-config`: `authmap.yml` loading, validation, defaults, scan plans, limits, and drift policy configuration.
 - `crates/authmap-report`: Markdown, JSON-related presentation helpers, SARIF, and explain output.
 - `crates/authmap-cli`: command-line interface.
 - `crates/authmap-testkit`: regression and golden test support.
 - `tests/fixtures`: active and pending source fixtures.
 - `tests/golden`: reviewed JSON and Markdown snapshots.
+- `action.yml`: composite GitHub Action for CI reports, artifacts, optional SARIF upload, and baseline drift review.
 - `docs`: schema, diagnostics, configuration, and contributor-facing design docs.
 
 ## Common Commands
@@ -37,11 +39,20 @@ Run these from the repository root:
 cargo fmt
 cargo test --workspace
 cargo run -p authmap-cli -- --help
+cargo run -p authmap-cli -- init --output authmap.yml
 cargo run -p authmap-cli -- scan . --format json --output authmap.json
 cargo run -p authmap-cli -- scan . --format markdown --output authmap.md
+cargo run -p authmap-cli -- scan . --format sarif --output authmap.sarif
+cargo run -p authmap-cli -- baseline create . --output authmap.baseline.json
+cargo run -p authmap-cli -- diff --base authmap.baseline.json --head authmap.json --format markdown
+cargo run -p authmap-cli -- diff main...HEAD --target . --format json --output authmap.diff.json
+cargo run -p authmap-cli -- explain route_0001 --input authmap.json
+cargo run -p authmap-cli -- rules suggest . --format markdown
 ```
 
 When changing user-visible report or scan behavior, run the full workspace tests. For focused development, run the relevant package or test first, then finish with `cargo test --workspace`.
+
+`authmap scan` accepts `--config`, `--mode advisory|enforce`, and scan limit overrides. `authmap diff` compares either AuthMap JSON documents or committed git ranges via `git archive`; git range diffs do not include uncommitted working-tree changes. `authmap rules suggest` is read-only and must not edit `authmap.yml`.
 
 ## Fixture And Golden Expectations
 
@@ -52,6 +63,7 @@ When changing user-visible report or scan behavior, run the full workspace tests
 
 ```sh
 AUTHMAP_UPDATE_GOLDENS=1 cargo test -p authmap-testkit --test route_inventory_regression
+AUTHMAP_UPDATE_GOLDENS=1 cargo test -p authmap-testkit --test realistic_smoke_regression
 ```
 
 Review golden diffs carefully and keep only intentional output changes.
@@ -63,6 +75,9 @@ Review golden diffs carefully and keep only intentional output changes.
 - Keep IDs, ordering, diagnostics, facts, links, and coverage support metadata deterministic.
 - Prefer conservative detection with explicit uncertainty over guessing.
 - When adding new facts, make sure JSON serialization, schema validation, Markdown/report visibility, and explain output remain coherent.
+- Configuration must not change the canonical map schema version. Project rules may add evidence, sensitivity labels, coverage support metadata, reviewer questions, and scan behavior.
+- Drift JSON reports use their own `authmap.diff` report contract and are not canonical map documents.
+- SARIF output is for advisory code-scanning integration. Treat coverage alerts as review priorities, not confirmed vulnerabilities.
 
 ## Implementation Notes
 
@@ -70,7 +85,9 @@ Review golden diffs carefully and keep only intentional output changes.
 - Tree-sitter spans are important: keep file, line, column, and byte ranges stable where possible.
 - Detection code should avoid executing project code or requiring third-party app dependencies.
 - For source discovery, respect include/exclude behavior and hard exclusions for dependency, build, VCS, cache, and generated output directories.
+- Respect configured scan limits for file count, file size, total bytes, and runtime budget. Large-repository behavior should stay deterministic and bounded.
 - Coverage classification should stay evidence-driven. Links with `mutation_id: null` may provide review context but should not raise linked-mutation risk by themselves.
+- GitHub Action path-like inputs must stay workspace-relative and must reject absolute paths, parent directory components, empty path components, control characters, and `output-directory: .`.
 
 ## Before Finishing
 
