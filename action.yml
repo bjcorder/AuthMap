@@ -22,6 +22,10 @@ inputs:
     description: Optional AuthMap JSON baseline path. When set, the action generates a current JSON map and appends drift Markdown to the job summary.
     required: false
     default: ""
+  baseline-ref:
+    description: Optional trusted git ref used to read the baseline file, such as a protected branch, tag, or pull request base SHA. Pull request workflows default to the base SHA when available.
+    required: false
+    default: ""
   fail-on:
     description: Optional comma-separated drift categories that fail enforce-mode baseline diffs.
     required: false
@@ -79,6 +83,8 @@ runs:
         INPUT_TARGET: ${{ inputs.target }}
         INPUT_CONFIG: ${{ inputs.config }}
         INPUT_BASELINE: ${{ inputs.baseline }}
+        INPUT_BASELINE_REF: ${{ inputs.baseline-ref }}
+        AUTHMAP_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
         INPUT_OUTPUT_DIRECTORY: ${{ inputs.output-directory }}
         INPUT_UPLOAD_SARIF: ${{ inputs.upload-sarif }}

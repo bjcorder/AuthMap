@@ -1,6 +1,6 @@
 # AuthMap Report
 
-- Tool: authmap 0.1.0
+- Tool: authmap 1.0.0
 - Schema: 0.1.0
 
 ## Summary

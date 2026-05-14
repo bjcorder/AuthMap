@@ -131,7 +131,7 @@ fn explain_document_json() -> &'static str {
   "schema_version": "0.1.0",
   "metadata": {
     "tool_name": "authmap",
-    "tool_version": "0.1.0",
+    "tool_version": "1.0.0",
     "mode": "advisory",
     "target_roots": ["src"],
     "config_path": null
@@ -274,7 +274,7 @@ fn root_version_includes_package_and_schema_versions() {
     assert_exit(&output, 0);
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "authmap 0.1.0 (schema 0.1.0)\n"
+        "authmap 1.0.0 (schema 0.1.0)\n"
     );
     assert!(output.stderr.is_empty());
 }
@@ -400,6 +400,37 @@ fn ci_workflow_defines_cross_platform_rust_matrix_and_install_smoke() {
 }
 
 #[test]
+fn release_workflow_runs_locked_tests_and_smokes_unpacked_artifacts() {
+    let root = repo_root();
+    let workflow = fs::read_to_string(root.join(".github/workflows/release.yml"))
+        .expect("release workflow should exist");
+
+    assert!(workflow.contains("tags:"));
+    assert!(workflow.contains("\"v*\""));
+    assert!(workflow.contains("Tag ${tag} does not match workspace package version ${version}"));
+    assert!(workflow.contains("CHANGELOG.md does not contain a section for {version}"));
+    assert!(workflow.contains("cargo test --workspace --all-targets --locked"));
+    assert!(
+        workflow.contains("cargo build --package authmap-cli --bin authmap --release --locked")
+    );
+    assert!(workflow.contains("tar -C package -czf \"dist/${base}.tar.gz\""));
+    assert!(workflow.contains("Compress-Archive -Path '${base}'"));
+    assert!(workflow.contains("tar -C \"${smoke_dir}\" -xzf \"${ARTIFACT}\""));
+    assert!(workflow.contains("Expand-Archive -Path '${ARTIFACT}'"));
+    assert!(workflow.contains("\"${authmap_bin}\" --help"));
+    assert!(workflow.contains("\"${authmap_bin}\" --version"));
+    assert!(workflow.contains("scan tests/fixtures/negative/frontend_only --format json"));
+    assert!(workflow.contains("scan tests/fixtures/negative/frontend_only --format markdown"));
+    assert!(workflow.contains("scan tests/fixtures/negative/frontend_only --format sarif"));
+    assert!(workflow.contains("baseline create tests/fixtures/negative/frontend_only"));
+    assert!(workflow.contains(
+        "diff --base \"${report_dir}/authmap.baseline.json\" --head \"${report_dir}/authmap.json\""
+    ));
+    assert!(workflow.contains("sha256sum authmap-* > SHA256SUMS"));
+    assert!(workflow.contains("gh release edit \"${RELEASE_TAG}\" --draft=false"));
+}
+
+#[test]
 fn action_metadata_defines_expected_wrapper_contract() {
     let root = repo_root();
     let action = fs::read_to_string(root.join("action.yml")).expect("action.yml should exist");
@@ -412,6 +443,7 @@ fn action_metadata_defines_expected_wrapper_contract() {
         "target:",
         "config:",
         "baseline:",
+        "baseline-ref:",
         "fail-on:",
         "output-directory:",
         "upload-artifact:",
@@ -445,6 +477,8 @@ fn action_metadata_defines_expected_wrapper_contract() {
     assert!(script.contains("authmap.diff.json"));
     assert!(script.contains("authmap.diff.md"));
     assert!(script.contains("--fail-on"));
+    assert!(script.contains("resolve_baseline_path"));
+    assert!(script.contains("AUTHMAP_PR_BASE_SHA"));
     assert!(script.contains("AUTHMAP_DEFER_EXIT"));
     assert!(script.contains("exit-code"));
     assert!(script.contains("validate_relative_path"));
@@ -582,6 +616,112 @@ def read_accounts(user=Depends(require_user)):
 }
 
 #[test]
+fn action_runner_uses_pull_request_base_sha_for_trusted_baseline() {
+    if cfg!(windows) || Command::new("git").arg("--version").output().is_err() {
+        return;
+    }
+
+    let temp = TestDir::new("action-trusted-baseline");
+    let root = repo_root();
+    let workspace = temp.path().join("workspace");
+    let project = workspace.join("project");
+    let github_output = temp.path().join("github-output.txt");
+    let step_summary = temp.path().join("summary.md");
+    write_file(
+        &project.join("app.py"),
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts():
+    return []
+"#,
+    );
+    init_git_repo(&workspace);
+    let baseline = authmap_in_dir(
+        &[
+            "scan",
+            "project",
+            "--format",
+            "json",
+            "--output",
+            "baseline.json",
+        ],
+        &workspace,
+    );
+    assert_exit(&baseline, 0);
+    git_commit_all(&workspace, "base");
+    let base_sha_output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&workspace)
+        .output()
+        .expect("git should run");
+    assert_exit(&base_sha_output, 0);
+    let base_sha = String::from_utf8_lossy(&base_sha_output.stdout)
+        .trim()
+        .to_string();
+
+    write_file(
+        &project.join("app.py"),
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts():
+    return []
+
+@app.post("/admin")
+def create_admin():
+    return {"ok": True}
+"#,
+    );
+    let pr_controlled_baseline = authmap_in_dir(
+        &[
+            "scan",
+            "project",
+            "--format",
+            "json",
+            "--output",
+            "baseline.json",
+        ],
+        &workspace,
+    );
+    assert_exit(&pr_controlled_baseline, 0);
+
+    let output = Command::new("bash")
+        .arg(root.join(".github/actions/authmap/run.sh"))
+        .current_dir(&root)
+        .env("GITHUB_ACTION_PATH", &root)
+        .env("GITHUB_WORKSPACE", &workspace)
+        .env("GITHUB_OUTPUT", &github_output)
+        .env("GITHUB_STEP_SUMMARY", &step_summary)
+        .env("INPUT_MODE", "advisory")
+        .env("INPUT_OUTPUT", "json")
+        .env("INPUT_TARGET", "project")
+        .env("INPUT_CONFIG", "")
+        .env("INPUT_BASELINE", "baseline.json")
+        .env("INPUT_BASELINE_REF", "")
+        .env("AUTHMAP_PR_BASE_SHA", &base_sha)
+        .env("INPUT_FAIL_ON", "")
+        .env("INPUT_OUTPUT_DIRECTORY", "reports")
+        .env("INPUT_UPLOAD_SARIF", "false")
+        .output()
+        .expect("action runner should execute");
+
+    assert_exit(&output, 0);
+    let diff_json_path = workspace.join("reports/authmap.diff.json");
+    let report: Value = serde_json::from_str(
+        &fs::read_to_string(diff_json_path).expect("diff JSON should be readable"),
+    )
+    .expect("diff JSON should parse");
+    assert_eq!(report["summary"]["added_routes"], 1);
+}
+
+#[test]
 fn action_runner_rejects_unsafe_workspace_relative_paths() {
     if cfg!(windows) {
         return;
@@ -593,6 +733,7 @@ fn action_runner_rejects_unsafe_workspace_relative_paths() {
         ("INPUT_OUTPUT_DIRECTORY", ".", "output-directory"),
         ("INPUT_OUTPUT_DIRECTORY", "reports/", "output-directory"),
         ("INPUT_BASELINE", "baselines\nforged=1", "baseline"),
+        ("INPUT_BASELINE_REF", "-main", "baseline-ref"),
     ];
 
     for (name, value, label) in cases {
@@ -626,7 +767,14 @@ fn run_action_validation_case(name: &str, value: &str) -> Output {
         .env("INPUT_OUTPUT", "json")
         .env("INPUT_TARGET", "project")
         .env("INPUT_CONFIG", "")
-        .env("INPUT_BASELINE", "")
+        .env(
+            "INPUT_BASELINE",
+            if name == "INPUT_BASELINE_REF" {
+                "baseline.json"
+            } else {
+                ""
+            },
+        )
         .env("INPUT_FAIL_ON", "")
         .env("INPUT_OUTPUT_DIRECTORY", "reports")
         .env("INPUT_UPLOAD_SARIF", "false")
@@ -945,6 +1093,69 @@ def create_admin():
 }
 
 #[test]
+fn diff_git_range_target_pathspec_excludes_unrelated_files() {
+    if Command::new("git").arg("--version").output().is_err() {
+        return;
+    }
+
+    let temp = TestDir::new("diff-git-range-pathspec");
+    write_file(
+        &temp.path().join("src/app.py"),
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts():
+    return []
+"#,
+    );
+    write_file(&temp.path().join("large-unrelated.bin"), "base\n");
+    init_git_repo(temp.path());
+    git_commit_all(temp.path(), "base");
+
+    write_file(
+        &temp.path().join("src/app.py"),
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts():
+    return []
+
+@app.post("/admin")
+def create_admin():
+    return {"ok": True}
+"#,
+    );
+    let large = fs::File::create(temp.path().join("large-unrelated.bin"))
+        .expect("large unrelated file should be created");
+    large
+        .set_len(80 * 1024 * 1024)
+        .expect("large unrelated file should be sized");
+    git_commit_all(temp.path(), "head");
+
+    let output = authmap_in_dir(
+        &[
+            "diff",
+            "HEAD~1...HEAD",
+            "--target",
+            "src",
+            "--format",
+            "json",
+        ],
+        temp.path(),
+    );
+    assert_exit(&output, 0);
+    let report: Value =
+        serde_json::from_slice(&output.stdout).expect("git range diff should emit JSON");
+    assert_eq!(report["summary"]["added_routes"], 1);
+}
+
+#[test]
 fn diff_git_range_reports_external_absolute_config_metadata() {
     if Command::new("git").arg("--version").output().is_err() {
         return;
@@ -1076,6 +1287,53 @@ fn explain_uses_default_authmap_json_in_current_directory() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("- ID: route_0001"));
     assert!(stdout.contains("- Route: GET /accounts"));
+}
+
+#[test]
+fn config_diff_and_explain_reject_oversized_inputs_before_parsing() {
+    let temp = TestDir::new("oversized-inputs");
+    let project = temp.path().join("project");
+    write_file(&project.join("app.py"), "print('hello')\n");
+    let config = temp.path().join("authmap.yml");
+    let config_file = fs::File::create(&config).expect("config should be created");
+    config_file
+        .set_len(authmap_config::MAX_CONFIG_BYTES + 1)
+        .expect("config should be oversized");
+    let output = authmap(&[
+        "scan",
+        project.to_str().expect("path should be UTF-8"),
+        "--config",
+        config.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&output, 12);
+    assert!(String::from_utf8_lossy(&output.stderr).contains("maximum size"));
+
+    let huge = temp.path().join("huge-authmap.json");
+    let huge_file = fs::File::create(&huge).expect("huge input should be created");
+    huge_file
+        .set_len(65 * 1024 * 1024)
+        .expect("huge input should be oversized");
+    let small = temp.path().join("small-authmap.json");
+    write_file(&small, explain_document_json());
+
+    let diff = authmap(&[
+        "diff",
+        "--base",
+        huge.to_str().expect("path should be UTF-8"),
+        "--head",
+        small.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&diff, 12);
+    assert!(String::from_utf8_lossy(&diff.stderr).contains("exceeds maximum size"));
+
+    let explain = authmap(&[
+        "explain",
+        "route_0001",
+        "--input",
+        huge.to_str().expect("path should be UTF-8"),
+    ]);
+    assert_exit(&explain, 12);
+    assert!(String::from_utf8_lossy(&explain.stderr).contains("exceeds maximum size"));
 }
 
 #[test]

@@ -8,7 +8,7 @@ The canonical machine-readable contract lives in
 
 Every document contains:
 
-- `schema_version`: the AuthMap schema version. v0.1.0 uses `"0.1.0"`.
+- `schema_version`: the AuthMap schema version. The v1.0.0 CLI emits schema `"0.1.0"`.
 - `metadata`: tool version, scan mode, targets, and optional config path.
 - `source_files`: discovered files and project hints.
 - `routes`: normalized externally reachable routes or handlers.

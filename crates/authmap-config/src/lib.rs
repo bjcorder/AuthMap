@@ -4,6 +4,8 @@ use authmap_core::{Confidence, EvidenceType, ScanMode};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub const MAX_CONFIG_BYTES: u64 = 1_048_576;
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ScanConfig {
@@ -164,6 +166,17 @@ pub fn load_config(path: Option<PathBuf>) -> Result<(Option<PathBuf>, ScanConfig
     let Some(path) = path else {
         return Ok((None, ScanConfig::default()));
     };
+
+    let metadata = std::fs::metadata(&path).map_err(|source| ConfigError::Read {
+        path: path.clone(),
+        source,
+    })?;
+    if metadata.len() > MAX_CONFIG_BYTES {
+        return Err(ConfigError::Validate {
+            path,
+            message: format!("config file exceeds maximum size of {MAX_CONFIG_BYTES} bytes"),
+        });
+    }
 
     let text = std::fs::read_to_string(&path).map_err(|source| ConfigError::Read {
         path: path.clone(),

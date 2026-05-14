@@ -169,6 +169,7 @@ enum DiffOutputFormat {
 }
 
 const CLI_VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), " (schema 0.1.0)");
+const MAX_AUTHMAP_INPUT_BYTES: u64 = 64 * 1024 * 1024;
 
 fn main() -> ExitCode {
     match run() {
@@ -439,8 +440,9 @@ fn run_diff(args: DiffArgs) -> Result<ExitCode, CliError> {
                 })?;
             let base_dir = temp.path().join("base");
             let head_dir = temp.path().join("head");
-            extract_git_ref(&base_ref, &base_dir)?;
-            extract_git_ref(&head_ref, &head_dir)?;
+            let archive_paths = git_diff_archive_paths(&args.target, args.config.as_deref())?;
+            extract_git_ref(&base_ref, &base_dir, &archive_paths)?;
+            extract_git_ref(&head_ref, &head_dir, &archive_paths)?;
             let (base_config_path, mut base_config, head_config_path, mut head_config, config_meta) =
                 load_git_diff_configs(args.config.clone(), &base_dir, &head_dir)?;
             if let Some(mode) = args.mode {
@@ -537,6 +539,20 @@ fn validate_archive_relative_path(path: &Path, label: &str) -> Result<(), CliErr
     Ok(())
 }
 
+fn git_diff_archive_paths(target: &Path, config: Option<&Path>) -> Result<Vec<PathBuf>, CliError> {
+    validate_archive_relative_path(target, "--target")?;
+    let mut paths = vec![target.to_path_buf()];
+    if let Some(config) = config
+        && !config.is_absolute()
+    {
+        validate_archive_relative_path(config, "config")?;
+        if !paths.iter().any(|path| path == config) {
+            paths.push(config.to_path_buf());
+        }
+    }
+    Ok(paths)
+}
+
 fn load_git_diff_configs(
     config: Option<PathBuf>,
     base_dir: &Path,
@@ -622,14 +638,25 @@ fn parse_git_range(range: &str) -> Result<(String, String), CliError> {
 }
 
 fn read_authmap_document(path: &Path) -> Result<AuthMapDocument, CliError> {
-    let text = fs::read_to_string(path).map_err(|source| CliError::DiffRead {
-        path: path.to_path_buf(),
-        source,
-    })?;
+    let text = read_authmap_input(path, |path, source| CliError::DiffRead { path, source })?;
     serde_json::from_str(&text).map_err(|source| CliError::DiffParse {
         path: path.to_path_buf(),
         source,
     })
+}
+
+fn read_authmap_input(
+    path: &Path,
+    read_error: impl Fn(PathBuf, std::io::Error) -> CliError,
+) -> Result<String, CliError> {
+    let metadata = fs::metadata(path).map_err(|source| read_error(path.to_path_buf(), source))?;
+    if metadata.len() > MAX_AUTHMAP_INPUT_BYTES {
+        return Err(CliError::InputTooLarge {
+            path: path.to_path_buf(),
+            limit: MAX_AUTHMAP_INPUT_BYTES,
+        });
+    }
+    fs::read_to_string(path).map_err(|source| read_error(path.to_path_buf(), source))
 }
 
 fn ensure_supported_document(document: &AuthMapDocument, label: &str) -> Result<(), CliError> {
@@ -642,13 +669,15 @@ fn ensure_supported_document(document: &AuthMapDocument, label: &str) -> Result<
     Ok(())
 }
 
-fn extract_git_ref(ref_name: &str, destination: &Path) -> Result<(), CliError> {
+fn extract_git_ref(ref_name: &str, destination: &Path, paths: &[PathBuf]) -> Result<(), CliError> {
     fs::create_dir_all(destination).map_err(|source| CliError::TempDir {
         path: destination.to_path_buf(),
         source,
     })?;
-    let mut archive = ProcessCommand::new("git")
-        .args(["archive", "--format=tar", ref_name])
+    let mut archive_command = ProcessCommand::new("git");
+    archive_command.args(["archive", "--format=tar", ref_name, "--"]);
+    archive_command.args(paths);
+    let mut archive = archive_command
         .stdout(Stdio::piped())
         .spawn()
         .map_err(|source| CliError::GitArchive {
@@ -714,10 +743,7 @@ fn run_rules_suggest(
 }
 
 fn run_explain(id: &str, input: &Path) -> Result<ExitCode, CliError> {
-    let text = fs::read_to_string(input).map_err(|source| CliError::ExplainRead {
-        path: input.to_path_buf(),
-        source,
-    })?;
+    let text = read_authmap_input(input, |path, source| CliError::ExplainRead { path, source })?;
     let document: AuthMapDocument =
         serde_json::from_str(&text).map_err(|source| CliError::ExplainParse {
             path: input.to_path_buf(),
@@ -943,6 +969,8 @@ enum CliError {
         path: PathBuf,
         source: serde_json::Error,
     },
+    #[error("AuthMap input {path} exceeds maximum size of {limit} bytes")]
+    InputTooLarge { path: PathBuf, limit: u64 },
     #[error("invalid diff input: {0}")]
     InvalidDiffInput(String),
     #[error("invalid drift fail category {0}")]
@@ -991,6 +1019,7 @@ impl CliError {
             CliError::Explain(_) => 13,
             CliError::DiffRead { .. } => 10,
             CliError::DiffParse { .. } => 12,
+            CliError::InputTooLarge { .. } => 12,
             CliError::InvalidDiffInput(_) | CliError::InvalidDriftFailCategory(_) => 2,
             CliError::GitArchive { .. } | CliError::TarExtract { .. } => 13,
             CliError::TempDir { .. } => 14,
@@ -1035,6 +1064,7 @@ impl CliError {
             CliError::Explain(_) => diagnostic_codes::REPORT_RENDER_FAILED,
             CliError::DiffRead { .. } => diagnostic_codes::CONFIG_READ_FAILED,
             CliError::DiffParse { .. } => diagnostic_codes::CONFIG_PARSE_FAILED,
+            CliError::InputTooLarge { .. } => diagnostic_codes::CONFIG_VALIDATION_FAILED,
             CliError::InvalidDiffInput(_) | CliError::InvalidDriftFailCategory(_) => {
                 diagnostic_codes::CONFIG_VALIDATION_FAILED
             }

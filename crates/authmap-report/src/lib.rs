@@ -2259,7 +2259,7 @@ fn sarif_location(span: &Span) -> Value {
     json!({
         "physicalLocation": {
             "artifactLocation": {
-                "uri": span.file
+                "uri": redact_sensitive_text(&span.file)
             },
             "region": sarif_region(span)
         }
@@ -2329,7 +2329,7 @@ fn redact_json_value_for_key(value: &mut Value, key: Option<&str>) {
 fn redact_json_object(map: &mut Map<String, Value>) {
     for (key, value) in map {
         let nested_key = Some(key.as_str());
-        if is_span_location_key(key) {
+        if is_numeric_location_key(key) {
             continue;
         }
         redact_json_value_for_key(value, nested_key);
@@ -2356,11 +2356,8 @@ fn is_stable_identifier_key(key: Option<&str>) -> bool {
     )
 }
 
-fn is_span_location_key(key: &str) -> bool {
-    matches!(
-        key,
-        "span" | "physicalLocation" | "artifactLocation" | "region"
-    )
+fn is_numeric_location_key(key: &str) -> bool {
+    matches!(key, "region")
 }
 
 fn contains_sensitive_marker(input: &str) -> bool {
@@ -2468,12 +2465,12 @@ fn redaction_patterns() -> &'static [RedactionPattern] {
                 replacement: RedactionReplacement::QuotedSecretValue,
             },
             RedactionPattern {
-                regex: Regex::new(r#"(?i)\b([A-Za-z0-9_.-]*(?:api[_-]?key|token|secret|password|passwd|pwd|credential|client[_-]?secret|access[_-]?key)[A-Za-z0-9_.-]*\s*[:=]\s*)[^\s,;&|\"']+"#)
+                regex: Regex::new(r#"(?i)\b([A-Za-z0-9_.-]*(?:api[_-]?key|token|secret|password|passwd|pwd|credential|client[_-]?secret|access[_-]?key)[A-Za-z0-9_.-]*\s*[:=]\s*)[^\s,;&|/\"']+"#)
                     .expect("secret assignment redaction regex should compile"),
                 replacement: RedactionReplacement::SecretValue,
             },
             RedactionPattern {
-                regex: Regex::new(r"(?i)([?&](?:api[_-]?key|token|access_token|refresh_token|password|passwd|pwd|secret|client_secret)=)[^&#\s]+")
+                regex: Regex::new(r"(?i)([?&](?:api[_-]?key|token|access_token|refresh_token|password|passwd|pwd|secret|client_secret)=)[^&#/\s]+")
                     .expect("query secret redaction regex should compile"),
                 replacement: RedactionReplacement::QueryValue,
             },
@@ -2559,10 +2556,10 @@ mod tests {
         RuleSuggestion, RuleSuggestionExample, RuleSuggestionMatch, RuleSuggestionReport,
     };
     use authmap_core::{
-        AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticCategory,
-        DiagnosticSeverity, Evidence, EvidenceType, ExtensionMap, Framework, Mutation,
-        MutationOperation, ReachabilityLink, Recoverability, RiskLevel, Route, ScanMetadata,
-        SkipReason, SourceFile, Span, SymbolRef, diagnostic_codes,
+        AuthMapDocument, ByteRange, Confidence, Coverage, CoverageClass, Diagnostic,
+        DiagnosticCategory, DiagnosticSeverity, Evidence, EvidenceType, ExtensionMap, Framework,
+        Mutation, MutationOperation, ReachabilityLink, Recoverability, RiskLevel, Route,
+        ScanMetadata, SkipReason, SourceFile, Span, SymbolRef, diagnostic_codes,
     };
 
     #[test]
@@ -2661,6 +2658,40 @@ mod tests {
             redact_sensitive_text("GET /accounts/:accountId"),
             "GET /accounts/:accountId"
         );
+    }
+
+    #[test]
+    fn redacts_sensitive_span_paths_in_json_and_sarif() {
+        let mut document = synthetic_document();
+        document.diagnostics.push(Diagnostic {
+            category: DiagnosticCategory::Parser,
+            code: "secret_path".to_string(),
+            severity: DiagnosticSeverity::Warning,
+            recoverability: Recoverability::Recoverable,
+            span: Some(Span {
+                file: "src/callback?access_token=super-secret-token/app.py".to_string(),
+                line: 7,
+                column: 3,
+                byte_range: Some(ByteRange {
+                    start: 100,
+                    end: 120,
+                }),
+            }),
+            message: "diagnostic with sensitive path".to_string(),
+        });
+
+        let json = JsonReporter.render(&document).expect("JSON should render");
+        let sarif = SarifReporter
+            .render(&document)
+            .expect("SARIF should render");
+
+        for output in [&json, &sarif] {
+            assert!(output.contains("access_token=[REDACTED]"));
+            assert!(!output.contains("super-secret-token"));
+            assert!(output.contains("src/callback"));
+            assert!(output.contains("app.py"));
+            assert!(output.contains("7"));
+        }
     }
 
     #[test]

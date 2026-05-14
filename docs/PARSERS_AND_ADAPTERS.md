@@ -6,7 +6,7 @@ target app to start.
 
 ## Parser Strategy
 
-AuthMap v0.1.0 uses Tree-sitter as its initial parser layer:
+AuthMap v1.0.0 uses Tree-sitter as its parser layer:
 
 - Python: `tree-sitter-python`
 - JavaScript and JSX: `tree-sitter-javascript`

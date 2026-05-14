@@ -2,7 +2,7 @@
   "schema_version": "0.1.0",
   "metadata": {
     "tool_name": "authmap",
-    "tool_version": "0.1.0",
+    "tool_version": "1.0.0",
     "mode": "advisory",
     "target_roots": [
       "tests/fixtures/realistic/express"

@@ -208,7 +208,7 @@ diagnostics. Coverage alerts are warnings by default; AuthMap risk and
 classification details are included as SARIF result properties rather than
 asserted as confirmed vulnerabilities.
 
-`authmap scan` supports `--mode advisory|enforce`. In v0.1.0, enforce mode
+`authmap scan` supports `--mode advisory|enforce`. In v1.0.0, enforce mode
 writes the requested report and exits `20` when the completed document contains
 any `error` or `fatal` diagnostic. Warnings remain non-blocking; incomplete
 discovery conditions such as file truncation or oversized supported files are
@@ -255,7 +255,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Ozark-Security-Labs/AuthMap@v0
+      - uses: Ozark-Security-Labs/AuthMap@v1
         with:
           mode: advisory
           output: markdown,json
@@ -274,7 +274,7 @@ permissions:
 
 steps:
   - uses: actions/checkout@v4
-  - uses: Ozark-Security-Labs/AuthMap@v0
+  - uses: Ozark-Security-Labs/AuthMap@v1
     with:
       mode: advisory
       output: markdown,json,sarif
@@ -288,20 +288,22 @@ matches are present:
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: Ozark-Security-Labs/AuthMap@v0
+  - uses: Ozark-Security-Labs/AuthMap@v1
     with:
       mode: enforce
       output: markdown,json
 ```
 
-To review drift against a baseline in CI, provide `baseline`. The action
-generates `authmap.diff.json` and `authmap.diff.md`, appends the drift Markdown
-to the job summary, and honors `fail-on` in enforce mode:
+To review drift against a baseline in CI, provide `baseline`. Pull request runs
+read that baseline from the trusted base commit when available, or from
+`baseline-ref` when supplied, so PR changes cannot mask their own drift. The
+action generates `authmap.diff.json` and `authmap.diff.md`, appends the drift
+Markdown to the job summary, and honors `fail-on` in enforce mode:
 
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: Ozark-Security-Labs/AuthMap@v0
+  - uses: Ozark-Security-Labs/AuthMap@v1
     with:
       mode: enforce
       output: markdown,json

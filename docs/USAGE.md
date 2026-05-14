@@ -295,7 +295,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Ozark-Security-Labs/AuthMap@v0
+      - uses: Ozark-Security-Labs/AuthMap@v1
         with:
           mode: advisory
           output: markdown,json

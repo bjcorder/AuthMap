@@ -6,9 +6,7 @@ AuthMap releases package the defensive CLI, JSON schema contract, report rendere
 
 AuthMap uses semantic versioning for the workspace package version and release tags. Tags use the form `vMAJOR.MINOR.PATCH`, and the tag version must match the Cargo workspace package version.
 
-While AuthMap is pre-1.0, minor releases may introduce breaking changes when the changelog and release notes call them out clearly. Patch releases should remain narrowly scoped to fixes, documentation corrections, dependency updates, and release-process repairs that do not intentionally break documented behavior.
-
-After 1.0, compatibility expectations are:
+Compatibility expectations are:
 
 - **Major** releases may include breaking CLI, schema, configuration, report, or GitHub Action changes.
 - **Minor** releases may add new commands, flags, schema fields, diagnostics, report sections, action inputs, or non-breaking behavior.
@@ -85,6 +83,4 @@ version and AuthMap schema version.
 
 ## Supported versions
 
-Before 1.0, security fixes are normally released from the default branch and documented in the changelog. Maintainers may choose to issue patch releases for important fixes, but users should expect the latest pre-1.0 release to be the supported line unless release notes say otherwise.
-
-After 1.0, supported release lines will be documented in `SECURITY.md` and updated when support windows change.
+Supported release lines are documented in `SECURITY.md` and updated when support windows change.

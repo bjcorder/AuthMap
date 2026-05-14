@@ -34,6 +34,50 @@ workspace_path() {
   printf '%s/%s' "$GITHUB_WORKSPACE" "$value"
 }
 
+validate_git_ref_input() {
+  local name="$1"
+  local value="$2"
+
+  [[ -n "$value" ]] || die "$name must not be empty"
+  case "$value" in
+    -*|*$'\n'*|*$'\r'*|*$'\t'*)
+      die "$name must be a git ref, tag, or commit SHA without control characters or leading '-'"
+      ;;
+  esac
+  if printf '%s' "$value" | LC_ALL=C grep -q '[[:cntrl:][:space:]]'; then
+    die "$name must not contain whitespace or control characters"
+  fi
+  printf '%s' "$value"
+}
+
+resolve_baseline_path() {
+  local baseline_relative="$1"
+  local requested_ref="$2"
+  local pr_base_sha="$3"
+  local trusted_ref=""
+  local trusted_path
+
+  if [[ -n "$requested_ref" ]]; then
+    trusted_ref="$(validate_git_ref_input "baseline-ref" "$requested_ref")" || exit $?
+  elif [[ -n "$pr_base_sha" ]]; then
+    trusted_ref="$(validate_git_ref_input "pull request base SHA" "$pr_base_sha")" || exit $?
+  fi
+
+  if [[ -z "$trusted_ref" ]]; then
+    workspace_path "$baseline_relative"
+    return
+  fi
+
+  if ! git -C "$GITHUB_WORKSPACE" cat-file -e "${trusted_ref}^{commit}" >/dev/null 2>&1; then
+    git -C "$GITHUB_WORKSPACE" fetch --no-tags --depth=1 origin "$trusted_ref" || die "failed to fetch trusted baseline ref '${trusted_ref}'"
+  fi
+  git -C "$GITHUB_WORKSPACE" cat-file -e "${trusted_ref}^{commit}" >/dev/null 2>&1 || die "baseline-ref '${trusted_ref}' is not a commit"
+
+  trusted_path="${RUNNER_TEMP:-$GITHUB_WORKSPACE}/authmap-baseline-${RANDOM}-${RANDOM}.json"
+  git -C "$GITHUB_WORKSPACE" show "${trusted_ref}:${baseline_relative}" > "$trusted_path" || die "baseline '${baseline_relative}' was not found at trusted ref '${trusted_ref}'"
+  printf '%s' "$trusted_path"
+}
+
 validate_relative_path() {
   local name="$1"
   local value="$2"
@@ -150,7 +194,9 @@ baseline_input="$(trim "${INPUT_BASELINE:-}")"
 baseline_path=""
 if [[ -n "$baseline_input" ]]; then
   baseline_input="$(validate_relative_path "baseline" "$baseline_input" false)" || exit $?
-  baseline_path="$(workspace_path "$baseline_input")"
+  baseline_ref_input="$(trim "${INPUT_BASELINE_REF:-}")"
+  pr_base_sha="$(trim "${AUTHMAP_PR_BASE_SHA:-}")"
+  baseline_path="$(resolve_baseline_path "$baseline_input" "$baseline_ref_input" "$pr_base_sha")" || exit $?
 fi
 
 fail_on_input="$(trim "${INPUT_FAIL_ON:-}")"
