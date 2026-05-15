@@ -8,11 +8,11 @@
 - Mode: advisory
 - Targets: tests/fixtures/fastapi
 - Source files: 7
-- Routes: 19
+- Routes: 23
 - Evidence entries: 6
 - Mutations: 0
 - Diagnostics: 4
-- Frameworks: fast_api: 19
+- Frameworks: fast_api: 23
 
 ## Review Required
 
@@ -28,11 +28,11 @@
 | [route_0015](#route-route_0015) | GET /reports | confidence is medium; router prefix is dynamic and was not included in the route path; include_router prefix is dynamic and was not included in the route path |
 | [route_0017](#route-route_0017) | POST /search | risk is high |
 | [route_0018](#route-route_0018) | ANY /fallback | confidence is medium; api_route methods are dynamic or missing; emitted as ANY; risk is high |
-| [route_0019](#route-route_0019) | GET &lt;dynamic&gt; | confidence is medium; route path is dynamic and was emitted as &lt;dynamic&gt;; route path is dynamic and was not fully resolved |
-| diagnostic | fastapi_dynamic_router_prefix | FastAPI router prefix is dynamic and could not be resolved at tests/fixtures/fastapi/main.py:11:18 |
-| diagnostic | fastapi_dynamic_api_route_methods | FastAPI api_route methods are dynamic or missing at tests/fixtures/fastapi/main.py:80:2 |
-| diagnostic | fastapi_dynamic_route_path | FastAPI route path is dynamic and could not be resolved at tests/fixtures/fastapi/main.py:85:2 |
-| diagnostic | fastapi_dynamic_include_router_prefix | FastAPI include_router prefix is dynamic and could not be resolved at tests/fixtures/fastapi/main.py:96:1 |
+| [route_0021](#route-route_0021) | GET &lt;dynamic&gt; | confidence is medium; route path is dynamic and was emitted as &lt;dynamic&gt;; route path is dynamic and was not fully resolved |
+| diagnostic | fastapi_dynamic_router_prefix | FastAPI router prefix is dynamic and could not be resolved at tests/fixtures/fastapi/main.py:14:18 |
+| diagnostic | fastapi_dynamic_api_route_methods | FastAPI api_route methods are dynamic or missing at tests/fixtures/fastapi/main.py:83:2 |
+| diagnostic | fastapi_dynamic_route_path | FastAPI route path is dynamic and could not be resolved at tests/fixtures/fastapi/main.py:98:2 |
+| diagnostic | fastapi_dynamic_include_router_prefix | FastAPI include_router prefix is dynamic and could not be resolved at tests/fixtures/fastapi/main.py:122:1 |
 
 ## Route Inventory
 
@@ -45,18 +45,22 @@
 | [route_0005](#route-route_0005) | fast_api | GET | /v1/users/{user_id} | \`get_user\` (tests/fixtures/fastapi/app/routes/users.py:7:5) | none | high | unauthenticated | medium |
 | [route_0006](#route-route_0006) | fast_api | PUT | /relative/users/{user_id} | \`update_user\` (tests/fixtures/fastapi/app/routes/users.py:12:5) | none | high | unauthenticated | high |
 | [route_0007](#route-route_0007) | fast_api | PUT | /v1/users/{user_id} | \`update_user\` (tests/fixtures/fastapi/app/routes/users.py:12:5) | none | high | unauthenticated | high |
-| [route_0008](#route-route_0008) | fast_api | GET | /health | \`health\` (tests/fixtures/fastapi/main.py:33:5) | none | high | unauthenticated | low |
-| [route_0009](#route-route_0009) | fast_api | POST | /items | \`create_item\` (tests/fixtures/fastapi/main.py:38:5) | none | high | unauthenticated | high |
-| [route_0010](#route-route_0010) | fast_api | GET | /profile | \`profile\` (tests/fixtures/fastapi/main.py:43:5) | none | high | authn_only | low |
-| [route_0011](#route-route_0011) | fast_api | DELETE | /admin/accounts/{account_id} | \`delete_account\` (tests/fixtures/fastapi/main.py:48:5) | \`require_admin\` (tests/fixtures/fastapi/main.py:47:67) | high | admin_guarded | low |
-| [route_0012](#route-route_0012) | fast_api | PATCH | /accounts/{account_id}/permissions | \`grant_permission\` (tests/fixtures/fastapi/main.py:53:5) | \`can_edit_account\` (tests/fixtures/fastapi/main.py:52:72) | high | permission_guarded | low |
-| [route_0013](#route-route_0013) | fast_api | POST | /service/accounts | \`service_account\` (tests/fixtures/fastapi/main.py:60:5) | none | high | unknown_or_dynamic | review_required |
-| [route_0014](#route-route_0014) | fast_api | DELETE | /api/local/{item_id} | \`delete_local\` (tests/fixtures/fastapi/main.py:66:5) | \`require_user\` (tests/fixtures/fastapi/main.py:90:71) | high | authn_only | review_required |
-| [route_0015](#route-route_0015) | fast_api | GET | /reports | \`dynamic_reports\` (tests/fixtures/fastapi/main.py:71:5) | none | medium | unauthenticated | low |
-| [route_0016](#route-route_0016) | fast_api | GET | /search | \`search\` (tests/fixtures/fastapi/main.py:76:5) | none | high | unauthenticated | low |
-| [route_0017](#route-route_0017) | fast_api | POST | /search | \`search\` (tests/fixtures/fastapi/main.py:76:5) | none | high | unauthenticated | high |
-| [route_0018](#route-route_0018) | fast_api | ANY | /fallback | \`fallback\` (tests/fixtures/fastapi/main.py:81:5) | none | medium | unauthenticated | high |
-| [route_0019](#route-route_0019) | fast_api | GET | &lt;dynamic&gt; | \`generated_path\` (tests/fixtures/fastapi/main.py:86:5) | none | medium | unauthenticated | low |
+| [route_0008](#route-route_0008) | fast_api | GET | /health | \`health\` (tests/fixtures/fastapi/main.py:36:5) | none | high | unauthenticated | low |
+| [route_0009](#route-route_0009) | fast_api | POST | /items | \`create_item\` (tests/fixtures/fastapi/main.py:41:5) | none | high | unauthenticated | high |
+| [route_0010](#route-route_0010) | fast_api | GET | /profile | \`profile\` (tests/fixtures/fastapi/main.py:46:5) | none | high | authn_only | low |
+| [route_0011](#route-route_0011) | fast_api | DELETE | /admin/accounts/{account_id} | \`delete_account\` (tests/fixtures/fastapi/main.py:51:5) | \`require_admin\` (tests/fixtures/fastapi/main.py:50:67) | high | admin_guarded | low |
+| [route_0012](#route-route_0012) | fast_api | PATCH | /accounts/{account_id}/permissions | \`grant_permission\` (tests/fixtures/fastapi/main.py:56:5) | \`can_edit_account\` (tests/fixtures/fastapi/main.py:55:72) | high | permission_guarded | low |
+| [route_0013](#route-route_0013) | fast_api | POST | /service/accounts | \`service_account\` (tests/fixtures/fastapi/main.py:63:5) | none | high | unknown_or_dynamic | review_required |
+| [route_0014](#route-route_0014) | fast_api | DELETE | /api/local/{item_id} | \`delete_local\` (tests/fixtures/fastapi/main.py:69:5) | \`require_user\` (tests/fixtures/fastapi/main.py:116:71) | high | authn_only | review_required |
+| [route_0015](#route-route_0015) | fast_api | GET | /reports | \`dynamic_reports\` (tests/fixtures/fastapi/main.py:74:5) | none | medium | unauthenticated | low |
+| [route_0016](#route-route_0016) | fast_api | GET | /search | \`search\` (tests/fixtures/fastapi/main.py:79:5) | none | high | unauthenticated | low |
+| [route_0017](#route-route_0017) | fast_api | POST | /search | \`search\` (tests/fixtures/fastapi/main.py:79:5) | none | high | unauthenticated | high |
+| [route_0018](#route-route_0018) | fast_api | ANY | /fallback | \`fallback\` (tests/fixtures/fastapi/main.py:84:5) | none | medium | unauthenticated | high |
+| [route_0019](#route-route_0019) | fast_api | GET | /generated | \`generated_path\` (tests/fixtures/fastapi/main.py:89:5) | none | high | unauthenticated | low |
+| [route_0020](#route-route_0020) | fast_api | GET | /constant | \`constant_alias_path\` (tests/fixtures/fastapi/main.py:94:5) | none | high | unauthenticated | low |
+| [route_0021](#route-route_0021) | fast_api | GET | &lt;dynamic&gt; | \`unresolved_runtime_path\` (tests/fixtures/fastapi/main.py:99:5) | none | medium | unauthenticated | low |
+| [route_0022](#route-route_0022) | fast_api | GET | /factory/status | \`default_status_path\` (tests/fixtures/fastapi/main.py:108:9) | none | high | unauthenticated | low |
+| [route_0023](#route-route_0023) | fast_api | GET | /factory/ready | \`default_ready_path\` (tests/fixtures/fastapi/main.py:112:9) | none | high | unauthenticated | low |
 
 ## Data Mutations
 
@@ -180,8 +184,8 @@ No data mutations were detected.
 ### route_0008 GET `/health`
 
 - Framework: fast_api
-- Handler: `health` (tests/fixtures/fastapi/main.py:33:5)
-- Route location: tests/fixtures/fastapi/main.py:32:2
+- Handler: `health` (tests/fixtures/fastapi/main.py:36:5)
+- Route location: tests/fixtures/fastapi/main.py:35:2
 - Middleware: none
 - Confidence: high
 - Coverage: unauthenticated (low)
@@ -193,8 +197,8 @@ No data mutations were detected.
 ### route_0009 POST `/items`
 
 - Framework: fast_api
-- Handler: `create_item` (tests/fixtures/fastapi/main.py:38:5)
-- Route location: tests/fixtures/fastapi/main.py:37:2
+- Handler: `create_item` (tests/fixtures/fastapi/main.py:41:5)
+- Route location: tests/fixtures/fastapi/main.py:40:2
 - Middleware: none
 - Confidence: high
 - Coverage: unauthenticated (high)
@@ -209,25 +213,25 @@ No data mutations were detected.
 ### route_0010 GET `/profile`
 
 - Framework: fast_api
-- Handler: `profile` (tests/fixtures/fastapi/main.py:43:5)
-- Route location: tests/fixtures/fastapi/main.py:42:2
+- Handler: `profile` (tests/fixtures/fastapi/main.py:46:5)
+- Route location: tests/fixtures/fastapi/main.py:45:2
 - Middleware: none
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
 - Coverage support: evidence: evidence_0001
 - Auth evidence:
-  - authn `authn_guard` at tests/fixtures/fastapi/main.py:43:18 (high)
-    - Symbol: `require_user` (tests/fixtures/fastapi/main.py:43:26)
+  - authn `authn_guard` at tests/fixtures/fastapi/main.py:46:18 (high)
+    - Symbol: `require_user` (tests/fixtures/fastapi/main.py:46:26)
 - Data mutations: none
 
 <a id="route-route_0011"></a>
 ### route_0011 DELETE `/admin/accounts/{account_id}`
 
 - Framework: fast_api
-- Handler: `delete_account` (tests/fixtures/fastapi/main.py:48:5)
-- Route location: tests/fixtures/fastapi/main.py:47:2
-- Middleware: `require_admin` (tests/fixtures/fastapi/main.py:47:67)
+- Handler: `delete_account` (tests/fixtures/fastapi/main.py:51:5)
+- Route location: tests/fixtures/fastapi/main.py:50:2
+- Middleware: `require_admin` (tests/fixtures/fastapi/main.py:50:67)
 - Confidence: high
 - Coverage: admin_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): account_path, admin_path, path_param, unsafe_method.
@@ -237,17 +241,17 @@ No data mutations were detected.
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
 - Auth evidence:
-  - admin_check `admin_guard` at tests/fixtures/fastapi/main.py:47:59 (high)
-    - Symbol: `require_admin` (tests/fixtures/fastapi/main.py:47:67)
+  - admin_check `admin_guard` at tests/fixtures/fastapi/main.py:50:59 (high)
+    - Symbol: `require_admin` (tests/fixtures/fastapi/main.py:50:67)
 - Data mutations: none
 
 <a id="route-route_0012"></a>
 ### route_0012 PATCH `/accounts/{account_id}/permissions`
 
 - Framework: fast_api
-- Handler: `grant_permission` (tests/fixtures/fastapi/main.py:53:5)
-- Route location: tests/fixtures/fastapi/main.py:52:2
-- Middleware: `can_edit_account` (tests/fixtures/fastapi/main.py:52:72)
+- Handler: `grant_permission` (tests/fixtures/fastapi/main.py:56:5)
+- Route location: tests/fixtures/fastapi/main.py:55:2
+- Middleware: `can_edit_account` (tests/fixtures/fastapi/main.py:55:72)
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param, unsafe_method.
@@ -259,10 +263,10 @@ No data mutations were detected.
   - Dynamic authorization evidence requires review.
   - Low-confidence authorization evidence was detected.
 - Auth evidence:
-  - permission_check `permission_guard` at tests/fixtures/fastapi/main.py:52:64 (high)
-    - Symbol: `can_edit_account` (tests/fixtures/fastapi/main.py:52:72)
-  - unknown_dynamic_check `handler_call` at tests/fixtures/fastapi/main.py:54:12 (low)
-    - Symbol: `dynamic_policy_check` (tests/fixtures/fastapi/main.py:54:12)
+  - permission_check `permission_guard` at tests/fixtures/fastapi/main.py:55:64 (high)
+    - Symbol: `can_edit_account` (tests/fixtures/fastapi/main.py:55:72)
+  - unknown_dynamic_check `handler_call` at tests/fixtures/fastapi/main.py:57:12 (low)
+    - Symbol: `dynamic_policy_check` (tests/fixtures/fastapi/main.py:57:12)
     - Note: Dynamic or indirect policy call requires review
 - Data mutations: none
 
@@ -270,8 +274,8 @@ No data mutations were detected.
 ### route_0013 POST `/service/accounts`
 
 - Framework: fast_api
-- Handler: `service_account` (tests/fixtures/fastapi/main.py:60:5)
-- Route location: tests/fixtures/fastapi/main.py:59:2
+- Handler: `service_account` (tests/fixtures/fastapi/main.py:63:5)
+- Route location: tests/fixtures/fastapi/main.py:62:2
 - Middleware: none
 - Confidence: high
 - Coverage: unknown_or_dynamic (review_required)
@@ -294,9 +298,9 @@ No data mutations were detected.
 ### route_0014 DELETE `/api/local/{item_id}`
 
 - Framework: fast_api
-- Handler: `delete_local` (tests/fixtures/fastapi/main.py:66:5)
-- Route location: tests/fixtures/fastapi/main.py:65:2
-- Middleware: `require_user` (tests/fixtures/fastapi/main.py:90:71)
+- Handler: `delete_local` (tests/fixtures/fastapi/main.py:69:5)
+- Route location: tests/fixtures/fastapi/main.py:68:2
+- Middleware: `require_user` (tests/fixtures/fastapi/main.py:116:71)
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, unsafe_method.
@@ -305,16 +309,16 @@ No data mutations were detected.
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
 - Auth evidence:
-  - authn `authn_guard` at tests/fixtures/fastapi/main.py:90:71 (high)
-    - Symbol: `require_user` (tests/fixtures/fastapi/main.py:90:71)
+  - authn `authn_guard` at tests/fixtures/fastapi/main.py:116:71 (high)
+    - Symbol: `require_user` (tests/fixtures/fastapi/main.py:116:71)
 - Data mutations: none
 
 <a id="route-route_0015"></a>
 ### route_0015 GET `/reports`
 
 - Framework: fast_api
-- Handler: `dynamic_reports` (tests/fixtures/fastapi/main.py:71:5)
-- Route location: tests/fixtures/fastapi/main.py:70:2
+- Handler: `dynamic_reports` (tests/fixtures/fastapi/main.py:74:5)
+- Route location: tests/fixtures/fastapi/main.py:73:2
 - Middleware: none
 - Confidence: medium
 - Coverage: unauthenticated (low)
@@ -331,8 +335,8 @@ No data mutations were detected.
 ### route_0016 GET `/search`
 
 - Framework: fast_api
-- Handler: `search` (tests/fixtures/fastapi/main.py:76:5)
-- Route location: tests/fixtures/fastapi/main.py:75:2
+- Handler: `search` (tests/fixtures/fastapi/main.py:79:5)
+- Route location: tests/fixtures/fastapi/main.py:78:2
 - Middleware: none
 - Confidence: high
 - Coverage: unauthenticated (low)
@@ -344,8 +348,8 @@ No data mutations were detected.
 ### route_0017 POST `/search`
 
 - Framework: fast_api
-- Handler: `search` (tests/fixtures/fastapi/main.py:76:5)
-- Route location: tests/fixtures/fastapi/main.py:75:2
+- Handler: `search` (tests/fixtures/fastapi/main.py:79:5)
+- Route location: tests/fixtures/fastapi/main.py:78:2
 - Middleware: none
 - Confidence: high
 - Coverage: unauthenticated (high)
@@ -360,8 +364,8 @@ No data mutations were detected.
 ### route_0018 ANY `/fallback`
 
 - Framework: fast_api
-- Handler: `fallback` (tests/fixtures/fastapi/main.py:81:5)
-- Route location: tests/fixtures/fastapi/main.py:80:2
+- Handler: `fallback` (tests/fixtures/fastapi/main.py:84:5)
+- Route location: tests/fixtures/fastapi/main.py:83:2
 - Middleware: none
 - Confidence: medium
 - Coverage: unauthenticated (high)
@@ -377,11 +381,37 @@ No data mutations were detected.
 - Data mutations: none
 
 <a id="route-route_0019"></a>
-### route_0019 GET `&lt;dynamic&gt;`
+### route_0019 GET `/generated`
 
 - Framework: fast_api
-- Handler: `generated_path` (tests/fixtures/fastapi/main.py:86:5)
-- Route location: tests/fixtures/fastapi/main.py:85:2
+- Handler: `generated_path` (tests/fixtures/fastapi/main.py:89:5)
+- Route location: tests/fixtures/fastapi/main.py:88:2
+- Middleware: none
+- Confidence: high
+- Coverage: unauthenticated (low)
+- Coverage rationale: No authorization evidence was detected.
+- Auth evidence: none
+- Data mutations: none
+
+<a id="route-route_0020"></a>
+### route_0020 GET `/constant`
+
+- Framework: fast_api
+- Handler: `constant_alias_path` (tests/fixtures/fastapi/main.py:94:5)
+- Route location: tests/fixtures/fastapi/main.py:93:2
+- Middleware: none
+- Confidence: high
+- Coverage: unauthenticated (low)
+- Coverage rationale: No authorization evidence was detected.
+- Auth evidence: none
+- Data mutations: none
+
+<a id="route-route_0021"></a>
+### route_0021 GET `&lt;dynamic&gt;`
+
+- Framework: fast_api
+- Handler: `unresolved_runtime_path` (tests/fixtures/fastapi/main.py:99:5)
+- Route location: tests/fixtures/fastapi/main.py:98:2
 - Middleware: none
 - Confidence: medium
 - Coverage: unauthenticated (low)
@@ -394,14 +424,40 @@ No data mutations were detected.
 - Auth evidence: none
 - Data mutations: none
 
+<a id="route-route_0022"></a>
+### route_0022 GET `/factory/status`
+
+- Framework: fast_api
+- Handler: `default_status_path` (tests/fixtures/fastapi/main.py:108:9)
+- Route location: tests/fixtures/fastapi/main.py:107:6
+- Middleware: none
+- Confidence: high
+- Coverage: unauthenticated (low)
+- Coverage rationale: No authorization evidence was detected.
+- Auth evidence: none
+- Data mutations: none
+
+<a id="route-route_0023"></a>
+### route_0023 GET `/factory/ready`
+
+- Framework: fast_api
+- Handler: `default_ready_path` (tests/fixtures/fastapi/main.py:112:9)
+- Route location: tests/fixtures/fastapi/main.py:111:6
+- Middleware: none
+- Confidence: high
+- Coverage: unauthenticated (low)
+- Coverage rationale: No authorization evidence was detected.
+- Auth evidence: none
+- Data mutations: none
+
 ## Diagnostics
 
 | Severity | Code | Location | Message |
 | --- | --- | --- | --- |
-| warning | fastapi_dynamic_router_prefix | tests/fixtures/fastapi/main.py:11:18 | FastAPI router prefix is dynamic and could not be resolved |
-| warning | fastapi_dynamic_api_route_methods | tests/fixtures/fastapi/main.py:80:2 | FastAPI api_route methods are dynamic or missing |
-| warning | fastapi_dynamic_route_path | tests/fixtures/fastapi/main.py:85:2 | FastAPI route path is dynamic and could not be resolved |
-| warning | fastapi_dynamic_include_router_prefix | tests/fixtures/fastapi/main.py:96:1 | FastAPI include_router prefix is dynamic and could not be resolved |
+| warning | fastapi_dynamic_router_prefix | tests/fixtures/fastapi/main.py:14:18 | FastAPI router prefix is dynamic and could not be resolved |
+| warning | fastapi_dynamic_api_route_methods | tests/fixtures/fastapi/main.py:83:2 | FastAPI api_route methods are dynamic or missing |
+| warning | fastapi_dynamic_route_path | tests/fixtures/fastapi/main.py:98:2 | FastAPI route path is dynamic and could not be resolved |
+| warning | fastapi_dynamic_include_router_prefix | tests/fixtures/fastapi/main.py:122:1 | FastAPI include_router prefix is dynamic and could not be resolved |
 
 ## Skipped Files
 

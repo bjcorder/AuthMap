@@ -73,7 +73,7 @@
     {
       "path": "tests/fixtures/fastapi/main.py",
       "language": "python",
-      "size_bytes": 2375,
+      "size_bytes": 2879,
       "sha256": null,
       "project_hints": [
         "fast_api"
@@ -335,21 +335,21 @@
         "name": "health",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 33,
+          "line": 36,
           "column": 5,
           "byte_range": {
-            "start": 869,
-            "end": 875
+            "start": 968,
+            "end": 974
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 32,
+        "line": 35,
         "column": 2,
         "byte_range": {
-          "start": 809,
-          "end": 864
+          "start": 908,
+          "end": 963
         }
       },
       "source_evidence": [],
@@ -370,21 +370,21 @@
         "name": "create_item",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 38,
+          "line": 41,
           "column": 5,
           "byte_range": {
-            "start": 950,
-            "end": 961
+            "start": 1049,
+            "end": 1060
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 37,
+        "line": 40,
         "column": 2,
         "byte_range": {
-          "start": 906,
-          "end": 945
+          "start": 1005,
+          "end": 1044
         }
       },
       "source_evidence": [],
@@ -403,21 +403,21 @@
         "name": "profile",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 43,
+          "line": 46,
           "column": 5,
           "byte_range": {
-            "start": 1021,
-            "end": 1028
+            "start": 1120,
+            "end": 1127
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 42,
+        "line": 45,
         "column": 2,
         "byte_range": {
-          "start": 997,
-          "end": 1016
+          "start": 1096,
+          "end": 1115
         }
       },
       "source_evidence": [],
@@ -436,11 +436,11 @@
           "name": "require_admin",
           "span": {
             "file": "tests/fixtures/fastapi/main.py",
-            "line": 47,
+            "line": 50,
             "column": 67,
             "byte_range": {
-              "start": 1142,
-              "end": 1155
+              "start": 1241,
+              "end": 1254
             }
           }
         }
@@ -449,21 +449,21 @@
         "name": "delete_account",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 48,
+          "line": 51,
           "column": 5,
           "byte_range": {
-            "start": 1163,
-            "end": 1177
+            "start": 1262,
+            "end": 1276
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 47,
+        "line": 50,
         "column": 2,
         "byte_range": {
-          "start": 1077,
-          "end": 1158
+          "start": 1176,
+          "end": 1257
         }
       },
       "source_evidence": [],
@@ -482,11 +482,11 @@
           "name": "can_edit_account",
           "span": {
             "file": "tests/fixtures/fastapi/main.py",
-            "line": 52,
+            "line": 55,
             "column": 72,
             "byte_range": {
-              "start": 1304,
-              "end": 1320
+              "start": 1403,
+              "end": 1419
             }
           }
         }
@@ -495,21 +495,21 @@
         "name": "grant_permission",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 53,
+          "line": 56,
           "column": 5,
           "byte_range": {
-            "start": 1328,
-            "end": 1344
+            "start": 1427,
+            "end": 1443
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 52,
+        "line": 55,
         "column": 2,
         "byte_range": {
-          "start": 1234,
-          "end": 1323
+          "start": 1333,
+          "end": 1422
         }
       },
       "source_evidence": [],
@@ -528,21 +528,21 @@
         "name": "service_account",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 60,
+          "line": 63,
           "column": 5,
           "byte_range": {
-            "start": 1536,
-            "end": 1551
+            "start": 1635,
+            "end": 1650
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 59,
+        "line": 62,
         "column": 2,
         "byte_range": {
-          "start": 1502,
-          "end": 1531
+          "start": 1601,
+          "end": 1630
         }
       },
       "source_evidence": [],
@@ -563,11 +563,11 @@
           "name": "require_user",
           "span": {
             "file": "tests/fixtures/fastapi/main.py",
-            "line": 90,
+            "line": 116,
             "column": 71,
             "byte_range": {
-              "start": 2120,
-              "end": 2132
+              "start": 2624,
+              "end": 2636
             }
           }
         }
@@ -576,21 +576,21 @@
         "name": "delete_local",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 66,
+          "line": 69,
           "column": 5,
           "byte_range": {
-            "start": 1698,
-            "end": 1710
+            "start": 1797,
+            "end": 1809
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 65,
+        "line": 68,
         "column": 2,
         "byte_range": {
-          "start": 1639,
-          "end": 1693
+          "start": 1738,
+          "end": 1792
         }
       },
       "source_evidence": [],
@@ -609,21 +609,21 @@
         "name": "dynamic_reports",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 71,
+          "line": 74,
           "column": 5,
           "byte_range": {
-            "start": 1796,
-            "end": 1811
+            "start": 1895,
+            "end": 1910
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 70,
+        "line": 73,
         "column": 2,
         "byte_range": {
-          "start": 1761,
-          "end": 1791
+          "start": 1860,
+          "end": 1890
         }
       },
       "source_evidence": [],
@@ -647,21 +647,21 @@
         "name": "search",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 76,
+          "line": 79,
           "column": 5,
           "byte_range": {
-            "start": 1903,
-            "end": 1909
+            "start": 2002,
+            "end": 2008
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 75,
+        "line": 78,
         "column": 2,
         "byte_range": {
-          "start": 1832,
-          "end": 1898
+          "start": 1931,
+          "end": 1997
         }
       },
       "source_evidence": [],
@@ -682,21 +682,21 @@
         "name": "search",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 76,
+          "line": 79,
           "column": 5,
           "byte_range": {
-            "start": 1903,
-            "end": 1909
+            "start": 2002,
+            "end": 2008
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 75,
+        "line": 78,
         "column": 2,
         "byte_range": {
-          "start": 1832,
-          "end": 1898
+          "start": 1931,
+          "end": 1997
         }
       },
       "source_evidence": [],
@@ -715,21 +715,21 @@
         "name": "fallback",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 81,
+          "line": 84,
           "column": 5,
           "byte_range": {
-            "start": 1961,
-            "end": 1969
+            "start": 2060,
+            "end": 2068
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 80,
+        "line": 83,
         "column": 2,
         "byte_range": {
-          "start": 1930,
-          "end": 1956
+          "start": 2029,
+          "end": 2055
         }
       },
       "source_evidence": [],
@@ -742,7 +742,7 @@
       "id": "route_0019",
       "framework": "fast_api",
       "method": "GET",
-      "path": "<dynamic>",
+      "path": "/generated",
       "name": null,
       "tags": [],
       "middleware": [],
@@ -750,21 +750,87 @@
         "name": "generated_path",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 86,
+          "line": 89,
           "column": 5,
           "byte_range": {
-            "start": 2016,
-            "end": 2030
+            "start": 2115,
+            "end": 2129
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 85,
+        "line": 88,
         "column": 2,
         "byte_range": {
-          "start": 1990,
-          "end": 2011
+          "start": 2089,
+          "end": 2110
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0020",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "/constant",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "constant_alias_path",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 94,
+          "column": 5,
+          "byte_range": {
+            "start": 2176,
+            "end": 2195
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 93,
+        "column": 2,
+        "byte_range": {
+          "start": 2150,
+          "end": 2171
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0021",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "<dynamic>",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "unresolved_runtime_path",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 99,
+          "column": 5,
+          "byte_range": {
+            "start": 2242,
+            "end": 2265
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 98,
+        "column": 2,
+        "byte_range": {
+          "start": 2216,
+          "end": 2237
         }
       },
       "source_evidence": [],
@@ -773,6 +839,72 @@
         "route path is dynamic and was emitted as <dynamic>",
         "route path is dynamic and was not fully resolved"
       ]
+    },
+    {
+      "id": "route_0022",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "/factory/status",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "default_status_path",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 108,
+          "column": 9,
+          "byte_range": {
+            "start": 2432,
+            "end": 2451
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 107,
+        "column": 6,
+        "byte_range": {
+          "start": 2403,
+          "end": 2423
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "route_0023",
+      "framework": "fast_api",
+      "method": "GET",
+      "path": "/factory/ready",
+      "name": null,
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "default_ready_path",
+        "span": {
+          "file": "tests/fixtures/fastapi/main.py",
+          "line": 112,
+          "column": 9,
+          "byte_range": {
+            "start": 2512,
+            "end": 2530
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 111,
+        "column": 6,
+        "byte_range": {
+          "start": 2479,
+          "end": 2503
+        }
+      },
+      "source_evidence": [],
+      "confidence": "high",
+      "notes": []
     }
   ],
   "evidence": [
@@ -785,21 +917,21 @@
         "name": "require_user",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 43,
+          "line": 46,
           "column": 26,
           "byte_range": {
-            "start": 1042,
-            "end": 1054
+            "start": 1141,
+            "end": 1153
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 43,
+        "line": 46,
         "column": 18,
         "byte_range": {
-          "start": 1034,
-          "end": 1055
+          "start": 1133,
+          "end": 1154
         }
       },
       "confidence": "high",
@@ -814,21 +946,21 @@
         "name": "require_admin",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 47,
+          "line": 50,
           "column": 67,
           "byte_range": {
-            "start": 1142,
-            "end": 1155
+            "start": 1241,
+            "end": 1254
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 47,
+        "line": 50,
         "column": 59,
         "byte_range": {
-          "start": 1134,
-          "end": 1156
+          "start": 1233,
+          "end": 1255
         }
       },
       "confidence": "high",
@@ -843,21 +975,21 @@
         "name": "can_edit_account",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 52,
+          "line": 55,
           "column": 72,
           "byte_range": {
-            "start": 1304,
-            "end": 1320
+            "start": 1403,
+            "end": 1419
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 52,
+        "line": 55,
         "column": 64,
         "byte_range": {
-          "start": 1296,
-          "end": 1321
+          "start": 1395,
+          "end": 1420
         }
       },
       "confidence": "high",
@@ -872,21 +1004,21 @@
         "name": "dynamic_policy_check",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 54,
+          "line": 57,
           "column": 12,
           "byte_range": {
-            "start": 1374,
-            "end": 1394
+            "start": 1473,
+            "end": 1493
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 54,
+        "line": 57,
         "column": 12,
         "byte_range": {
-          "start": 1374,
-          "end": 1412
+          "start": 1473,
+          "end": 1511
         }
       },
       "confidence": "low",
@@ -934,21 +1066,21 @@
         "name": "require_user",
         "span": {
           "file": "tests/fixtures/fastapi/main.py",
-          "line": 90,
+          "line": 116,
           "column": 71,
           "byte_range": {
-            "start": 2120,
-            "end": 2132
+            "start": 2624,
+            "end": 2636
           }
         }
       },
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 90,
+        "line": 116,
         "column": 71,
         "byte_range": {
-          "start": 2120,
-          "end": 2132
+          "start": 2624,
+          "end": 2636
         }
       },
       "confidence": "high",
@@ -970,12 +1102,12 @@
         "authmap.reachability": {
           "call_span": {
             "byte_range": {
-              "end": 1611,
-              "start": 1594
+              "end": 1710,
+              "start": 1693
             },
             "column": 5,
             "file": "tests/fixtures/fastapi/main.py",
-            "line": 61
+            "line": 64
           },
           "call_target": "service.execute",
           "reason": "unresolved_service_call"
@@ -1457,9 +1589,85 @@
         "No authorization evidence was detected."
       ],
       "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0020",
+      "class": "unauthenticated",
+      "risk": "low",
+      "rationale": [
+        "No authorization evidence was detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0021",
+      "class": "unauthenticated",
+      "risk": "low",
+      "rationale": [
+        "No authorization evidence was detected."
+      ],
+      "reviewer_questions": [],
       "uncertainty_reasons": [
         "Route inventory confidence is not high."
       ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0022",
+      "class": "unauthenticated",
+      "risk": "low",
+      "rationale": [
+        "No authorization evidence was detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0023",
+      "class": "unauthenticated",
+      "risk": "low",
+      "rationale": [
+        "No authorization evidence was detected."
+      ],
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [],
@@ -1479,11 +1687,11 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 80,
+        "line": 83,
         "column": 2,
         "byte_range": {
-          "start": 1930,
-          "end": 1956
+          "start": 2029,
+          "end": 2055
         }
       },
       "message": "FastAPI api_route methods are dynamic or missing"
@@ -1495,11 +1703,11 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 96,
+        "line": 122,
         "column": 1,
         "byte_range": {
-          "start": 2317,
-          "end": 2374
+          "start": 2821,
+          "end": 2878
         }
       },
       "message": "FastAPI include_router prefix is dynamic and could not be resolved"
@@ -1511,11 +1719,11 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 85,
+        "line": 98,
         "column": 2,
         "byte_range": {
-          "start": 1990,
-          "end": 2011
+          "start": 2216,
+          "end": 2237
         }
       },
       "message": "FastAPI route path is dynamic and could not be resolved"
@@ -1527,11 +1735,11 @@
       "recoverability": "recoverable",
       "span": {
         "file": "tests/fixtures/fastapi/main.py",
-        "line": 11,
+        "line": 14,
         "column": 18,
         "byte_range": {
-          "start": 417,
-          "end": 449
+          "start": 516,
+          "end": 548
         }
       },
       "message": "FastAPI router prefix is dynamic and could not be resolved"

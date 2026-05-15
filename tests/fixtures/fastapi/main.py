@@ -8,6 +8,9 @@ app = FastAPI()
 local_router = APIRouter(prefix="/local", tags=["local-default"])
 dynamic_prefix = "/dynamic"
 dynamic_path = "/generated"
+ALIAS_SOURCE_PATH = "/constant"
+ALIASED_PATH = ALIAS_SOURCE_PATH
+runtime_path = get_runtime_path()
 dynamic_router = APIRouter(prefix=dynamic_prefix)
 
 
@@ -85,6 +88,29 @@ def fallback():
 @app.get(dynamic_path)
 def generated_path():
     return {}
+
+
+@app.get(ALIASED_PATH)
+def constant_alias_path():
+    return {}
+
+
+@app.get(runtime_path)
+def unresolved_runtime_path():
+    return {}
+
+
+def register_default_paths(
+    status_path: str = "/factory/status",
+    ready_path: str = "/factory/ready",
+):
+    @app.get(status_path)
+    def default_status_path():
+        return {}
+
+    @app.get(path=ready_path)
+    def default_ready_path():
+        return {}
 
 
 app.include_router(local_router, prefix="/api", dependencies=[Depends(require_user)])

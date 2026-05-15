@@ -5860,14 +5860,14 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 19);
+        assert_eq!(document.routes.len(), 23);
         assert_eq!(
             document.routes.first().map(|route| route.id.as_str()),
             Some("route_0001")
         );
         assert_eq!(
             document.routes.last().map(|route| route.id.as_str()),
-            Some("route_0019")
+            Some("route_0023")
         );
         assert!(document.routes.iter().any(|route| {
             route.method == "DELETE"
@@ -5895,6 +5895,38 @@ sensitivity:
         }));
         assert!(document.routes.iter().any(|route| {
             route.method == "GET"
+                && route.path == "/generated"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "generated_path")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.method == "GET"
+                && route.path == "/constant"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "constant_alias_path")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.method == "GET"
+                && route.path == "/factory/status"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "default_status_path")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.method == "GET"
+                && route.path == "/factory/ready"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "default_ready_path")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.method == "GET"
                 && route.path == "/v1/users/{user_id}"
                 && route
                     .handler
@@ -5911,6 +5943,14 @@ sensitivity:
                 .diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic.code == "fastapi_dynamic_api_route_methods")
+        );
+        assert_eq!(
+            document
+                .diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic.code == "fastapi_dynamic_route_path")
+                .count(),
+            1
         );
         assert!(document.evidence.iter().any(|evidence| {
             evidence.evidence_type == EvidenceType::AdminCheck

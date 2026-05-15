@@ -458,6 +458,7 @@ impl FrameworkAdapter for FastApiAdapter {
                 parsed,
                 module_index: &module_index,
                 index: &mut index,
+                static_strings: HashMap::new(),
             };
             collector.collect(root);
         }
@@ -814,6 +815,7 @@ struct FileCollector<'a> {
     parsed: &'a ParsedFile,
     module_index: &'a BTreeMap<String, String>,
     index: &'a mut FastApiIndex,
+    static_strings: HashMap<String, String>,
 }
 
 impl<'a> FileCollector<'a> {
@@ -822,6 +824,7 @@ impl<'a> FileCollector<'a> {
             self.parsed.source.path.clone(),
             parse_imports(self.parsed, self.module_index),
         );
+        self.static_strings = collect_module_static_strings(self.parsed, root);
         self.walk_for_bindings(root);
         self.walk_for_factories(root);
         self.walk_for_routes_and_includes(root);
@@ -986,7 +989,17 @@ impl<'a> FileCollector<'a> {
             let Some(methods) = methods_for_decorator(self.parsed, call, &decorator_name) else {
                 continue;
             };
-            let (mut path, dynamic_path) = route_path(self.parsed, call);
+            let route_path_strings = route_path_static_strings(
+                self.parsed,
+                call,
+                function_default_static_strings(
+                    self.parsed,
+                    enclosing_python_function(call),
+                    &self.static_strings,
+                ),
+                &self.static_strings,
+            );
+            let (mut path, dynamic_path) = route_path(self.parsed, call, &route_path_strings);
             if path.is_none() {
                 self.index.diagnostics.push(diagnostic(
                     "fastapi_dynamic_route_path",
@@ -1210,6 +1223,193 @@ fn module_matches(file: &str, module: &str) -> bool {
     dotted.ends_with(module)
 }
 
+#[derive(Clone, Debug)]
+enum StaticStringExpr {
+    Literal(String),
+    Alias(String),
+}
+
+fn collect_module_static_strings(parsed: &ParsedFile, root: Node<'_>) -> HashMap<String, String> {
+    let mut raw = Vec::<(String, StaticStringExpr)>::new();
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if matches!(node.kind(), "assignment" | "annotated_assignment")
+            && !is_inside_python_definition(node)
+            && let Some((name, value)) = static_string_assignment(parsed, node)
+        {
+            raw.push((name, value));
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor).filter(|child| child.is_named()));
+    }
+    resolve_static_string_assignments(raw, &HashMap::new())
+}
+
+fn function_default_static_strings(
+    parsed: &ParsedFile,
+    function: Option<Node<'_>>,
+    module_strings: &HashMap<String, String>,
+) -> HashMap<String, String> {
+    let Some(function) = function else {
+        return HashMap::new();
+    };
+    let Some(parameters) = function.child_by_field_name("parameters") else {
+        return HashMap::new();
+    };
+    let mut raw = Vec::<(String, StaticStringExpr)>::new();
+    let mut stack = vec![parameters];
+    while let Some(node) = stack.pop() {
+        if matches!(node.kind(), "default_parameter" | "typed_default_parameter")
+            && let Some(name_node) = node
+                .child_by_field_name("name")
+                .or_else(|| node.child_by_field_name("pattern"))
+            && let Some(value_node) = node.child_by_field_name("value")
+            && let Some(name) = identifier_text(parsed, name_node)
+            && let Some(value) = static_string_expr(parsed, value_node)
+        {
+            raw.push((name, value));
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor).filter(|child| child.is_named()));
+    }
+    if raw.is_empty() {
+        raw = function_default_static_strings_from_text(parsed, parameters);
+    }
+    resolve_static_string_assignments(raw, module_strings)
+}
+
+fn function_local_static_strings(
+    parsed: &ParsedFile,
+    function: Node<'_>,
+    base_strings: &HashMap<String, String>,
+) -> HashMap<String, String> {
+    let Some(body) = function.child_by_field_name("body") else {
+        return HashMap::new();
+    };
+    let mut raw = Vec::<(String, StaticStringExpr)>::new();
+    let mut stack = vec![body];
+    while let Some(node) = stack.pop() {
+        if matches!(node.kind(), "assignment" | "annotated_assignment")
+            && enclosing_python_function(node).is_some_and(|parent| parent.id() == function.id())
+            && let Some((name, value)) = static_string_assignment(parsed, node)
+        {
+            raw.push((name, value));
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor).filter(|child| child.is_named()));
+    }
+    resolve_static_string_assignments(raw, base_strings)
+}
+
+fn static_string_assignment(
+    parsed: &ParsedFile,
+    node: Node<'_>,
+) -> Option<(String, StaticStringExpr)> {
+    let left = node
+        .child_by_field_name("left")
+        .or_else(|| node.child_by_field_name("name"))?;
+    let right = node
+        .child_by_field_name("right")
+        .or_else(|| node.child_by_field_name("value"))?;
+    let name = identifier_text(parsed, left)?;
+    let value = static_string_expr(parsed, right)?;
+    Some((name, value))
+}
+
+fn static_string_expr(parsed: &ParsedFile, node: Node<'_>) -> Option<StaticStringExpr> {
+    if let Some(value) = string_literal(parsed, node) {
+        return Some(StaticStringExpr::Literal(value));
+    }
+    identifier_text(parsed, node).map(StaticStringExpr::Alias)
+}
+
+fn resolve_static_string_assignments(
+    raw: Vec<(String, StaticStringExpr)>,
+    base: &HashMap<String, String>,
+) -> HashMap<String, String> {
+    let mut resolved = base.clone();
+    let mut pending = raw;
+    let mut changed = true;
+    while changed {
+        changed = false;
+        pending.retain(|(name, value)| {
+            let next = match value {
+                StaticStringExpr::Literal(value) => Some(value.clone()),
+                StaticStringExpr::Alias(alias) => resolved.get(alias).cloned(),
+            };
+            if let Some(next) = next {
+                resolved.insert(name.clone(), next);
+                changed = true;
+                false
+            } else {
+                true
+            }
+        });
+    }
+    resolved
+        .into_iter()
+        .filter(|(name, _)| !base.contains_key(name))
+        .collect()
+}
+
+fn function_default_static_strings_from_text(
+    parsed: &ParsedFile,
+    parameters: Node<'_>,
+) -> Vec<(String, StaticStringExpr)> {
+    let Some(text) = parsed.text_for(parameters) else {
+        return Vec::new();
+    };
+    text.trim()
+        .trim_start_matches('(')
+        .trim_end_matches(')')
+        .split(',')
+        .filter_map(|parameter| {
+            let (left, right) = parameter.split_once('=')?;
+            let name = left
+                .rsplit_once(':')
+                .map_or(left, |(name, _)| name)
+                .trim()
+                .trim_start_matches('*')
+                .trim();
+            if name.is_empty() {
+                return None;
+            }
+            let value = decode_python_string_literal(right.trim())
+                .map(StaticStringExpr::Literal)
+                .or_else(|| {
+                    right
+                        .trim()
+                        .chars()
+                        .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+                        .then(|| StaticStringExpr::Alias(right.trim().to_string()))
+                })?;
+            Some((name.to_string(), value))
+        })
+        .collect()
+}
+
+fn enclosing_python_function(node: Node<'_>) -> Option<Node<'_>> {
+    let mut current = node.parent();
+    while let Some(node) = current {
+        if node.kind() == "function_definition" {
+            return Some(node);
+        }
+        current = node.parent();
+    }
+    None
+}
+
+fn is_inside_python_definition(node: Node<'_>) -> bool {
+    let mut current = node.parent();
+    while let Some(node) = current {
+        if matches!(node.kind(), "function_definition" | "class_definition") {
+            return true;
+        }
+        current = node.parent();
+    }
+    false
+}
+
 fn find_first_kind<'tree>(node: Node<'tree>, kind: &str) -> Option<Node<'tree>> {
     let mut stack = vec![node];
     while let Some(node) = stack.pop() {
@@ -1288,14 +1488,63 @@ fn methods_for_decorator(
     }
 }
 
-fn route_path(parsed: &ParsedFile, call: Node<'_>) -> (Option<String>, bool) {
-    if let Some(path) = first_string_argument(parsed, call) {
-        return (Some(path), false);
+fn route_path(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    static_strings: &HashMap<String, String>,
+) -> (Option<String>, bool) {
+    if let Some(argument) = first_argument_node(call) {
+        return (
+            static_string_value(parsed, argument, static_strings),
+            !static_string_expr_is_resolved(parsed, argument, static_strings),
+        );
     }
-    let keyword_path = keyword_string(parsed, call, "path");
+    let keyword_path = keyword_value(parsed, call, "path")
+        .and_then(|value| static_string_value(parsed, value, static_strings));
     let unresolved_keyword_path = keyword_path.is_none();
     let dynamic = keyword_exists(parsed, call, "path") || first_argument_exists(call);
     (keyword_path, dynamic && unresolved_keyword_path)
+}
+
+fn route_path_static_strings(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    function_strings: HashMap<String, String>,
+    module_strings: &HashMap<String, String>,
+) -> HashMap<String, String> {
+    let mut strings = module_strings.clone();
+    strings.extend(function_strings);
+    if let Some(function) = enclosing_python_function(call) {
+        strings.extend(function_local_static_strings(parsed, function, &strings));
+    }
+    strings
+}
+
+fn static_string_expr_is_resolved(
+    parsed: &ParsedFile,
+    node: Node<'_>,
+    static_strings: &HashMap<String, String>,
+) -> bool {
+    static_string_value(parsed, node, static_strings).is_some()
+}
+
+fn static_string_value(
+    parsed: &ParsedFile,
+    node: Node<'_>,
+    static_strings: &HashMap<String, String>,
+) -> Option<String> {
+    if let Some(value) = string_literal(parsed, node) {
+        return Some(value);
+    }
+    identifier_text(parsed, node).and_then(|name| static_strings.get(&name).cloned())
+}
+
+fn first_argument_node(call: Node<'_>) -> Option<Node<'_>> {
+    let arguments = call.child_by_field_name("arguments")?;
+    let mut cursor = arguments.walk();
+    arguments
+        .children(&mut cursor)
+        .find(|child| child.is_named() && child.kind() != "keyword_argument")
 }
 
 fn first_argument_exists(call: Node<'_>) -> bool {
@@ -1306,18 +1555,6 @@ fn first_argument_exists(call: Node<'_>) -> bool {
     arguments
         .children(&mut cursor)
         .any(|child| child.is_named() && child.kind() != "keyword_argument")
-}
-
-fn first_string_argument(parsed: &ParsedFile, call: Node<'_>) -> Option<String> {
-    let arguments = call.child_by_field_name("arguments")?;
-    let mut cursor = arguments.walk();
-    for child in arguments.children(&mut cursor) {
-        if !child.is_named() || child.kind() == "keyword_argument" {
-            continue;
-        }
-        return string_literal(parsed, child);
-    }
-    None
 }
 
 fn first_router_argument(parsed: &ParsedFile, call: Node<'_>) -> Option<(String, Option<String>)> {
@@ -3444,7 +3681,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        assert_eq!(output.routes.len(), 19);
+        assert_eq!(output.routes.len(), 23);
         assert!(summaries.contains(&(
             "POST",
             "/service/accounts",
@@ -3567,8 +3804,40 @@ mod tests {
         )));
         assert!(summaries.contains(&(
             "GET",
-            "<dynamic>",
+            "/generated",
             Some("generated_path"),
+            None,
+            Vec::<String>::new(),
+            authmap_core::Confidence::High,
+        )));
+        assert!(summaries.contains(&(
+            "GET",
+            "/constant",
+            Some("constant_alias_path"),
+            None,
+            Vec::<String>::new(),
+            authmap_core::Confidence::High,
+        )));
+        assert!(summaries.contains(&(
+            "GET",
+            "/factory/status",
+            Some("default_status_path"),
+            None,
+            Vec::<String>::new(),
+            authmap_core::Confidence::High,
+        )));
+        assert!(summaries.contains(&(
+            "GET",
+            "/factory/ready",
+            Some("default_ready_path"),
+            None,
+            Vec::<String>::new(),
+            authmap_core::Confidence::High,
+        )));
+        assert!(summaries.contains(&(
+            "GET",
+            "<dynamic>",
+            Some("unresolved_runtime_path"),
             None,
             Vec::<String>::new(),
             authmap_core::Confidence::Medium,
@@ -3604,7 +3873,9 @@ mod tests {
             output
                 .diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.code == "fastapi_dynamic_route_path")
+                .filter(|diagnostic| diagnostic.code == "fastapi_dynamic_route_path")
+                .count()
+                == 1
         );
     }
 
