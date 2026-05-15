@@ -392,6 +392,8 @@ pub enum Framework {
     DjangoRestFramework,
     Express,
     NextJs,
+    Trpc,
+    Graphql,
     Unknown,
 }
 

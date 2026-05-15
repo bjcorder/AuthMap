@@ -439,6 +439,8 @@
         "django_rest_framework",
         "express",
         "next_js",
+        "trpc",
+        "graphql",
         "unknown"
       ]
     },

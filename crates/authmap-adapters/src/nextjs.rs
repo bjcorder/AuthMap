@@ -99,6 +99,14 @@ struct RouteExport {
     notes: Vec<String>,
 }
 
+impl RouteExport {
+    fn reexported_as(mut self, method: &str, span: Span) -> Self {
+        self.method = method.to_string();
+        self.span = span;
+        self
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ExportKind {
     Function,
@@ -399,6 +407,14 @@ fn collect_export_clause(
         if !is_http_method(exported) {
             continue;
         }
+        if let Some(external) = external_file
+            .as_ref()
+            .and_then(|file| parsed_by_path.get(file))
+            .and_then(|external| resolved_external_route_export(external, local))
+        {
+            exports.push(external.reexported_as(exported, parsed.span_for(node)));
+            continue;
+        }
         let definition = external_definitions
             .as_ref()
             .and_then(|definitions| definitions.get(local))
@@ -437,6 +453,24 @@ fn collect_export_clause(
             },
         });
     }
+}
+
+fn resolved_external_route_export(parsed: &ParsedFile, method: &str) -> Option<RouteExport> {
+    let root = parsed.root_node()?;
+    let mut diagnostics = Vec::new();
+    let definitions = collect_definitions(parsed, root);
+    let empty_module_index = BTreeMap::new();
+    let empty_parsed_by_path = BTreeMap::new();
+    collect_route_exports(
+        parsed,
+        root,
+        &definitions,
+        &empty_module_index,
+        &empty_parsed_by_path,
+        &mut diagnostics,
+    )
+    .into_iter()
+    .find(|item| item.method == method)
 }
 
 fn export_clause_text<'a>(parsed: &'a ParsedFile, node: Node<'_>) -> Option<&'a str> {

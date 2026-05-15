@@ -1,1 +1,1 @@
-export { POST, missing as PUT } from "./handler";
+export { POST, DELETE, missing as PUT } from "./handler";

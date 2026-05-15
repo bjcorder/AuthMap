@@ -40,6 +40,22 @@ const HARD_EXCLUDED_FILES: &[&str] = &[
     "authmap.sarif.json",
 ];
 
+const DEFAULT_EXCLUDE_PATTERNS: &[&str] = &[
+    "**/tests/**",
+    "**/test/**",
+    "**/__tests__/**",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/*.test.js",
+    "**/*.test.jsx",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.js",
+    "**/*.spec.jsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+];
+
 const MANIFEST_FILES: &[&str] = &[
     "package.json",
     "requirements.txt",
@@ -564,7 +580,17 @@ impl PatternMatchers {
         exclude: &[String],
     ) -> Result<Self, DiscoveryError> {
         let includes = build_matchers(roots, include, "include")?;
-        let excludes = build_matchers(roots, exclude, "exclude")?;
+        let default_excludes = if include.is_empty() {
+            DEFAULT_EXCLUDE_PATTERNS
+                .iter()
+                .map(|pattern| (*pattern).to_string())
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+        let mut exclude_patterns = default_excludes;
+        exclude_patterns.extend(exclude.iter().cloned());
+        let excludes = build_matchers(roots, &exclude_patterns, "exclude")?;
         Ok(Self { includes, excludes })
     }
 
@@ -743,6 +769,29 @@ mod tests {
         let result = discover_sources(&plan(temp.path())).expect("discovery should succeed");
 
         assert_eq!(names(&result), vec!["app.ts"]);
+    }
+
+    #[test]
+    fn default_exclusions_skip_tests_unless_explicitly_included() {
+        let temp = TestDir::new("default-test-exclusions");
+        write_file(&temp.path().join("src/app.py"), "print('app')\n");
+        write_file(
+            &temp.path().join("src/tests/test_app.py"),
+            "print('test')\n",
+        );
+        write_file(
+            &temp.path().join("src/app.test.ts"),
+            "export const test = 1;\n",
+        );
+
+        let result = discover_sources(&plan(temp.path())).expect("discovery should succeed");
+        assert_eq!(names(&result), vec!["app.py"]);
+
+        let mut plan = plan(temp.path());
+        plan.config.include = vec!["src/tests/**/*.py".to_string()];
+        let result =
+            discover_sources(&plan).expect("explicit include should opt into test sources");
+        assert_eq!(names(&result), vec!["test_app.py"]);
     }
 
     #[test]

@@ -47,6 +47,7 @@ impl ParsedFile {
 pub enum ParseStatus {
     Parsed,
     Recovered,
+    TextOnly,
     Unsupported,
 }
 
@@ -74,6 +75,48 @@ where
         .map(|file| {
             let text = read_source(file)?;
             backend.parse(file, &text)
+        })
+        .collect::<Vec<_>>();
+
+    let mut output = ParseOutput::default();
+    for result in parsed_or_errors.drain(..) {
+        match result {
+            Ok(parsed) => {
+                output.diagnostics.extend(parsed.diagnostics.clone());
+                output.parsed_files.push(parsed);
+            }
+            Err(error) => output.diagnostics.push(error.into_diagnostic()),
+        }
+    }
+    output
+}
+
+pub fn parse_files_in_parallel_selective<B>(
+    backend: &B,
+    files: &[SourceFile],
+    read_source: impl Fn(&SourceFile) -> Result<String, ParseError> + Send + Sync,
+    should_parse: impl Fn(&SourceFile, &str) -> bool + Send + Sync,
+) -> ParseOutput
+where
+    B: ParserBackend,
+{
+    let mut parsed_or_errors = files
+        .par_iter()
+        .filter(|file| file.skipped.is_none())
+        .map(|file| {
+            let text = read_source(file)?;
+            if should_parse(file, &text) {
+                backend.parse(file, &text)
+            } else {
+                Ok(ParsedFile {
+                    source: file.clone(),
+                    language: file.language,
+                    text,
+                    tree: None,
+                    status: ParseStatus::TextOnly,
+                    diagnostics: Vec::new(),
+                })
+            }
         })
         .collect::<Vec<_>>();
 
@@ -366,6 +409,39 @@ mod tests {
             parsed.diagnostics[0].code,
             diagnostic_codes::PARSER_SOURCE_LANGUAGE_UNSUPPORTED
         );
+    }
+
+    #[test]
+    fn selective_parse_keeps_text_without_building_unneeded_trees() {
+        let backend = TreeSitterBackend;
+        let files = vec![
+            source("parsed.py", Language::Python),
+            source("text_only.py", Language::Python),
+        ];
+        let output = parse_files_in_parallel_selective(
+            &backend,
+            &files,
+            |file| Ok(format!("# {}\n", file.path)),
+            |file, _| file.path == "parsed.py",
+        );
+
+        let parsed = output
+            .parsed_files
+            .iter()
+            .find(|file| file.source.path == "parsed.py")
+            .expect("parsed file should be present");
+        assert_eq!(parsed.status, ParseStatus::Parsed);
+        assert!(parsed.tree().is_some());
+
+        let text_only = output
+            .parsed_files
+            .iter()
+            .find(|file| file.source.path == "text_only.py")
+            .expect("text-only file should be present");
+        assert_eq!(text_only.status, ParseStatus::TextOnly);
+        assert!(text_only.tree().is_none());
+        assert_eq!(text_only.text, "# text_only.py\n");
+        assert!(output.diagnostics.is_empty());
     }
 
     #[test]

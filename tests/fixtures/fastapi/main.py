@@ -1,4 +1,7 @@
 from fastapi import FastAPI, APIRouter, Depends
+from app.factories.collection import make_collection_router
+from app.factories.custom import make_factory_router
+from app.services.account import AccountService
 from app.routes.users import router as users_router
 
 app = FastAPI()
@@ -53,6 +56,12 @@ def grant_permission(account_id: str):
     return {"account_id": account_id}
 
 
+@app.post("/service/accounts")
+def service_account(service: AccountService = Depends()):
+    service.execute()
+    return {"ok": True}
+
+
 @local_router.delete("/{item_id}", name="delete_local")
 def delete_local(item_id: str):
     return {"deleted": item_id}
@@ -78,6 +87,10 @@ def generated_path():
     return {}
 
 
-app.include_router(local_router, prefix="/api")
+app.include_router(local_router, prefix="/api", dependencies=[Depends(require_user)])
 app.include_router(users_router, prefix="/v1")
+app.include_router(make_factory_router())
+ROUTERS = (make_collection_router(),)
+for router in ROUTERS:
+    app.include_router(router)
 app.include_router(dynamic_router, prefix=dynamic_prefix)
