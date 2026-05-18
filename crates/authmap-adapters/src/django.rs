@@ -975,6 +975,8 @@ fn emit_pattern_routes(
                     name: pattern.name.clone(),
                     tags: Vec::new(),
                     middleware: Vec::new(),
+                    params: Vec::new(),
+                    declared_protection: Vec::new(),
                     handler: Some(SymbolRef {
                         name: handler.name.clone(),
                         span: Some(handler.span.clone()),
@@ -1115,6 +1117,8 @@ fn emit_generated_include_routes(
                 name: registration.name.clone(),
                 tags: Vec::new(),
                 middleware: Vec::new(),
+                params: Vec::new(),
+                declared_protection: Vec::new(),
                 handler: Some(SymbolRef {
                     name: registration.handler.name.clone(),
                     span: Some(registration.handler.span.clone()),
@@ -1337,6 +1341,8 @@ fn emit_drf_route(
                 .map(|basename| format!("{}-{}", basename, action_name.replace('_', "-"))),
             tags: Vec::new(),
             middleware: Vec::new(),
+            params: Vec::new(),
+            declared_protection: Vec::new(),
             handler: Some(SymbolRef {
                 name: format!("{}.{}", viewset.name, action_name),
                 span: Some(action_span),

@@ -77,6 +77,7 @@ No data mutations were detected.
 - Handler: `&lt;inline_handler&gt;` (tests/fixtures/express/app.js:53:33)
 - Route location: tests/fixtures/express/app.js:53:1
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:14:10)
+- Declared protection: requireAuth
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
@@ -93,6 +94,7 @@ No data mutations were detected.
 - Handler: `listAccounts` (tests/fixtures/express/app.js:44:10)
 - Route location: tests/fixtures/express/app.js:57:1
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:14:10), `audit` (tests/fixtures/express/app.js:36:10)
+- Declared protection: requireAuth
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): account_path, unsafe_method.
@@ -112,6 +114,7 @@ No data mutations were detected.
 - Handler: `listAccounts` (tests/fixtures/express/app.js:44:10)
 - Route location: tests/fixtures/express/app.js:58:1
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:51:19), `requirePermission` (tests/fixtures/express/app.js:51:32), `requireRole` (tests/fixtures/express/app.js:18:10)
+- Declared protection: requireAuth, requirePermission, requireRole
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): admin_path, unsafe_method.
@@ -135,6 +138,8 @@ No data mutations were detected.
 - Handler: `listAccounts` (tests/fixtures/express/app.js:44:10)
 - Route location: tests/fixtures/express/app.js:59:1
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:14:10)
+- Params: tenant (high)
+- Declared protection: requireAuth
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, tenant_path.
@@ -154,6 +159,8 @@ No data mutations were detected.
 - Handler: `&lt;inline_handler&gt;` (tests/fixtures/express/app.js:60:77)
 - Route location: tests/fixtures/express/app.js:60:1
 - Middleware: `requirePermission` (tests/fixtures/express/app.js:27:10)
+- Params: id (high)
+- Declared protection: requirePermission, dynamicPolicyCheck
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param, unsafe_method.
@@ -179,6 +186,7 @@ No data mutations were detected.
 - Handler: `listAccounts` (tests/fixtures/express/app.js:44:10)
 - Route location: tests/fixtures/express/app.js:66:1
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:14:10)
+- Declared protection: requireAuth
 - Confidence: low
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): unsafe_method.
@@ -201,6 +209,8 @@ No data mutations were detected.
 - Handler: `listAccounts` (tests/fixtures/express/app.js:44:10)
 - Route location: tests/fixtures/express/app.js:68:1
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:14:10)
+- Params: id (high)
+- Declared protection: requireAuth
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, unsafe_method.
@@ -220,6 +230,7 @@ No data mutations were detected.
 - Handler: `listAccounts` (tests/fixtures/express/app.js:44:10)
 - Route location: tests/fixtures/express/app.js:69:1
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:70:28), `audit` (tests/fixtures/express/app.js:36:10)
+- Declared protection: requireAuth
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
@@ -253,6 +264,7 @@ No data mutations were detected.
 - Handler: `listAccounts` (tests/fixtures/express/app.js:44:10)
 - Route location: tests/fixtures/express/app.js:74:3
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:14:10)
+- Declared protection: requireAuth
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
@@ -269,6 +281,7 @@ No data mutations were detected.
 - Handler: `listAccounts` (tests/fixtures/express/app.js:44:10)
 - Route location: tests/fixtures/express/app.js:79:3
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:14:10)
+- Declared protection: requireAuth
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
@@ -285,6 +298,7 @@ No data mutations were detected.
 - Handler: `getProfile` (tests/fixtures/express/helpers/app.js:6:56)
 - Route location: tests/fixtures/express/helpers/app.js:6:1
 - Middleware: `middleware.authenticateRequest` (tests/fixtures/express/helpers/app.js:6:1), `requireAuth` (tests/fixtures/express/helpers/app.js:6:42)
+- Declared protection: middleware.authenticateRequest, requireAuth
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.
@@ -303,6 +317,7 @@ No data mutations were detected.
 - Handler: `getProfile` (tests/fixtures/express/helpers/app.js:6:56)
 - Route location: tests/fixtures/express/helpers/app.js:6:1
 - Middleware: `middleware.authenticateRequest` (tests/fixtures/express/helpers/app.js:6:1), `requireAuth` (tests/fixtures/express/helpers/app.js:6:42)
+- Declared protection: middleware.authenticateRequest, requireAuth
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.
@@ -321,6 +336,7 @@ No data mutations were detected.
 - Handler: `getAdmin` (tests/fixtures/express/helpers/app.js:7:60)
 - Route location: tests/fixtures/express/helpers/app.js:7:1
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:51:19), `requirePermission` (tests/fixtures/express/app.js:51:32), `middleware.ensureLoggedIn` (tests/fixtures/express/helpers/app.js:7:1), `middleware.admin.checkPrivileges` (tests/fixtures/express/helpers/app.js:7:1), `requireAdmin` (tests/fixtures/express/helpers/app.js:7:45)
+- Declared protection: middleware.admin.checkPrivileges, middleware.ensureLoggedIn, requireAdmin, requireAuth, requirePermission
 - Confidence: high
 - Coverage: admin_guarded (low)
 - Coverage rationale: 5 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): admin_path.
@@ -347,6 +363,7 @@ No data mutations were detected.
 - Handler: `getAdmin` (tests/fixtures/express/helpers/app.js:7:60)
 - Route location: tests/fixtures/express/helpers/app.js:7:1
 - Middleware: `middleware.ensureLoggedIn` (tests/fixtures/express/helpers/app.js:7:1), `middleware.admin.checkPrivileges` (tests/fixtures/express/helpers/app.js:7:1), `requireAdmin` (tests/fixtures/express/helpers/app.js:7:45)
+- Declared protection: middleware.admin.checkPrivileges, middleware.ensureLoggedIn, requireAdmin
 - Confidence: high
 - Coverage: admin_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): admin_path.
@@ -369,6 +386,7 @@ No data mutations were detected.
 - Handler: `writeApi` (tests/fixtures/express/helpers/app.js:8:71)
 - Route location: tests/fixtures/express/helpers/app.js:8:1
 - Middleware: `middleware.authenticateRequest` (tests/fixtures/express/helpers/app.js:8:1), `requirePermission` (tests/fixtures/express/helpers/app.js:8:51)
+- Declared protection: middleware.authenticateRequest, requirePermission
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): unsafe_method.
@@ -389,6 +407,7 @@ No data mutations were detected.
 - Handler: `getProfile` (tests/fixtures/express/helpers/app.js:9:47)
 - Route location: tests/fixtures/express/helpers/app.js:9:1
 - Middleware: `middleware.authenticateRequest` (tests/fixtures/express/helpers/app.js:9:1), `requireAuth` (tests/fixtures/express/helpers/app.js:9:33)
+- Declared protection: middleware.authenticateRequest, requireAuth
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.
@@ -407,6 +426,7 @@ No data mutations were detected.
 - Handler: `getProfile` (tests/fixtures/express/helpers/app.js:9:47)
 - Route location: tests/fixtures/express/helpers/app.js:9:1
 - Middleware: `middleware.authenticateRequest` (tests/fixtures/express/helpers/app.js:9:1), `requireAuth` (tests/fixtures/express/helpers/app.js:9:33)
+- Declared protection: middleware.authenticateRequest, requireAuth
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.
@@ -425,6 +445,7 @@ No data mutations were detected.
 - Handler: `listAdmins` (tests/fixtures/express/routes/admin.js:9:10)
 - Route location: tests/fixtures/express/routes/admin.js:13:1
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:51:19), `requirePermission` (tests/fixtures/express/app.js:51:32), `requireAdmin` (tests/fixtures/express/routes/admin.js:5:10)
+- Declared protection: requireAdmin, requireAuth, requirePermission
 - Confidence: high
 - Coverage: admin_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): admin_path.
@@ -463,6 +484,8 @@ No data mutations were detected.
 - Handler: `&lt;inline_handler&gt;` (tests/fixtures/express/routes/users.ts:22:21)
 - Route location: tests/fixtures/express/routes/users.ts:20:1
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:85:20), `requireUser` (tests/fixtures/express/routes/users.ts:5:10)
+- Params: userId (high)
+- Declared protection: requireUser, requireAuth
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, user_path.
@@ -483,6 +506,8 @@ No data mutations were detected.
 - Handler: `&lt;inline_handler&gt;` (tests/fixtures/express/routes/users.ts:22:21)
 - Route location: tests/fixtures/express/routes/users.ts:20:1
 - Middleware: `requireUser` (tests/fixtures/express/routes/users.ts:5:10)
+- Params: userId (high)
+- Declared protection: requireUser
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, user_path.
@@ -501,6 +526,8 @@ No data mutations were detected.
 - Handler: `updateUser` (tests/fixtures/express/routes/users.ts:16:7)
 - Route location: tests/fixtures/express/routes/users.ts:20:1
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:85:20), `requireUser` (tests/fixtures/express/routes/users.ts:5:10)
+- Params: userId (high)
+- Declared protection: requireUser, requireAuth
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, unsafe_method, user_path.
@@ -522,6 +549,8 @@ No data mutations were detected.
 - Handler: `updateUser` (tests/fixtures/express/routes/users.ts:16:7)
 - Route location: tests/fixtures/express/routes/users.ts:20:1
 - Middleware: `requireUser` (tests/fixtures/express/routes/users.ts:5:10)
+- Params: userId (high)
+- Declared protection: requireUser
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, unsafe_method, user_path.
@@ -541,6 +570,8 @@ No data mutations were detected.
 - Handler: `&lt;inline_handler&gt;` (tests/fixtures/express/routes/users.ts:27:50)
 - Route location: tests/fixtures/express/routes/users.ts:27:1
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:85:20), `requireTenant` (tests/fixtures/express/routes/users.ts:9:10)
+- Params: tenantId (high)
+- Declared protection: requireTenant, requireAuth
 - Confidence: high
 - Coverage: tenant_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support tenant_guarded coverage.; Sensitive route modifier(s): path_param, tenant_path.
@@ -562,6 +593,8 @@ No data mutations were detected.
 - Handler: `&lt;inline_handler&gt;` (tests/fixtures/express/routes/users.ts:27:50)
 - Route location: tests/fixtures/express/routes/users.ts:27:1
 - Middleware: `requireTenant` (tests/fixtures/express/routes/users.ts:9:10)
+- Params: tenantId (high)
+- Declared protection: requireTenant
 - Confidence: high
 - Coverage: tenant_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support tenant_guarded coverage.; Sensitive route modifier(s): path_param, tenant_path.

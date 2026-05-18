@@ -40,3 +40,25 @@
 - Next.js
 - SQLAlchemy/Django ORM/Prisma enrichment
 - Baseline and diff mode
+
+## Post-v1 folded capabilities
+
+AuthMap folds the route, policy, tenant, diff, and control-review roadmap into
+one defensive authorization map rather than separate tools. The public framing
+stays simple: AuthMap maps authorization surfaces and shows how protection
+changes over time.
+
+- Route inventory and classification: focused route review, normalized params,
+  declared protection metadata, adapter parity, and conservative diagnostics.
+- Policy evidence: framework and project-specific guard, role, permission,
+  ownership, tenant, public, audit, and dynamic-policy signals.
+- Tenant and resource context: sensitivity labels and reviewer questions for
+  route families and linked mutation resources.
+- Diffs and controls: baseline drift reports, CI enforcement categories, SARIF,
+  and advisory review priorities.
+- Fixtures and documentation: small static regressions, known limitations, and
+  evidence-bound usage guidance.
+
+AuthMap remains local and non-invasive. Roadmap work must not add live
+exploitation, payload generation, credential handling, or vulnerability claims
+that are not supported by static evidence.

@@ -64,6 +64,48 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "account_id",
+          "syntax": "{account_id}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "authn_guard",
+          "symbol": {
+            "name": "require_user",
+            "span": {
+              "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+              "line": 12,
+              "column": 48,
+              "byte_range": {
+                "start": 390,
+                "end": 402
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+            "line": 12,
+            "column": 40,
+            "byte_range": {
+              "start": 382,
+              "end": 403
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0001"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "read_account",
         "span": {
@@ -97,6 +139,39 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "authn_guard",
+          "symbol": {
+            "name": "require_user",
+            "span": {
+              "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+              "line": 17,
+              "column": 57,
+              "byte_range": {
+                "start": 531,
+                "end": 543
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+            "line": 17,
+            "column": 49,
+            "byte_range": {
+              "start": 523,
+              "end": 544
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0002"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "create_account_route",
         "span": {
@@ -130,6 +205,81 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "account_id",
+          "syntax": "{account_id}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "permission_guard",
+          "symbol": {
+            "name": "can_edit_account",
+            "span": {
+              "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+              "line": 25,
+              "column": 56,
+              "byte_range": {
+                "start": 768,
+                "end": 784
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+            "line": 25,
+            "column": 48,
+            "byte_range": {
+              "start": 760,
+              "end": 785
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0003"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "unknown_dynamic",
+          "mechanism": "handler_call",
+          "symbol": {
+            "name": "dynamic_policy_check",
+            "span": {
+              "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+              "line": 26,
+              "column": 12,
+              "byte_range": {
+                "start": 799,
+                "end": 819
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+            "line": 26,
+            "column": 12,
+            "byte_range": {
+              "start": 799,
+              "end": 838
+            }
+          },
+          "inherited": false,
+          "confidence": "low",
+          "evidence_ids": [
+            "evidence_0004"
+          ],
+          "notes": [
+            "Dynamic or indirect policy call requires review"
+          ]
+        }
+      ],
       "handler": {
         "name": "update_account_route",
         "span": {
@@ -163,6 +313,48 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "account_id",
+          "syntax": "{account_id}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "admin_guard",
+          "symbol": {
+            "name": "require_admin",
+            "span": {
+              "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+              "line": 32,
+              "column": 56,
+              "byte_range": {
+                "start": 1035,
+                "end": 1048
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+            "line": 32,
+            "column": 48,
+            "byte_range": {
+              "start": 1027,
+              "end": 1049
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0005"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "delete_account_route",
         "span": {
@@ -196,6 +388,39 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "authn_guard",
+          "symbol": {
+            "name": "require_user",
+            "span": {
+              "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+              "line": 37,
+              "column": 41,
+              "byte_range": {
+                "start": 1157,
+                "end": 1169
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+            "line": 37,
+            "column": 33,
+            "byte_range": {
+              "start": 1149,
+              "end": 1170
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0006"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "service_create_account",
         "span": {
@@ -229,6 +454,39 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "authn_guard",
+          "symbol": {
+            "name": "require_user",
+            "span": {
+              "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+              "line": 42,
+              "column": 41,
+              "byte_range": {
+                "start": 1286,
+                "end": 1298
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+            "line": 42,
+            "column": 33,
+            "byte_range": {
+              "start": 1278,
+              "end": 1299
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0007"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "dynamic_service_create",
         "span": {
@@ -295,6 +553,39 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "admin_guard",
+          "symbol": {
+            "name": "require_admin",
+            "span": {
+              "file": "tests/fixtures/realistic/fastapi/main.py",
+              "line": 34,
+              "column": 28,
+              "byte_range": {
+                "start": 770,
+                "end": 783
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/realistic/fastapi/main.py",
+            "line": 34,
+            "column": 20,
+            "byte_range": {
+              "start": 762,
+              "end": 784
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0008"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "audit_log",
         "span": {
@@ -328,6 +619,39 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "authn_guard",
+          "symbol": {
+            "name": "require_user",
+            "span": {
+              "file": "tests/fixtures/realistic/fastapi/main.py",
+              "line": 39,
+              "column": 34,
+              "byte_range": {
+                "start": 887,
+                "end": 899
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/realistic/fastapi/main.py",
+            "line": 39,
+            "column": 26,
+            "byte_range": {
+              "start": 879,
+              "end": 900
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0009"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "dynamic_reports",
         "span": {

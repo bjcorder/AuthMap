@@ -34,6 +34,7 @@ Then bootstrap a config and scan:
 ```bash
 authmap init --output authmap.yml
 authmap scan . --config authmap.yml --format markdown --output authmap.md
+authmap routes . --config authmap.yml --format markdown --output authmap.routes.md
 ```
 
 Use it in CI with the GitHub Action:

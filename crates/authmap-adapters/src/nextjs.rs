@@ -146,6 +146,8 @@ fn build_route(parsed: &ParsedFile, path_info: &PathInfo, export: RouteExport) -
         name: None,
         tags: Vec::new(),
         middleware: Vec::new(),
+        params: Vec::new(),
+        declared_protection: Vec::new(),
         handler: Some(export.handler),
         span: Some(export.span),
         source_evidence,

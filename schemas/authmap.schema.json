@@ -144,6 +144,14 @@
           "type": "array",
           "items": { "$ref": "#/$defs/symbol_ref" }
         },
+        "params": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/route_param" }
+        },
+        "declared_protection": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/route_protection" }
+        },
         "handler": {
           "anyOf": [
             { "$ref": "#/$defs/symbol_ref" },
@@ -163,6 +171,56 @@
         "confidence": { "$ref": "#/$defs/confidence" },
         "notes": { "$ref": "#/$defs/string_list" },
         "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "route_param": {
+      "type": "object",
+      "required": ["name", "syntax", "span", "confidence", "notes"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "syntax": { "type": "string", "minLength": 1 },
+        "span": {
+          "anyOf": [
+            { "$ref": "#/$defs/span" },
+            { "type": "null" }
+          ]
+        },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "notes": { "$ref": "#/$defs/string_list" }
+      },
+      "additionalProperties": false
+    },
+    "route_protection": {
+      "type": "object",
+      "required": [
+        "kind",
+        "mechanism",
+        "symbol",
+        "span",
+        "inherited",
+        "confidence",
+        "notes"
+      ],
+      "properties": {
+        "kind": { "$ref": "#/$defs/route_protection_kind" },
+        "mechanism": { "type": "string", "minLength": 1 },
+        "symbol": {
+          "anyOf": [
+            { "$ref": "#/$defs/symbol_ref" },
+            { "type": "null" }
+          ]
+        },
+        "span": {
+          "anyOf": [
+            { "$ref": "#/$defs/span" },
+            { "type": "null" }
+          ]
+        },
+        "inherited": { "type": "boolean" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "evidence_ids": { "$ref": "#/$defs/string_list" },
+        "notes": { "$ref": "#/$defs/string_list" }
       },
       "additionalProperties": false
     },
@@ -456,6 +514,15 @@
         "explicit_public",
         "audit_log",
         "unknown_dynamic_check"
+      ]
+    },
+    "route_protection_kind": {
+      "type": "string",
+      "enum": [
+        "public_declared",
+        "route_guard",
+        "inherited_guard",
+        "unknown_dynamic"
       ]
     },
     "mutation_operation": {

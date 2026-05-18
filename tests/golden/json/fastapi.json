@@ -90,6 +90,15 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "item_id",
+          "syntax": "{item_id}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "delete_collection_item",
         "span": {
@@ -191,6 +200,15 @@
         "users"
       ],
       "middleware": [],
+      "params": [
+        {
+          "name": "user_id",
+          "syntax": "{user_id}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "get_user",
         "span": {
@@ -263,6 +281,79 @@
           }
         }
       ],
+      "params": [
+        {
+          "name": "user_id",
+          "syntax": "{user_id}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "inherited_guard",
+          "mechanism": "fastapi_dependency",
+          "symbol": {
+            "name": "can_edit_account",
+            "span": {
+              "file": "tests/fixtures/fastapi/main.py",
+              "line": 135,
+              "column": 36,
+              "byte_range": {
+                "start": 3083,
+                "end": 3099
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 135,
+            "column": 36,
+            "byte_range": {
+              "start": 3083,
+              "end": 3099
+            }
+          },
+          "inherited": true,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0002"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "inherited_guard",
+          "mechanism": "fastapi_dependency",
+          "symbol": {
+            "name": "require_user",
+            "span": {
+              "file": "tests/fixtures/fastapi/main.py",
+              "line": 134,
+              "column": 32,
+              "byte_range": {
+                "start": 3033,
+                "end": 3045
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 134,
+            "column": 32,
+            "byte_range": {
+              "start": 3033,
+              "end": 3045
+            }
+          },
+          "inherited": true,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0001"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "get_user",
         "span": {
@@ -298,6 +389,15 @@
         "users"
       ],
       "middleware": [],
+      "params": [
+        {
+          "name": "user_id",
+          "syntax": "{user_id}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "get_user",
         "span": {
@@ -333,6 +433,15 @@
         "users"
       ],
       "middleware": [],
+      "params": [
+        {
+          "name": "user_id",
+          "syntax": "{user_id}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "update_user",
         "span": {
@@ -405,6 +514,79 @@
           }
         }
       ],
+      "params": [
+        {
+          "name": "user_id",
+          "syntax": "{user_id}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "inherited_guard",
+          "mechanism": "fastapi_dependency",
+          "symbol": {
+            "name": "can_edit_account",
+            "span": {
+              "file": "tests/fixtures/fastapi/main.py",
+              "line": 135,
+              "column": 36,
+              "byte_range": {
+                "start": 3083,
+                "end": 3099
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 135,
+            "column": 36,
+            "byte_range": {
+              "start": 3083,
+              "end": 3099
+            }
+          },
+          "inherited": true,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0004"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "inherited_guard",
+          "mechanism": "fastapi_dependency",
+          "symbol": {
+            "name": "require_user",
+            "span": {
+              "file": "tests/fixtures/fastapi/main.py",
+              "line": 134,
+              "column": 32,
+              "byte_range": {
+                "start": 3033,
+                "end": 3045
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 134,
+            "column": 32,
+            "byte_range": {
+              "start": 3033,
+              "end": 3045
+            }
+          },
+          "inherited": true,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0003"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "update_user",
         "span": {
@@ -440,6 +622,15 @@
         "users"
       ],
       "middleware": [],
+      "params": [
+        {
+          "name": "user_id",
+          "syntax": "{user_id}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "update_user",
         "span": {
@@ -543,6 +734,39 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "authn_guard",
+          "symbol": {
+            "name": "require_user",
+            "span": {
+              "file": "tests/fixtures/fastapi/main.py",
+              "line": 50,
+              "column": 26,
+              "byte_range": {
+                "start": 1197,
+                "end": 1209
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 50,
+            "column": 18,
+            "byte_range": {
+              "start": 1189,
+              "end": 1210
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0005"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "profile",
         "span": {
@@ -587,6 +811,48 @@
               "end": 1310
             }
           }
+        }
+      ],
+      "params": [
+        {
+          "name": "account_id",
+          "syntax": "{account_id}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "fastapi_dependency",
+          "symbol": {
+            "name": "require_admin",
+            "span": {
+              "file": "tests/fixtures/fastapi/main.py",
+              "line": 54,
+              "column": 67,
+              "byte_range": {
+                "start": 1297,
+                "end": 1310
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 54,
+            "column": 67,
+            "byte_range": {
+              "start": 1297,
+              "end": 1310
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0006"
+          ],
+          "notes": []
         }
       ],
       "handler": {
@@ -635,6 +901,81 @@
           }
         }
       ],
+      "params": [
+        {
+          "name": "account_id",
+          "syntax": "{account_id}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "fastapi_dependency",
+          "symbol": {
+            "name": "can_edit_account",
+            "span": {
+              "file": "tests/fixtures/fastapi/main.py",
+              "line": 59,
+              "column": 72,
+              "byte_range": {
+                "start": 1459,
+                "end": 1475
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 59,
+            "column": 72,
+            "byte_range": {
+              "start": 1459,
+              "end": 1475
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0007"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "unknown_dynamic",
+          "mechanism": "handler_call",
+          "symbol": {
+            "name": "dynamic_policy_check",
+            "span": {
+              "file": "tests/fixtures/fastapi/main.py",
+              "line": 61,
+              "column": 12,
+              "byte_range": {
+                "start": 1529,
+                "end": 1549
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 61,
+            "column": 12,
+            "byte_range": {
+              "start": 1529,
+              "end": 1567
+            }
+          },
+          "inherited": false,
+          "confidence": "low",
+          "evidence_ids": [
+            "evidence_0008"
+          ],
+          "notes": [
+            "Dynamic or indirect policy call requires review"
+          ]
+        }
+      ],
       "handler": {
         "name": "grant_permission",
         "span": {
@@ -668,6 +1009,41 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "unknown_dynamic",
+          "mechanism": "dynamic_policy",
+          "symbol": {
+            "name": "authorize",
+            "span": {
+              "file": "tests/fixtures/fastapi/app/services/account.py",
+              "line": 7,
+              "column": 9,
+              "byte_range": {
+                "start": 88,
+                "end": 97
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/fastapi/app/services/account.py",
+            "line": 7,
+            "column": 9,
+            "byte_range": {
+              "start": 88,
+              "end": 99
+            }
+          },
+          "inherited": false,
+          "confidence": "low",
+          "evidence_ids": [
+            "evidence_0009"
+          ],
+          "notes": [
+            "One-hop service call `service.execute` reaches `execute`"
+          ]
+        }
+      ],
       "handler": {
         "name": "service_account",
         "span": {
@@ -714,6 +1090,48 @@
               "end": 2817
             }
           }
+        }
+      ],
+      "params": [
+        {
+          "name": "item_id",
+          "syntax": "{item_id}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "fastapi_dependency",
+          "symbol": {
+            "name": "require_user",
+            "span": {
+              "file": "tests/fixtures/fastapi/main.py",
+              "line": 128,
+              "column": 71,
+              "byte_range": {
+                "start": 2805,
+                "end": 2817
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 128,
+            "column": 71,
+            "byte_range": {
+              "start": 2805,
+              "end": 2817
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0010"
+          ],
+          "notes": []
         }
       ],
       "handler": {
@@ -784,6 +1202,70 @@
               "end": 3163
             }
           }
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "fastapi_dependency",
+          "symbol": {
+            "name": "can_edit_account",
+            "span": {
+              "file": "tests/fixtures/fastapi/main.py",
+              "line": 135,
+              "column": 36,
+              "byte_range": {
+                "start": 3083,
+                "end": 3099
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 135,
+            "column": 36,
+            "byte_range": {
+              "start": 3083,
+              "end": 3099
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0012"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "fastapi_dependency",
+          "symbol": {
+            "name": "require_user",
+            "span": {
+              "file": "tests/fixtures/fastapi/main.py",
+              "line": 134,
+              "column": 32,
+              "byte_range": {
+                "start": 3033,
+                "end": 3045
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 134,
+            "column": 32,
+            "byte_range": {
+              "start": 3033,
+              "end": 3045
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0011"
+          ],
+          "notes": []
         }
       ],
       "handler": {

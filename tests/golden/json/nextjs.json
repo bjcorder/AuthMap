@@ -314,6 +314,81 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "slug",
+          "syntax": "[...slug]",
+          "span": null,
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "nextjs_auth_wrapper",
+          "symbol": {
+            "name": "withAuth",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/blog/[...slug]/route.ts",
+              "line": 9,
+              "column": 14,
+              "byte_range": {
+                "start": 122,
+                "end": 125
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/blog/[...slug]/route.ts",
+            "line": 9,
+            "column": 14,
+            "byte_range": {
+              "start": 122,
+              "end": 204
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0001"
+          ],
+          "notes": [
+            "Next.js route handler is wrapped by an auth-like helper"
+          ]
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "permission_guard",
+          "symbol": {
+            "name": "requirePermission",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/blog/[...slug]/route.ts",
+              "line": 10,
+              "column": 3,
+              "byte_range": {
+                "start": 153,
+                "end": 170
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/blog/[...slug]/route.ts",
+            "line": 10,
+            "column": 3,
+            "byte_range": {
+              "start": 153,
+              "end": 172
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0002"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "GET",
         "span": {
@@ -386,6 +461,50 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "slug",
+          "syntax": "[[...slug]]",
+          "span": null,
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "nextjs_auth_wrapper",
+          "symbol": {
+            "name": "requireUser",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/docs/[[...slug]]/route.ts",
+              "line": 9,
+              "column": 32,
+              "byte_range": {
+                "start": 184,
+                "end": 193
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/docs/[[...slug]]/route.ts",
+            "line": 9,
+            "column": 14,
+            "byte_range": {
+              "start": 166,
+              "end": 194
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0003"
+          ],
+          "notes": [
+            "Next.js route handler is wrapped by an auth-like helper"
+          ]
+        }
+      ],
       "handler": {
         "name": "updateDoc",
         "span": {
@@ -530,6 +649,41 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "nextjs_auth_wrapper",
+          "symbol": {
+            "name": "withAuth",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/external/handler.ts",
+              "line": 14,
+              "column": 32,
+              "byte_range": {
+                "start": 296,
+                "end": 310
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/external/route.ts",
+            "line": 1,
+            "column": 1,
+            "byte_range": {
+              "start": 0,
+              "end": 57
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0004"
+          ],
+          "notes": [
+            "Next.js route handler is wrapped by an auth-like helper"
+          ]
+        }
+      ],
       "handler": {
         "name": "deleteExternal",
         "span": {
@@ -602,6 +756,39 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "authn_guard",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/external/handler.ts",
+              "line": 2,
+              "column": 3,
+              "byte_range": {
+                "start": 33,
+                "end": 44
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/external/handler.ts",
+            "line": 2,
+            "column": 3,
+            "byte_range": {
+              "start": 33,
+              "end": 46
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0005"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "POST",
         "span": {
@@ -950,6 +1137,39 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "authn_guard",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/route.ts",
+              "line": 6,
+              "column": 3,
+              "byte_range": {
+                "start": 75,
+                "end": 86
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/route.ts",
+            "line": 6,
+            "column": 3,
+            "byte_range": {
+              "start": 75,
+              "end": 88
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0006"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "GET",
         "span": {
@@ -1154,6 +1374,15 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "id",
+          "syntax": "[id]",
+          "span": null,
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "GET",
         "span": {
@@ -1222,6 +1451,15 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "id",
+          "syntax": "[id]",
+          "span": null,
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "PATCH",
         "span": {
@@ -1290,6 +1528,41 @@
       "name": null,
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "nextjs_auth_wrapper",
+          "symbol": {
+            "name": "requireUser",
+            "span": {
+              "file": "tests/fixtures/nextjs/app/wrapped-named/route.ts",
+              "line": 9,
+              "column": 34,
+              "byte_range": {
+                "start": 197,
+                "end": 210
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/nextjs/app/wrapped-named/route.ts",
+            "line": 9,
+            "column": 14,
+            "byte_range": {
+              "start": 177,
+              "end": 211
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0007"
+          ],
+          "notes": [
+            "Next.js route handler is wrapped by an auth-like helper"
+          ]
+        }
+      ],
       "handler": {
         "name": "updateProfile",
         "span": {

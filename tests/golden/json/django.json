@@ -128,6 +128,39 @@
       "name": "exported-list",
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "drf_permission_classes",
+          "symbol": {
+            "name": "permission_classes",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 121,
+              "column": 5,
+              "byte_range": {
+                "start": 2884,
+                "end": 2930
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 121,
+            "column": 5,
+            "byte_range": {
+              "start": 2884,
+              "end": 2930
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0001"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "ProjectReadOnlyViewSet.list",
         "span": {
@@ -229,6 +262,48 @@
       "name": "exported-retrieve",
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "pk",
+          "syntax": "{pk}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "drf_permission_classes",
+          "symbol": {
+            "name": "permission_classes",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 121,
+              "column": 5,
+              "byte_range": {
+                "start": 2884,
+                "end": 2930
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 121,
+            "column": 5,
+            "byte_range": {
+              "start": 2884,
+              "end": 2930
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0002"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "ProjectReadOnlyViewSet.retrieve",
         "span": {
@@ -330,6 +405,15 @@
       "name": "user-destroy",
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "uuid",
+          "syntax": "{uuid}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "UserViewSet.destroy",
         "span": {
@@ -431,6 +515,39 @@
       "name": "user-list",
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "permission_guard",
+          "symbol": {
+            "name": "require_permission",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 68,
+              "column": 9,
+              "byte_range": {
+                "start": 1430,
+                "end": 1448
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 68,
+            "column": 9,
+            "byte_range": {
+              "start": 1430,
+              "end": 1462
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0003"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "UserViewSet.list",
         "span": {
@@ -532,6 +649,15 @@
       "name": "user-retrieve",
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "uuid",
+          "syntax": "{uuid}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "UserViewSet.retrieve",
         "span": {
@@ -633,6 +759,15 @@
       "name": "user-partial-update",
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "uuid",
+          "syntax": "{uuid}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "UserViewSet.partial_update",
         "span": {
@@ -835,6 +970,15 @@
       "name": "user-disable",
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "uuid",
+          "syntax": "{uuid}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "UserViewSet.disable",
         "span": {
@@ -962,6 +1106,15 @@
       "name": "user-update",
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "uuid",
+          "syntax": "{uuid}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "UserViewSet.update",
         "span": {
@@ -1164,6 +1317,15 @@
       "name": "readonly-retrieve",
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "pk",
+          "syntax": "{pk}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "ReadOnlyAccountViewSet.retrieve",
         "span": {
@@ -1499,6 +1661,116 @@
       "name": "inherited-destroy",
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "pk",
+          "syntax": "{pk}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "django_authenticated_user_check",
+          "symbol": {
+            "name": "is_authenticated",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 115,
+              "column": 12,
+              "byte_range": {
+                "start": 2665,
+                "end": 2694
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 115,
+            "column": 12,
+            "byte_range": {
+              "start": 2665,
+              "end": 2694
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0005"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "django_queryset_restrict",
+          "symbol": {
+            "name": "restrict",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 116,
+              "column": 29,
+              "byte_range": {
+                "start": 2724,
+                "end": 2768
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 116,
+            "column": 29,
+            "byte_range": {
+              "start": 2724,
+              "end": 2768
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0006"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "drf_permission_classes",
+          "symbol": {
+            "name": "IsAuthenticated",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 112,
+              "column": 5,
+              "byte_range": {
+                "start": 2565,
+                "end": 2603
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 112,
+            "column": 5,
+            "byte_range": {
+              "start": 2565,
+              "end": 2603
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0004"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        }
+      ],
       "handler": {
         "name": "InheritedProjectViewSet.destroy",
         "span": {
@@ -1600,6 +1872,107 @@
       "name": "inherited-list",
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "django_authenticated_user_check",
+          "symbol": {
+            "name": "is_authenticated",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 115,
+              "column": 12,
+              "byte_range": {
+                "start": 2665,
+                "end": 2694
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 115,
+            "column": 12,
+            "byte_range": {
+              "start": 2665,
+              "end": 2694
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0008"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "django_queryset_restrict",
+          "symbol": {
+            "name": "restrict",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 116,
+              "column": 29,
+              "byte_range": {
+                "start": 2724,
+                "end": 2768
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 116,
+            "column": 29,
+            "byte_range": {
+              "start": 2724,
+              "end": 2768
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0009"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "drf_permission_classes",
+          "symbol": {
+            "name": "IsAuthenticated",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 112,
+              "column": 5,
+              "byte_range": {
+                "start": 2565,
+                "end": 2603
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 112,
+            "column": 5,
+            "byte_range": {
+              "start": 2565,
+              "end": 2603
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0007"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        }
+      ],
       "handler": {
         "name": "InheritedProjectViewSet.list",
         "span": {
@@ -1701,6 +2074,116 @@
       "name": "inherited-retrieve",
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "pk",
+          "syntax": "{pk}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "django_authenticated_user_check",
+          "symbol": {
+            "name": "is_authenticated",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 115,
+              "column": 12,
+              "byte_range": {
+                "start": 2665,
+                "end": 2694
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 115,
+            "column": 12,
+            "byte_range": {
+              "start": 2665,
+              "end": 2694
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0011"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "django_queryset_restrict",
+          "symbol": {
+            "name": "restrict",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 116,
+              "column": 29,
+              "byte_range": {
+                "start": 2724,
+                "end": 2768
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 116,
+            "column": 29,
+            "byte_range": {
+              "start": 2724,
+              "end": 2768
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0012"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "drf_permission_classes",
+          "symbol": {
+            "name": "IsAuthenticated",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 112,
+              "column": 5,
+              "byte_range": {
+                "start": 2565,
+                "end": 2603
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 112,
+            "column": 5,
+            "byte_range": {
+              "start": 2565,
+              "end": 2603
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0010"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        }
+      ],
       "handler": {
         "name": "InheritedProjectViewSet.retrieve",
         "span": {
@@ -1802,6 +2285,116 @@
       "name": "inherited-partial-update",
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "pk",
+          "syntax": "{pk}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "django_authenticated_user_check",
+          "symbol": {
+            "name": "is_authenticated",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 115,
+              "column": 12,
+              "byte_range": {
+                "start": 2665,
+                "end": 2694
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 115,
+            "column": 12,
+            "byte_range": {
+              "start": 2665,
+              "end": 2694
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0014"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "django_queryset_restrict",
+          "symbol": {
+            "name": "restrict",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 116,
+              "column": 29,
+              "byte_range": {
+                "start": 2724,
+                "end": 2768
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 116,
+            "column": 29,
+            "byte_range": {
+              "start": 2724,
+              "end": 2768
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0015"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "drf_permission_classes",
+          "symbol": {
+            "name": "IsAuthenticated",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 112,
+              "column": 5,
+              "byte_range": {
+                "start": 2565,
+                "end": 2603
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 112,
+            "column": 5,
+            "byte_range": {
+              "start": 2565,
+              "end": 2603
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0013"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        }
+      ],
       "handler": {
         "name": "InheritedProjectViewSet.partial_update",
         "span": {
@@ -1903,6 +2496,107 @@
       "name": "inherited-create",
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "django_authenticated_user_check",
+          "symbol": {
+            "name": "is_authenticated",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 115,
+              "column": 12,
+              "byte_range": {
+                "start": 2665,
+                "end": 2694
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 115,
+            "column": 12,
+            "byte_range": {
+              "start": 2665,
+              "end": 2694
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0017"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "django_queryset_restrict",
+          "symbol": {
+            "name": "restrict",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 116,
+              "column": 29,
+              "byte_range": {
+                "start": 2724,
+                "end": 2768
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 116,
+            "column": 29,
+            "byte_range": {
+              "start": 2724,
+              "end": 2768
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0018"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "drf_permission_classes",
+          "symbol": {
+            "name": "IsAuthenticated",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 112,
+              "column": 5,
+              "byte_range": {
+                "start": 2565,
+                "end": 2603
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 112,
+            "column": 5,
+            "byte_range": {
+              "start": 2565,
+              "end": 2603
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0016"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        }
+      ],
       "handler": {
         "name": "InheritedProjectViewSet.create",
         "span": {
@@ -2004,6 +2698,116 @@
       "name": "inherited-update",
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "pk",
+          "syntax": "{pk}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "django_authenticated_user_check",
+          "symbol": {
+            "name": "is_authenticated",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 115,
+              "column": 12,
+              "byte_range": {
+                "start": 2665,
+                "end": 2694
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 115,
+            "column": 12,
+            "byte_range": {
+              "start": 2665,
+              "end": 2694
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0020"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "django_queryset_restrict",
+          "symbol": {
+            "name": "restrict",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 116,
+              "column": 29,
+              "byte_range": {
+                "start": 2724,
+                "end": 2768
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 116,
+            "column": 29,
+            "byte_range": {
+              "start": 2724,
+              "end": 2768
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0021"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "drf_permission_classes",
+          "symbol": {
+            "name": "IsAuthenticated",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 112,
+              "column": 5,
+              "byte_range": {
+                "start": 2565,
+                "end": 2603
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 112,
+            "column": 5,
+            "byte_range": {
+              "start": 2565,
+              "end": 2603
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0019"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        }
+      ],
       "handler": {
         "name": "InheritedProjectViewSet.update",
         "span": {
@@ -2105,6 +2909,41 @@
       "name": "inherited-readonly-list",
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "drf_permission_classes",
+          "symbol": {
+            "name": "permission_classes",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 121,
+              "column": 5,
+              "byte_range": {
+                "start": 2884,
+                "end": 2930
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 121,
+            "column": 5,
+            "byte_range": {
+              "start": 2884,
+              "end": 2930
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0022"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectReadOnlyViewSet"
+          ]
+        }
+      ],
       "handler": {
         "name": "InheritedReadOnlyProjectViewSet.list",
         "span": {
@@ -2206,6 +3045,50 @@
       "name": "inherited-readonly-retrieve",
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "pk",
+          "syntax": "{pk}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "drf_permission_classes",
+          "symbol": {
+            "name": "permission_classes",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 121,
+              "column": 5,
+              "byte_range": {
+                "start": 2884,
+                "end": 2930
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 121,
+            "column": 5,
+            "byte_range": {
+              "start": 2884,
+              "end": 2930
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0023"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectReadOnlyViewSet"
+          ]
+        }
+      ],
       "handler": {
         "name": "InheritedReadOnlyProjectViewSet.retrieve",
         "span": {
@@ -2717,6 +3600,15 @@
       "name": "audit-retrieve",
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "pk",
+          "syntax": "{pk}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "ReadOnlyAuditViewSet.retrieve",
         "span": {
@@ -3028,6 +3920,50 @@
       "name": "account_detail",
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "pk",
+          "syntax": "<int:pk>",
+          "span": null,
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "unknown_dynamic",
+          "mechanism": "handler_condition",
+          "symbol": {
+            "name": "AccountDetailView",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 41,
+              "column": 7,
+              "byte_range": {
+                "start": 746,
+                "end": 763
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 44,
+            "column": 12,
+            "byte_range": {
+              "start": 853,
+              "end": 881
+            }
+          },
+          "inherited": false,
+          "confidence": "low",
+          "evidence_ids": [
+            "evidence_0024"
+          ],
+          "notes": [
+            "Handler condition references user authorization attributes; review required"
+          ]
+        }
+      ],
       "handler": {
         "name": "AccountDetailView",
         "span": {
@@ -3198,6 +4134,107 @@
       "name": "list",
       "tags": [],
       "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "django_authenticated_user_check",
+          "symbol": {
+            "name": "is_authenticated",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 115,
+              "column": 12,
+              "byte_range": {
+                "start": 2665,
+                "end": 2694
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 115,
+            "column": 12,
+            "byte_range": {
+              "start": 2665,
+              "end": 2694
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0026"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "django_queryset_restrict",
+          "symbol": {
+            "name": "restrict",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 116,
+              "column": 29,
+              "byte_range": {
+                "start": 2724,
+                "end": 2768
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 116,
+            "column": 29,
+            "byte_range": {
+              "start": 2724,
+              "end": 2768
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0027"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "drf_permission_classes",
+          "symbol": {
+            "name": "IsAuthenticated",
+            "span": {
+              "file": "tests/fixtures/django/accounts/views.py",
+              "line": 112,
+              "column": 5,
+              "byte_range": {
+                "start": 2565,
+                "end": 2603
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/accounts/views.py",
+            "line": 112,
+            "column": 5,
+            "byte_range": {
+              "start": 2565,
+              "end": 2603
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0025"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ProjectModelViewSet"
+          ]
+        }
+      ],
       "handler": {
         "name": "GeneratedAccountListView",
         "span": {
@@ -3328,6 +4365,50 @@
       "name": "edit",
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "pk",
+          "syntax": "<int:pk>",
+          "span": null,
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "django_permission_mixin",
+          "symbol": {
+            "name": "PermissionRequiredMixin",
+            "span": {
+              "file": "tests/fixtures/django/shared/generic/object_views.py",
+              "line": 1,
+              "column": 7,
+              "byte_range": {
+                "start": 6,
+                "end": 20
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/shared/generic/object_views.py",
+            "line": 1,
+            "column": 7,
+            "byte_range": {
+              "start": 6,
+              "end": 20
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0028"
+          ],
+          "notes": [
+            "Authorization evidence inherited from ObjectEditView"
+          ]
+        }
+      ],
       "handler": {
         "name": "GeneratedAccountEditView",
         "span": {
@@ -3526,6 +4607,15 @@
       "name": "legacy_detail",
       "tags": [],
       "middleware": [],
+      "params": [
+        {
+          "name": "slug",
+          "syntax": "{slug}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "legacy_detail",
         "span": {

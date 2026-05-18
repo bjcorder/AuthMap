@@ -114,6 +114,8 @@
 - Handler: `GET` (tests/fixtures/nextjs/app/blog/\[...slug\]/route.ts:9:14)
 - Route location: tests/fixtures/nextjs/app/blog/\[...slug\]/route.ts:9:14
 - Middleware: none
+- Params: slug (medium)
+- Declared protection: withAuth, requirePermission
 - Confidence: medium
 - Coverage: permission_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.
@@ -137,6 +139,8 @@
 - Handler: `updateDoc` (tests/fixtures/nextjs/app/docs/\[\[...slug\]\]/route.ts:9:32)
 - Route location: tests/fixtures/nextjs/app/docs/\[\[...slug\]\]/route.ts:9:14
 - Middleware: none
+- Params: slug (medium)
+- Declared protection: requireUser
 - Confidence: medium
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
@@ -182,6 +186,7 @@
 - Handler: `deleteExternal` (tests/fixtures/nextjs/app/external/handler.ts:14:32)
 - Route location: tests/fixtures/nextjs/app/external/route.ts:1:1
 - Middleware: none
+- Declared protection: withAuth
 - Confidence: medium
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
@@ -207,6 +212,7 @@
 - Handler: `POST` (tests/fixtures/nextjs/app/external/handler.ts:1:23)
 - Route location: tests/fixtures/nextjs/app/external/route.ts:1:1
 - Middleware: none
+- Declared protection: requireAuth
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
@@ -293,6 +299,7 @@
 - Handler: `GET` (tests/fixtures/nextjs/app/route.ts:5:23)
 - Route location: tests/fixtures/nextjs/app/route.ts:5:8
 - Middleware: none
+- Declared protection: requireAuth
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
@@ -340,6 +347,7 @@
 - Handler: `GET` (tests/fixtures/nextjs/app/users/\[id\]/route.ts:1:23)
 - Route location: tests/fixtures/nextjs/app/users/\[id\]/route.ts:1:8
 - Middleware: none
+- Params: id (medium)
 - Confidence: high
 - Coverage: unauthenticated (medium)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): user_path.
@@ -356,6 +364,7 @@
 - Handler: `PATCH` (tests/fixtures/nextjs/app/users/\[id\]/route.ts:5:14)
 - Route location: tests/fixtures/nextjs/app/users/\[id\]/route.ts:5:14
 - Middleware: none
+- Params: id (medium)
 - Confidence: high
 - Coverage: unauthenticated (high)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): linked_mutation, unsafe_method, user_path.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
@@ -375,6 +384,7 @@
 - Handler: `updateProfile` (tests/fixtures/nextjs/app/wrapped-named/route.ts:9:34)
 - Route location: tests/fixtures/nextjs/app/wrapped-named/route.ts:9:14
 - Middleware: none
+- Declared protection: requireUser
 - Confidence: medium
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.

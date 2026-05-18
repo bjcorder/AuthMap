@@ -73,6 +73,23 @@ authmap scan . --config authmap.yml --format sarif --output authmap.sarif
 When `--output` is omitted, AuthMap prints the report to stdout. `--config` may
 be omitted when no project config is needed.
 
+## Route Inventory Review
+
+Use `authmap routes` when the immediate review question is route discovery and
+classification rather than the full authorization map:
+
+```sh
+authmap routes . --config authmap.yml --format markdown --output authmap.routes.md
+authmap routes . --config authmap.yml --format json --output authmap.routes.json
+```
+
+The command uses the same static scan pipeline as `authmap scan`, including
+configuration, scan limits, advisory/enforce mode, route classification, and
+conservative diagnostics. Its JSON output is a focused route report, not the
+canonical AuthMap document. Use `scan --format json` when automation needs the
+complete schema-backed map with routes, evidence, mutations, links, coverage,
+and diagnostics.
+
 ## Scan Modes
 
 AuthMap supports `advisory` and `enforce` modes:
@@ -179,6 +196,11 @@ Markdown is intended for reviewers. It includes:
 JSON is the canonical machine-readable AuthMap document. Its schema is
 documented in [SCHEMA.md](SCHEMA.md) and defined by
 [../schemas/authmap.schema.json](../schemas/authmap.schema.json).
+
+Route objects can include normalized path parameters and declared protection
+metadata when AuthMap can support those facts with static evidence. Dynamic or
+unresolved route/protection metadata is represented with lower confidence,
+uncertainty notes, or diagnostics rather than guessed behavior.
 
 SARIF is for GitHub code scanning and similar integrations. AuthMap SARIF emits
 advisory authorization coverage alerts and diagnostics. SARIF results should be

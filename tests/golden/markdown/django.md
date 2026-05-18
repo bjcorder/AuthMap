@@ -101,6 +101,7 @@
 - Handler: `ProjectReadOnlyViewSet.list` (tests/fixtures/django/accounts/views.py:120:7)
 - Route location: tests/fixtures/django/accounts/api_urls.py:6:1
 - Middleware: none
+- Declared protection: permission_classes
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.
@@ -117,6 +118,8 @@
 - Handler: `ProjectReadOnlyViewSet.retrieve` (tests/fixtures/django/accounts/views.py:120:7)
 - Route location: tests/fixtures/django/accounts/api_urls.py:6:1
 - Middleware: none
+- Params: pk (high)
+- Declared protection: permission_classes
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): path_param.
@@ -135,6 +138,7 @@
 - Handler: `UserViewSet.destroy` (tests/fixtures/django/accounts/views.py:64:7)
 - Route location: tests/fixtures/django/accounts/urls.py:7:1
 - Middleware: none
+- Params: uuid (high)
 - Confidence: high
 - Coverage: unauthenticated (high)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, path_param, unsafe_method, user_path.; No strong authorization evidence was found for a high-sensitivity route.
@@ -152,6 +156,7 @@
 - Handler: `UserViewSet.list` (tests/fixtures/django/accounts/views.py:67:9)
 - Route location: tests/fixtures/django/accounts/urls.py:7:1
 - Middleware: none
+- Declared protection: require_permission
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, user_path.
@@ -170,6 +175,7 @@
 - Handler: `UserViewSet.retrieve` (tests/fixtures/django/accounts/views.py:64:7)
 - Route location: tests/fixtures/django/accounts/urls.py:7:1
 - Middleware: none
+- Params: uuid (high)
 - Confidence: high
 - Coverage: unauthenticated (medium)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, path_param, user_path.
@@ -186,6 +192,7 @@
 - Handler: `UserViewSet.partial_update` (tests/fixtures/django/accounts/views.py:64:7)
 - Route location: tests/fixtures/django/accounts/urls.py:7:1
 - Middleware: none
+- Params: uuid (high)
 - Confidence: high
 - Coverage: unauthenticated (high)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, path_param, unsafe_method, user_path.; No strong authorization evidence was found for a high-sensitivity route.
@@ -222,6 +229,7 @@
 - Handler: `UserViewSet.disable` (tests/fixtures/django/accounts/views.py:75:9)
 - Route location: tests/fixtures/django/accounts/urls.py:7:1
 - Middleware: none
+- Params: uuid (high)
 - Confidence: high
 - Coverage: unauthenticated (high)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method, user_path.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
@@ -241,6 +249,7 @@
 - Handler: `UserViewSet.update` (tests/fixtures/django/accounts/views.py:64:7)
 - Route location: tests/fixtures/django/accounts/urls.py:7:1
 - Middleware: none
+- Params: uuid (high)
 - Confidence: high
 - Coverage: unauthenticated (high)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, path_param, unsafe_method, user_path.; No strong authorization evidence was found for a high-sensitivity route.
@@ -274,6 +283,7 @@
 - Handler: `ReadOnlyAccountViewSet.retrieve` (tests/fixtures/django/accounts/views.py:79:7)
 - Route location: tests/fixtures/django/accounts/urls.py:8:1
 - Middleware: none
+- Params: pk (high)
 - Confidence: high
 - Coverage: unauthenticated (medium)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, path_param.
@@ -327,6 +337,8 @@
 - Handler: `InheritedProjectViewSet.destroy` (tests/fixtures/django/accounts/views.py:132:7)
 - Route location: tests/fixtures/django/accounts/urls.py:10:1
 - Middleware: none
+- Params: pk (high)
+- Declared protection: is_authenticated, restrict, IsAuthenticated
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param, unsafe_method.
@@ -353,6 +365,7 @@
 - Handler: `InheritedProjectViewSet.list` (tests/fixtures/django/accounts/views.py:132:7)
 - Route location: tests/fixtures/django/accounts/urls.py:10:1
 - Middleware: none
+- Declared protection: is_authenticated, restrict, IsAuthenticated
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path.
@@ -378,6 +391,8 @@
 - Handler: `InheritedProjectViewSet.retrieve` (tests/fixtures/django/accounts/views.py:132:7)
 - Route location: tests/fixtures/django/accounts/urls.py:10:1
 - Middleware: none
+- Params: pk (high)
+- Declared protection: is_authenticated, restrict, IsAuthenticated
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param.
@@ -403,6 +418,8 @@
 - Handler: `InheritedProjectViewSet.partial_update` (tests/fixtures/django/accounts/views.py:132:7)
 - Route location: tests/fixtures/django/accounts/urls.py:10:1
 - Middleware: none
+- Params: pk (high)
+- Declared protection: is_authenticated, restrict, IsAuthenticated
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param, unsafe_method.
@@ -429,6 +446,7 @@
 - Handler: `InheritedProjectViewSet.create` (tests/fixtures/django/accounts/views.py:132:7)
 - Route location: tests/fixtures/django/accounts/urls.py:10:1
 - Middleware: none
+- Declared protection: is_authenticated, restrict, IsAuthenticated
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, unsafe_method.
@@ -455,6 +473,8 @@
 - Handler: `InheritedProjectViewSet.update` (tests/fixtures/django/accounts/views.py:132:7)
 - Route location: tests/fixtures/django/accounts/urls.py:10:1
 - Middleware: none
+- Params: pk (high)
+- Declared protection: is_authenticated, restrict, IsAuthenticated
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param, unsafe_method.
@@ -481,6 +501,7 @@
 - Handler: `InheritedReadOnlyProjectViewSet.list` (tests/fixtures/django/accounts/views.py:136:7)
 - Route location: tests/fixtures/django/accounts/urls.py:11:1
 - Middleware: none
+- Declared protection: permission_classes
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path.
@@ -500,6 +521,8 @@
 - Handler: `InheritedReadOnlyProjectViewSet.retrieve` (tests/fixtures/django/accounts/views.py:136:7)
 - Route location: tests/fixtures/django/accounts/urls.py:11:1
 - Middleware: none
+- Params: pk (high)
+- Declared protection: permission_classes
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param.
@@ -586,6 +609,7 @@
 - Handler: `ReadOnlyAuditViewSet.retrieve` (tests/fixtures/django/accounts/views.py:87:7)
 - Route location: tests/fixtures/django/accounts/urls.py:17:1
 - Middleware: none
+- Params: pk (high)
 - Confidence: high
 - Coverage: unauthenticated (medium)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, path_param.
@@ -640,6 +664,8 @@
 - Handler: `AccountDetailView` (tests/fixtures/django/accounts/views.py:41:7)
 - Route location: tests/fixtures/django/accounts/urls.py:21:5
 - Middleware: none
+- Params: pk (medium)
+- Declared protection: AccountDetailView
 - Confidence: high
 - Coverage: unknown_or_dynamic (review_required)
 - Coverage rationale: 1 weak or dynamic authorization evidence item(s) were detected.; Sensitive route modifier(s): account_path, any_method, linked_mutation, path_param, unsafe_method, user_path.; Linked data mutation(s) increase review sensitivity.
@@ -687,6 +713,7 @@
 - Handler: `GeneratedAccountListView` (tests/fixtures/django/accounts/views.py:55:7)
 - Route location: tests/fixtures/django/accounts/views.py:54:2
 - Middleware: none
+- Declared protection: is_authenticated, restrict, IsAuthenticated
 - Confidence: medium
 - Coverage: permission_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, any_method, unsafe_method.
@@ -717,6 +744,8 @@
 - Handler: `GeneratedAccountEditView` (tests/fixtures/django/accounts/views.py:60:7)
 - Route location: tests/fixtures/django/accounts/views.py:59:2
 - Middleware: none
+- Params: pk (medium)
+- Declared protection: PermissionRequiredMixin
 - Confidence: medium
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, any_method, path_param, unsafe_method.
@@ -757,6 +786,7 @@
 - Handler: `legacy_detail` (tests/fixtures/django/accounts/views.py:29:5)
 - Route location: tests/fixtures/django/project/urls.py:8:5
 - Middleware: none
+- Params: slug (high)
 - Confidence: medium
 - Coverage: unauthenticated (high)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): any_method, path_param, unsafe_method.; No strong authorization evidence was found for a high-sensitivity route.

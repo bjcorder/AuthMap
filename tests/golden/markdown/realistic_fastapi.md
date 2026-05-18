@@ -60,6 +60,8 @@
 - Handler: `read_account` (tests/fixtures/realistic/fastapi/app/routers/accounts.py:12:5)
 - Route location: tests/fixtures/realistic/fastapi/app/routers/accounts.py:11:2
 - Middleware: none
+- Params: account_id (high)
+- Declared protection: require_user
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): account_path, path_param.
@@ -78,6 +80,7 @@
 - Handler: `create_account_route` (tests/fixtures/realistic/fastapi/app/routers/accounts.py:17:5)
 - Route location: tests/fixtures/realistic/fastapi/app/routers/accounts.py:16:2
 - Middleware: none
+- Declared protection: require_user
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): account_path, linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
@@ -99,6 +102,8 @@
 - Handler: `update_account_route` (tests/fixtures/realistic/fastapi/app/routers/accounts.py:25:5)
 - Route location: tests/fixtures/realistic/fastapi/app/routers/accounts.py:24:2
 - Middleware: none
+- Params: account_id (high)
+- Declared protection: can_edit_account, dynamic_policy_check
 - Confidence: high
 - Coverage: permission_guarded (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.; Linked data mutation(s) increase review sensitivity.
@@ -126,6 +131,8 @@
 - Handler: `delete_account_route` (tests/fixtures/realistic/fastapi/app/routers/accounts.py:32:5)
 - Route location: tests/fixtures/realistic/fastapi/app/routers/accounts.py:31:2
 - Middleware: none
+- Params: account_id (high)
+- Declared protection: require_admin
 - Confidence: high
 - Coverage: admin_guarded (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.; Linked data mutation(s) increase review sensitivity.
@@ -147,6 +154,7 @@
 - Handler: `service_create_account` (tests/fixtures/realistic/fastapi/app/routers/accounts.py:37:5)
 - Route location: tests/fixtures/realistic/fastapi/app/routers/accounts.py:36:2
 - Middleware: none
+- Declared protection: require_user
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): account_path, linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
@@ -168,6 +176,7 @@
 - Handler: `dynamic_service_create` (tests/fixtures/realistic/fastapi/app/routers/accounts.py:42:5)
 - Route location: tests/fixtures/realistic/fastapi/app/routers/accounts.py:41:2
 - Middleware: none
+- Declared protection: require_user
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): account_path, unsafe_method.
@@ -200,6 +209,7 @@
 - Handler: `audit_log` (tests/fixtures/realistic/fastapi/main.py:34:5)
 - Route location: tests/fixtures/realistic/fastapi/main.py:33:2
 - Middleware: none
+- Declared protection: require_admin
 - Confidence: high
 - Coverage: admin_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): admin_path.
@@ -218,6 +228,7 @@
 - Handler: `dynamic_reports` (tests/fixtures/realistic/fastapi/main.py:39:5)
 - Route location: tests/fixtures/realistic/fastapi/main.py:38:2
 - Middleware: none
+- Declared protection: require_user
 - Confidence: medium
 - Coverage: authn_only (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.

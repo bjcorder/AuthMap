@@ -39,6 +39,11 @@ the mutation object.
 
 Routes also include `source_evidence`, which records why an adapter believes a
 route exists, such as a decorator, router call, or framework handler export.
+When available, routes include normalized `params` entries for path parameters
+and `declared_protection` entries for declared public markers, route guards,
+inherited guard context, or dynamic protection
+signals. These entries are evidence metadata for review; coverage classification
+still comes from `coverage[]`.
 
 ## Confidence And Uncertainty
 
@@ -152,7 +157,8 @@ be any JSON value.
 ## Examples
 
 - [`examples/route-inventory.authmap.json`](../examples/route-inventory.authmap.json)
-  shows a minimal route inventory without authorization findings.
+  shows a minimal route inventory with normalized path params and no
+  authorization findings.
 - [`examples/authorization-map.authmap.json`](../examples/authorization-map.authmap.json)
   shows routes, all documented evidence types, mutations, links, coverage,
   uncertainty reasons, and namespaced extensions.

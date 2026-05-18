@@ -83,6 +83,39 @@
           }
         }
       ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 14,
+              "column": 10,
+              "byte_range": {
+                "start": 441,
+                "end": 452
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 14,
+            "column": 10,
+            "byte_range": {
+              "start": 441,
+              "end": 452
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0001"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "<inline_handler>",
         "span": {
@@ -139,6 +172,39 @@
               "end": 877
             }
           }
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 14,
+              "column": 10,
+              "byte_range": {
+                "start": 441,
+                "end": 452
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 14,
+            "column": 10,
+            "byte_range": {
+              "start": 441,
+              "end": 452
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0002"
+          ],
+          "notes": []
         }
       ],
       "handler": {
@@ -211,6 +277,101 @@
           }
         }
       ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 51,
+              "column": 19,
+              "byte_range": {
+                "start": 1174,
+                "end": 1185
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 51,
+            "column": 19,
+            "byte_range": {
+              "start": 1174,
+              "end": 1185
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0004"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requirePermission",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 51,
+              "column": 32,
+              "byte_range": {
+                "start": 1187,
+                "end": 1220
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 51,
+            "column": 32,
+            "byte_range": {
+              "start": 1187,
+              "end": 1220
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0005"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireRole",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 18,
+              "column": 10,
+              "byte_range": {
+                "start": 493,
+                "end": 504
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 18,
+            "column": 10,
+            "byte_range": {
+              "start": 493,
+              "end": 504
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0003"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "listAccounts",
         "span": {
@@ -255,6 +416,48 @@
               "end": 452
             }
           }
+        }
+      ],
+      "params": [
+        {
+          "name": "tenant",
+          "syntax": "{tenant}",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 14,
+              "column": 10,
+              "byte_range": {
+                "start": 441,
+                "end": 452
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 14,
+            "column": 10,
+            "byte_range": {
+              "start": 441,
+              "end": 452
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0006"
+          ],
+          "notes": []
         }
       ],
       "handler": {
@@ -303,6 +506,81 @@
           }
         }
       ],
+      "params": [
+        {
+          "name": "id",
+          "syntax": ":id",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requirePermission",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 27,
+              "column": 10,
+              "byte_range": {
+                "start": 663,
+                "end": 680
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 27,
+            "column": 10,
+            "byte_range": {
+              "start": 663,
+              "end": 680
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0007"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "unknown_dynamic",
+          "mechanism": "handler_call",
+          "symbol": {
+            "name": "dynamicPolicyCheck",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 61,
+              "column": 8,
+              "byte_range": {
+                "start": 1593,
+                "end": 1611
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 61,
+            "column": 8,
+            "byte_range": {
+              "start": 1593,
+              "end": 1630
+            }
+          },
+          "inherited": false,
+          "confidence": "low",
+          "evidence_ids": [
+            "evidence_0008"
+          ],
+          "notes": [
+            "Dynamic or indirect policy call requires review"
+          ]
+        }
+      ],
       "handler": {
         "name": "<inline_handler>",
         "span": {
@@ -347,6 +625,39 @@
               "end": 452
             }
           }
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 14,
+              "column": 10,
+              "byte_range": {
+                "start": 441,
+                "end": 452
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 14,
+            "column": 10,
+            "byte_range": {
+              "start": 441,
+              "end": 452
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0009"
+          ],
+          "notes": []
         }
       ],
       "handler": {
@@ -395,6 +706,48 @@
               "end": 452
             }
           }
+        }
+      ],
+      "params": [
+        {
+          "name": "id",
+          "syntax": ":id",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 14,
+              "column": 10,
+              "byte_range": {
+                "start": 441,
+                "end": 452
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 14,
+            "column": 10,
+            "byte_range": {
+              "start": 441,
+              "end": 452
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0010"
+          ],
+          "notes": []
         }
       ],
       "handler": {
@@ -453,6 +806,39 @@
               "end": 877
             }
           }
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 70,
+              "column": 28,
+              "byte_range": {
+                "start": 1877,
+                "end": 1888
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 70,
+            "column": 28,
+            "byte_range": {
+              "start": 1877,
+              "end": 1888
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0011"
+          ],
+          "notes": []
         }
       ],
       "handler": {
@@ -549,6 +935,39 @@
           }
         }
       ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 14,
+              "column": 10,
+              "byte_range": {
+                "start": 441,
+                "end": 452
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 14,
+            "column": 10,
+            "byte_range": {
+              "start": 441,
+              "end": 452
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0012"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "listAccounts",
         "span": {
@@ -593,6 +1012,39 @@
               "end": 452
             }
           }
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 14,
+              "column": 10,
+              "byte_range": {
+                "start": 441,
+                "end": 452
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 14,
+            "column": 10,
+            "byte_range": {
+              "start": 441,
+              "end": 452
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0013"
+          ],
+          "notes": []
         }
       ],
       "handler": {
@@ -653,6 +1105,70 @@
           }
         }
       ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "middleware.authenticateRequest",
+            "span": {
+              "file": "tests/fixtures/express/helpers/app.js",
+              "line": 6,
+              "column": 1,
+              "byte_range": {
+                "start": 99,
+                "end": 165
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 6,
+            "column": 1,
+            "byte_range": {
+              "start": 99,
+              "end": 165
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0014"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/helpers/app.js",
+              "line": 6,
+              "column": 42,
+              "byte_range": {
+                "start": 140,
+                "end": 151
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 6,
+            "column": 42,
+            "byte_range": {
+              "start": 140,
+              "end": 151
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0015"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "getProfile",
         "span": {
@@ -709,6 +1225,70 @@
               "end": 151
             }
           }
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "middleware.authenticateRequest",
+            "span": {
+              "file": "tests/fixtures/express/helpers/app.js",
+              "line": 6,
+              "column": 1,
+              "byte_range": {
+                "start": 99,
+                "end": 165
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 6,
+            "column": 1,
+            "byte_range": {
+              "start": 99,
+              "end": 165
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0016"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/helpers/app.js",
+              "line": 6,
+              "column": 42,
+              "byte_range": {
+                "start": 140,
+                "end": 151
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 6,
+            "column": 42,
+            "byte_range": {
+              "start": 140,
+              "end": 151
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0017"
+          ],
+          "notes": []
         }
       ],
       "handler": {
@@ -805,6 +1385,163 @@
           }
         }
       ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "middleware.admin.checkPrivileges",
+            "span": {
+              "file": "tests/fixtures/express/helpers/app.js",
+              "line": 7,
+              "column": 1,
+              "byte_range": {
+                "start": 167,
+                "end": 235
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 7,
+            "column": 1,
+            "byte_range": {
+              "start": 167,
+              "end": 235
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0021"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "middleware.ensureLoggedIn",
+            "span": {
+              "file": "tests/fixtures/express/helpers/app.js",
+              "line": 7,
+              "column": 1,
+              "byte_range": {
+                "start": 167,
+                "end": 235
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 7,
+            "column": 1,
+            "byte_range": {
+              "start": 167,
+              "end": 235
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0020"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAdmin",
+            "span": {
+              "file": "tests/fixtures/express/helpers/app.js",
+              "line": 7,
+              "column": 45,
+              "byte_range": {
+                "start": 211,
+                "end": 223
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 7,
+            "column": 45,
+            "byte_range": {
+              "start": 211,
+              "end": 223
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0022"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "inherited_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 51,
+              "column": 19,
+              "byte_range": {
+                "start": 1174,
+                "end": 1185
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 51,
+            "column": 19,
+            "byte_range": {
+              "start": 1174,
+              "end": 1185
+            }
+          },
+          "inherited": true,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0018"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "inherited_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requirePermission",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 51,
+              "column": 32,
+              "byte_range": {
+                "start": 1187,
+                "end": 1220
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 51,
+            "column": 32,
+            "byte_range": {
+              "start": 1187,
+              "end": 1220
+            }
+          },
+          "inherited": true,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0019"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "getAdmin",
         "span": {
@@ -875,6 +1612,101 @@
           }
         }
       ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "middleware.admin.checkPrivileges",
+            "span": {
+              "file": "tests/fixtures/express/helpers/app.js",
+              "line": 7,
+              "column": 1,
+              "byte_range": {
+                "start": 167,
+                "end": 235
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 7,
+            "column": 1,
+            "byte_range": {
+              "start": 167,
+              "end": 235
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0024"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "middleware.ensureLoggedIn",
+            "span": {
+              "file": "tests/fixtures/express/helpers/app.js",
+              "line": 7,
+              "column": 1,
+              "byte_range": {
+                "start": 167,
+                "end": 235
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 7,
+            "column": 1,
+            "byte_range": {
+              "start": 167,
+              "end": 235
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0023"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAdmin",
+            "span": {
+              "file": "tests/fixtures/express/helpers/app.js",
+              "line": 7,
+              "column": 45,
+              "byte_range": {
+                "start": 211,
+                "end": 223
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 7,
+            "column": 45,
+            "byte_range": {
+              "start": 211,
+              "end": 223
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0025"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "getAdmin",
         "span": {
@@ -931,6 +1763,70 @@
               "end": 304
             }
           }
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "middleware.authenticateRequest",
+            "span": {
+              "file": "tests/fixtures/express/helpers/app.js",
+              "line": 8,
+              "column": 1,
+              "byte_range": {
+                "start": 237,
+                "end": 316
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 8,
+            "column": 1,
+            "byte_range": {
+              "start": 237,
+              "end": 316
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0026"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requirePermission",
+            "span": {
+              "file": "tests/fixtures/express/helpers/app.js",
+              "line": 8,
+              "column": 51,
+              "byte_range": {
+                "start": 287,
+                "end": 304
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 8,
+            "column": 51,
+            "byte_range": {
+              "start": 287,
+              "end": 304
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0027"
+          ],
+          "notes": []
         }
       ],
       "handler": {
@@ -991,6 +1887,70 @@
           }
         }
       ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "middleware.authenticateRequest",
+            "span": {
+              "file": "tests/fixtures/express/helpers/app.js",
+              "line": 9,
+              "column": 1,
+              "byte_range": {
+                "start": 318,
+                "end": 375
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 9,
+            "column": 1,
+            "byte_range": {
+              "start": 318,
+              "end": 375
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0028"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/helpers/app.js",
+              "line": 9,
+              "column": 33,
+              "byte_range": {
+                "start": 350,
+                "end": 361
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 9,
+            "column": 33,
+            "byte_range": {
+              "start": 350,
+              "end": 361
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0029"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "getProfile",
         "span": {
@@ -1047,6 +2007,70 @@
               "end": 361
             }
           }
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "middleware.authenticateRequest",
+            "span": {
+              "file": "tests/fixtures/express/helpers/app.js",
+              "line": 9,
+              "column": 1,
+              "byte_range": {
+                "start": 318,
+                "end": 375
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 9,
+            "column": 1,
+            "byte_range": {
+              "start": 318,
+              "end": 375
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0030"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/helpers/app.js",
+              "line": 9,
+              "column": 33,
+              "byte_range": {
+                "start": 350,
+                "end": 361
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 9,
+            "column": 33,
+            "byte_range": {
+              "start": 350,
+              "end": 361
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0031"
+          ],
+          "notes": []
         }
       ],
       "handler": {
@@ -1117,6 +2141,101 @@
               "end": 92
             }
           }
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAdmin",
+            "span": {
+              "file": "tests/fixtures/express/routes/admin.js",
+              "line": 5,
+              "column": 10,
+              "byte_range": {
+                "start": 80,
+                "end": 92
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/routes/admin.js",
+            "line": 5,
+            "column": 10,
+            "byte_range": {
+              "start": 80,
+              "end": 92
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0034"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "inherited_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 51,
+              "column": 19,
+              "byte_range": {
+                "start": 1174,
+                "end": 1185
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 51,
+            "column": 19,
+            "byte_range": {
+              "start": 1174,
+              "end": 1185
+            }
+          },
+          "inherited": true,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0032"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "inherited_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requirePermission",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 51,
+              "column": 32,
+              "byte_range": {
+                "start": 1187,
+                "end": 1220
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 51,
+            "column": 32,
+            "byte_range": {
+              "start": 1187,
+              "end": 1220
+            }
+          },
+          "inherited": true,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0033"
+          ],
+          "notes": []
         }
       ],
       "handler": {
@@ -1223,6 +2342,79 @@
           }
         }
       ],
+      "params": [
+        {
+          "name": "userId",
+          "syntax": ":userId",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireUser",
+            "span": {
+              "file": "tests/fixtures/express/routes/users.ts",
+              "line": 5,
+              "column": 10,
+              "byte_range": {
+                "start": 75,
+                "end": 86
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/routes/users.ts",
+            "line": 5,
+            "column": 10,
+            "byte_range": {
+              "start": 75,
+              "end": 86
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0036"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "inherited_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 85,
+              "column": 20,
+              "byte_range": {
+                "start": 2371,
+                "end": 2382
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 85,
+            "column": 20,
+            "byte_range": {
+              "start": 2371,
+              "end": 2382
+            }
+          },
+          "inherited": true,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0035"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "<inline_handler>",
         "span": {
@@ -1267,6 +2459,48 @@
               "end": 86
             }
           }
+        }
+      ],
+      "params": [
+        {
+          "name": "userId",
+          "syntax": ":userId",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireUser",
+            "span": {
+              "file": "tests/fixtures/express/routes/users.ts",
+              "line": 5,
+              "column": 10,
+              "byte_range": {
+                "start": 75,
+                "end": 86
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/routes/users.ts",
+            "line": 5,
+            "column": 10,
+            "byte_range": {
+              "start": 75,
+              "end": 86
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0037"
+          ],
+          "notes": []
         }
       ],
       "handler": {
@@ -1327,6 +2561,79 @@
           }
         }
       ],
+      "params": [
+        {
+          "name": "userId",
+          "syntax": ":userId",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireUser",
+            "span": {
+              "file": "tests/fixtures/express/routes/users.ts",
+              "line": 5,
+              "column": 10,
+              "byte_range": {
+                "start": 75,
+                "end": 86
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/routes/users.ts",
+            "line": 5,
+            "column": 10,
+            "byte_range": {
+              "start": 75,
+              "end": 86
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0039"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "inherited_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 85,
+              "column": 20,
+              "byte_range": {
+                "start": 2371,
+                "end": 2382
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 85,
+            "column": 20,
+            "byte_range": {
+              "start": 2371,
+              "end": 2382
+            }
+          },
+          "inherited": true,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0038"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "updateUser",
         "span": {
@@ -1371,6 +2678,48 @@
               "end": 86
             }
           }
+        }
+      ],
+      "params": [
+        {
+          "name": "userId",
+          "syntax": ":userId",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireUser",
+            "span": {
+              "file": "tests/fixtures/express/routes/users.ts",
+              "line": 5,
+              "column": 10,
+              "byte_range": {
+                "start": 75,
+                "end": 86
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/routes/users.ts",
+            "line": 5,
+            "column": 10,
+            "byte_range": {
+              "start": 75,
+              "end": 86
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0040"
+          ],
+          "notes": []
         }
       ],
       "handler": {
@@ -1431,6 +2780,79 @@
           }
         }
       ],
+      "params": [
+        {
+          "name": "tenantId",
+          "syntax": ":tenantId",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireTenant",
+            "span": {
+              "file": "tests/fixtures/express/routes/users.ts",
+              "line": 9,
+              "column": 10,
+              "byte_range": {
+                "start": 184,
+                "end": 197
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/routes/users.ts",
+            "line": 9,
+            "column": 10,
+            "byte_range": {
+              "start": 184,
+              "end": 197
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0042"
+          ],
+          "notes": []
+        },
+        {
+          "kind": "inherited_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireAuth",
+            "span": {
+              "file": "tests/fixtures/express/app.js",
+              "line": 85,
+              "column": 20,
+              "byte_range": {
+                "start": 2371,
+                "end": 2382
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 85,
+            "column": 20,
+            "byte_range": {
+              "start": 2371,
+              "end": 2382
+            }
+          },
+          "inherited": true,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0041"
+          ],
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "<inline_handler>",
         "span": {
@@ -1475,6 +2897,48 @@
               "end": 197
             }
           }
+        }
+      ],
+      "params": [
+        {
+          "name": "tenantId",
+          "syntax": ":tenantId",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "express_middleware",
+          "symbol": {
+            "name": "requireTenant",
+            "span": {
+              "file": "tests/fixtures/express/routes/users.ts",
+              "line": 9,
+              "column": 10,
+              "byte_range": {
+                "start": 184,
+                "end": 197
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/express/routes/users.ts",
+            "line": 9,
+            "column": 10,
+            "byte_range": {
+              "start": 184,
+              "end": 197
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0043"
+          ],
+          "notes": []
         }
       ],
       "handler": {

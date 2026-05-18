@@ -78,6 +78,7 @@ No data mutations were detected.
 - Handler: `delete_collection_item` (tests/fixtures/fastapi/app/factories/collection.py:8:15)
 - Route location: tests/fixtures/fastapi/app/factories/collection.py:7:6
 - Middleware: none
+- Params: item_id (high)
 - Confidence: high
 - Coverage: unauthenticated (high)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): path_param, unsafe_method.; No strong authorization evidence was found for a high-sensitivity route.
@@ -124,6 +125,7 @@ No data mutations were detected.
 - Handler: `get_user` (tests/fixtures/fastapi/app/routes/users.py:7:5)
 - Route location: tests/fixtures/fastapi/app/routes/users.py:6:2
 - Middleware: none
+- Params: user_id (high)
 - Confidence: high
 - Coverage: unauthenticated (medium)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): path_param, user_path.
@@ -140,6 +142,8 @@ No data mutations were detected.
 - Handler: `get_user` (tests/fixtures/fastapi/app/routes/users.py:7:5)
 - Route location: tests/fixtures/fastapi/app/routes/users.py:6:2
 - Middleware: `require_user` (tests/fixtures/fastapi/main.py:134:32), `can_edit_account` (tests/fixtures/fastapi/main.py:135:36), `provide_database_interface` (tests/fixtures/fastapi/main.py:136:36)
+- Params: user_id (high)
+- Declared protection: can_edit_account, require_user
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): path_param, user_path.
@@ -160,6 +164,7 @@ No data mutations were detected.
 - Handler: `get_user` (tests/fixtures/fastapi/app/routes/users.py:7:5)
 - Route location: tests/fixtures/fastapi/app/routes/users.py:6:2
 - Middleware: none
+- Params: user_id (high)
 - Confidence: high
 - Coverage: unauthenticated (medium)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): path_param, user_path.
@@ -176,6 +181,7 @@ No data mutations were detected.
 - Handler: `update_user` (tests/fixtures/fastapi/app/routes/users.py:12:5)
 - Route location: tests/fixtures/fastapi/app/routes/users.py:11:2
 - Middleware: none
+- Params: user_id (high)
 - Confidence: high
 - Coverage: unauthenticated (high)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): path_param, unsafe_method, user_path.; No strong authorization evidence was found for a high-sensitivity route.
@@ -193,6 +199,8 @@ No data mutations were detected.
 - Handler: `update_user` (tests/fixtures/fastapi/app/routes/users.py:12:5)
 - Route location: tests/fixtures/fastapi/app/routes/users.py:11:2
 - Middleware: `require_user` (tests/fixtures/fastapi/main.py:134:32), `can_edit_account` (tests/fixtures/fastapi/main.py:135:36), `provide_database_interface` (tests/fixtures/fastapi/main.py:136:36)
+- Params: user_id (high)
+- Declared protection: can_edit_account, require_user
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): path_param, unsafe_method, user_path.
@@ -214,6 +222,7 @@ No data mutations were detected.
 - Handler: `update_user` (tests/fixtures/fastapi/app/routes/users.py:12:5)
 - Route location: tests/fixtures/fastapi/app/routes/users.py:11:2
 - Middleware: none
+- Params: user_id (high)
 - Confidence: high
 - Coverage: unauthenticated (high)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): path_param, unsafe_method, user_path.; No strong authorization evidence was found for a high-sensitivity route.
@@ -260,6 +269,7 @@ No data mutations were detected.
 - Handler: `profile` (tests/fixtures/fastapi/main.py:50:5)
 - Route location: tests/fixtures/fastapi/main.py:49:2
 - Middleware: none
+- Declared protection: require_user
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
@@ -276,6 +286,8 @@ No data mutations were detected.
 - Handler: `delete_account` (tests/fixtures/fastapi/main.py:55:5)
 - Route location: tests/fixtures/fastapi/main.py:54:2
 - Middleware: `require_admin` (tests/fixtures/fastapi/main.py:54:67)
+- Params: account_id (high)
+- Declared protection: require_admin
 - Confidence: high
 - Coverage: admin_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): account_path, admin_path, path_param, unsafe_method.
@@ -296,6 +308,8 @@ No data mutations were detected.
 - Handler: `grant_permission` (tests/fixtures/fastapi/main.py:60:5)
 - Route location: tests/fixtures/fastapi/main.py:59:2
 - Middleware: `can_edit_account` (tests/fixtures/fastapi/main.py:59:72)
+- Params: account_id (high)
+- Declared protection: can_edit_account, dynamic_policy_check
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param, unsafe_method.
@@ -321,6 +335,7 @@ No data mutations were detected.
 - Handler: `service_account` (tests/fixtures/fastapi/main.py:67:5)
 - Route location: tests/fixtures/fastapi/main.py:66:2
 - Middleware: none
+- Declared protection: authorize
 - Confidence: high
 - Coverage: unknown_or_dynamic (review_required)
 - Coverage rationale: 1 weak or dynamic authorization evidence item(s) were detected.; Sensitive route modifier(s): account_path, unsafe_method.
@@ -345,6 +360,8 @@ No data mutations were detected.
 - Handler: `delete_local` (tests/fixtures/fastapi/main.py:73:5)
 - Route location: tests/fixtures/fastapi/main.py:72:2
 - Middleware: `require_user` (tests/fixtures/fastapi/main.py:128:71)
+- Params: item_id (high)
+- Declared protection: require_user
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, unsafe_method.
@@ -364,6 +381,7 @@ No data mutations were detected.
 - Handler: `variable_settings` (tests/fixtures/fastapi/main.py:81:5)
 - Route location: tests/fixtures/fastapi/main.py:80:2
 - Middleware: `require_user` (tests/fixtures/fastapi/main.py:134:32), `can_edit_account` (tests/fixtures/fastapi/main.py:135:36), `provide_database_interface` (tests/fixtures/fastapi/main.py:136:36)
+- Declared protection: can_edit_account, require_user
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.
