@@ -77,6 +77,47 @@ fn repeated_scans_are_stable() {
     assert_snapshot_eq(first, second);
 }
 
+#[test]
+fn route_metadata_is_emitted_for_fastapi_and_express() {
+    let fastapi = scan_fixture("fastapi");
+    let fastapi_route = fastapi
+        .routes
+        .iter()
+        .find(|route| route.path == "/shared/users/{user_id}" && route.method == "GET")
+        .expect("FastAPI route should exist");
+    assert!(
+        fastapi_route
+            .params
+            .iter()
+            .any(|param| param.name == "user_id")
+    );
+    assert!(
+        fastapi_route
+            .declared_protection
+            .iter()
+            .any(|protection| protection.mechanism == "fastapi_dependency")
+    );
+
+    let express = scan_fixture("express");
+    let express_route = express
+        .routes
+        .iter()
+        .find(|route| route.path == "/v1/:userId" && route.method == "GET")
+        .expect("Express route should exist");
+    assert!(
+        express_route
+            .params
+            .iter()
+            .any(|param| param.name == "userId")
+    );
+    assert!(
+        express_route
+            .declared_protection
+            .iter()
+            .any(|protection| protection.mechanism == "express_middleware")
+    );
+}
+
 fn scan_fixture(name: &str) -> AuthMapDocument {
     let plan = ScanPlan::new(vec![fixture_path(name)], None, ScanConfig::default());
     run_scan(&plan).expect("fixture scan should succeed")
