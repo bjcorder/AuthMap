@@ -1,5 +1,7 @@
 from rest_framework.decorators import action
-from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet, ViewSet
+from rest_framework import mixins as drf_mixins
+from rest_framework.viewsets import GenericViewSet, ModelViewSet, ReadOnlyModelViewSet, ViewSet
+from shared import generic
 
 from .models import Account
 from .services import create_account
@@ -11,6 +13,13 @@ def get_url_path():
 
 def require_permission(user):
     return True
+
+
+def register_model_view(model, name="", path=None, detail=True):
+    def wrapper(cls):
+        return cls
+
+    return wrapper
 
 
 def status(request):
@@ -40,6 +49,16 @@ class AccountDetailView:
 
     def delete(self, request, pk):
         return Account.objects.filter(pk=pk).delete()
+
+
+@register_model_view(Account, "list", path="", detail=False)
+class GeneratedAccountListView(ProjectModelViewSet):
+    pass
+
+
+@register_model_view(Account, "edit", path="edit")
+class GeneratedAccountEditView(generic.ObjectEditView):
+    pass
 
 
 class UserViewSet(ModelViewSet):
@@ -87,3 +106,36 @@ class CustomModelBackedViewSet(MyModelViewSet):
 class DynamicViewSet(ViewSet):
     def list(self, request):
         return []
+
+
+class ProjectModelViewSet(ModelViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def initial(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            self.queryset = self.queryset.restrict(request.user, "view")
+        return super().initial(request, *args, **kwargs)
+
+
+class ProjectReadOnlyViewSet(ReadOnlyModelViewSet):
+    permission_classes = [DjangoObjectPermissions]
+
+
+class ProjectMixinViewSet(
+    drf_mixins.ListModelMixin,
+    drf_mixins.CreateModelMixin,
+    GenericViewSet,
+):
+    pass
+
+
+class InheritedProjectViewSet(ProjectModelViewSet):
+    pass
+
+
+class InheritedReadOnlyProjectViewSet(ProjectReadOnlyViewSet):
+    pass
+
+
+class MixinBackedProjectViewSet(ProjectMixinViewSet):
+    pass

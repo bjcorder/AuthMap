@@ -11,8 +11,11 @@ report-sensitivity, CI artifact, SARIF, baseline, and sharing guidance.
 
 ## Installation And Setup
 
-From a tagged GitHub Release, download the archive for your platform, unpack it,
-and place the `authmap` binary on your `PATH`. Verify the install with:
+From a tagged GitHub Release, download the archive for your platform, its
+matching `.sha256` sidecar, and the `authmap-VERSION.intoto.jsonl` provenance
+file. Verify the artifact with [VERIFYING_RELEASES.md](VERIFYING_RELEASES.md),
+then unpack it and place the `authmap` binary on your `PATH`. Verify the
+install with:
 
 ```sh
 authmap --help
@@ -147,6 +150,19 @@ GET /api/tenant/:tenantId -> tenant_guarded, low
 When Express mount prefixes or routers are dynamic, AuthMap emits diagnostics
 and uncertainty notes instead of guessing. For example, a route may appear with
 medium confidence when a mount prefix could not be resolved statically.
+
+## GraphQL Example
+
+AuthMap treats GraphQL schema containers and object/value types as schema
+structure, not directly invocable operations. Concrete mutation classes and root
+query/mutation fields are reported as `/graphql/<operation>` routes when they
+can be identified statically.
+
+GraphQL permission declarations are evidence-backed. Non-empty `permissions`
+declarations classify as permission checks, explicit empty declarations such as
+`permissions = ()` or `permissions=[]` classify as declared public operations,
+and operations without either signal remain unauthenticated for reviewer
+triage. AuthMap does not infer public access from operation names alone.
 
 ## Output Formats
 

@@ -629,12 +629,35 @@ fn parse_git_range(range: &str) -> Result<(String, String), CliError> {
             "git range must use BASE...HEAD".to_string(),
         ));
     };
-    if base.trim().is_empty() || head.trim().is_empty() {
+    let base = validate_git_range_ref(base)?;
+    let head = validate_git_range_ref(head)?;
+    if base.is_empty() || head.is_empty() {
         return Err(CliError::InvalidDiffInput(
             "git range must include both BASE and HEAD".to_string(),
         ));
     }
-    Ok((base.trim().to_string(), head.trim().to_string()))
+    Ok((base.to_string(), head.to_string()))
+}
+
+fn validate_git_range_ref(ref_name: &str) -> Result<&str, CliError> {
+    let trimmed = ref_name.trim();
+    if trimmed.is_empty() {
+        return Err(CliError::InvalidDiffInput(
+            "git range must include both BASE and HEAD".to_string(),
+        ));
+    }
+    if ref_name != trimmed
+        || trimmed.starts_with('-')
+        || ref_name
+            .chars()
+            .any(|ch| ch.is_whitespace() || ch.is_control())
+    {
+        return Err(CliError::InvalidDiffInput(
+            "git range refs must not start with '-' or contain whitespace/control characters"
+                .to_string(),
+        ));
+    }
+    Ok(trimmed)
 }
 
 fn read_authmap_document(path: &Path) -> Result<AuthMapDocument, CliError> {

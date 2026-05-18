@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use authmap_core::{
     Confidence, Diagnostic, DiagnosticCategory, DiagnosticSeverity, Evidence, Framework, Mutation,
-    Recoverability, Route, Span, SymbolRef,
+    Recoverability, Route, SourceEvidence, Span, SymbolRef,
 };
 use authmap_parsers::ParsedFile;
 use tree_sitter::{Node, Tree};
@@ -67,6 +67,580 @@ pub struct AdapterRegistry {
     adapters: Vec<Box<dyn FrameworkAdapter>>,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct TrpcAdapter;
+
+impl FrameworkAdapter for TrpcAdapter {
+    fn name(&self) -> &'static str {
+        "trpc"
+    }
+
+    fn discover_routes(
+        &self,
+        parsed_files: &[ParsedFile],
+        _context: &AdapterContext,
+    ) -> AdapterOutput {
+        let mut routes = Vec::new();
+        for parsed in parsed_files.iter().filter(|file| {
+            matches!(
+                file.language,
+                authmap_core::Language::JavaScript
+                    | authmap_core::Language::JavaScriptReact
+                    | authmap_core::Language::TypeScript
+                    | authmap_core::Language::TypeScriptReact
+            )
+        }) {
+            if !parsed.text.contains("Procedure") && !parsed.text.contains("procedure") {
+                continue;
+            }
+            let router_name = trpc_router_name(&parsed.source.path);
+            for operation in trpc_operations(&parsed.text) {
+                let span = Span {
+                    file: parsed.source.path.clone(),
+                    line: operation.line as u32,
+                    column: operation.column as u32,
+                    byte_range: None,
+                };
+                let mut extensions = authmap_core::ExtensionMap::new();
+                extensions.insert(
+                    "authmap.trpc".to_string(),
+                    serde_json::json!({
+                        "router": router_name,
+                        "procedure": operation.name,
+                        "procedure_root": operation.procedure,
+                        "operation_kind": operation.kind,
+                    }),
+                );
+                let path = format!("/trpc/{router_name}/{}", operation.name);
+                routes.push(Route {
+                    id: String::new(),
+                    framework: Framework::Trpc,
+                    method: if operation.kind == "mutation" {
+                        "POST"
+                    } else {
+                        "GET"
+                    }
+                    .to_string(),
+                    path,
+                    name: Some(operation.name.clone()),
+                    tags: Vec::new(),
+                    middleware: Vec::new(),
+                    handler: Some(SymbolRef {
+                        name: format!("{router_name}.{}", operation.name),
+                        span: Some(span.clone()),
+                    }),
+                    span: Some(span.clone()),
+                    source_evidence: vec![authmap_source_evidence(
+                        "trpc_procedure",
+                        &operation.procedure,
+                        span.clone(),
+                        Confidence::Medium,
+                    )],
+                    confidence: Confidence::Medium,
+                    notes: Vec::new(),
+                    extensions,
+                });
+            }
+        }
+        routes.sort_by_key(route_sort_key);
+        for (index, route) in routes.iter_mut().enumerate() {
+            route.id = format!("route_{:04}", index + 1);
+        }
+        AdapterOutput {
+            routes,
+            ..AdapterOutput::default()
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct GraphqlAdapter;
+
+impl FrameworkAdapter for GraphqlAdapter {
+    fn name(&self) -> &'static str {
+        "graphql"
+    }
+
+    fn discover_routes(
+        &self,
+        parsed_files: &[ParsedFile],
+        _context: &AdapterContext,
+    ) -> AdapterOutput {
+        let mut candidates = Vec::new();
+        for parsed in parsed_files
+            .iter()
+            .filter(|file| file.language == authmap_core::Language::Python)
+        {
+            if !parsed.text.contains("graphene")
+                && !parsed.text.contains("BaseMutation")
+                && !parsed.text.contains("permissions")
+            {
+                continue;
+            }
+            for class in python_top_level_classes(parsed) {
+                if graphql_schema_container_class(&class) {
+                    candidates.extend(graphql_routes_from_container(parsed, &class));
+                } else if let Some(route) = graphql_route_from_class(parsed, &class) {
+                    candidates.push(route);
+                }
+            }
+        }
+        let mut routes = dedup_graphql_routes(candidates);
+        routes.sort_by_key(route_sort_key);
+        for (index, route) in routes.iter_mut().enumerate() {
+            route.id = format!("route_{:04}", index + 1);
+        }
+        AdapterOutput {
+            routes,
+            ..AdapterOutput::default()
+        }
+    }
+}
+
+fn trpc_router_name(path: &str) -> String {
+    path.replace('\\', "/")
+        .rsplit_once('/')
+        .map_or(path, |(_, file)| file)
+        .trim_end_matches(".ts")
+        .trim_end_matches(".tsx")
+        .trim_end_matches(".js")
+        .trim_end_matches(".jsx")
+        .trim_start_matches('_')
+        .trim_end_matches("_router")
+        .to_string()
+}
+
+fn trpc_procedure_from_line(line: &str) -> Option<(String, String)> {
+    let (name, rest) = line.split_once(':')?;
+    let name = name
+        .trim()
+        .trim_matches(|ch| matches!(ch, '"' | '\'' | '`'));
+    if name.is_empty() || name.contains(' ') {
+        return None;
+    }
+    for procedure in [
+        "authedAdminProcedure",
+        "authedOrgAdminProcedure",
+        "authedProcedure",
+        "protectedProcedure",
+        "publicProcedure",
+    ] {
+        if rest.contains(procedure) {
+            return Some((name.to_string(), procedure.to_string()));
+        }
+    }
+    None
+}
+
+#[derive(Clone, Debug)]
+struct TrpcOperation {
+    name: String,
+    procedure: String,
+    kind: &'static str,
+    line: usize,
+    column: usize,
+}
+
+fn trpc_operations(text: &str) -> Vec<TrpcOperation> {
+    let lines = text.lines().collect::<Vec<_>>();
+    let mut operations = Vec::new();
+    for (index, line) in lines.iter().enumerate() {
+        let Some((name, procedure)) = trpc_procedure_from_line(line) else {
+            continue;
+        };
+        let mut statement = line.trim().to_string();
+        for next in lines.iter().skip(index + 1).take(16) {
+            if trpc_procedure_from_line(next).is_some() {
+                break;
+            }
+            statement.push(' ');
+            statement.push_str(next.trim());
+            if trpc_operation_kind(&statement).is_some() {
+                break;
+            }
+        }
+        let Some(kind) = trpc_operation_kind(&statement) else {
+            continue;
+        };
+        operations.push(TrpcOperation {
+            column: line.find(&name).unwrap_or_default(),
+            line: index + 1,
+            name,
+            procedure,
+            kind,
+        });
+    }
+    operations
+}
+
+fn trpc_operation_kind(line: &str) -> Option<&'static str> {
+    if line.contains(".mutation") {
+        Some("mutation")
+    } else if line.contains(".query") {
+        Some("query")
+    } else {
+        None
+    }
+}
+
+fn python_class_name(line: &str) -> Option<String> {
+    let rest = line.strip_prefix("class ")?;
+    let end = rest.find(['(', ':']).unwrap_or(rest.len());
+    let name = rest[..end].trim();
+    (!name.is_empty()).then(|| name.to_string())
+}
+
+#[derive(Clone, Debug)]
+struct PythonTopLevelClass {
+    name: String,
+    line: usize,
+    declaration: String,
+    body: Vec<(usize, String)>,
+}
+
+fn python_top_level_classes(parsed: &ParsedFile) -> Vec<PythonTopLevelClass> {
+    let mut classes = Vec::new();
+    let mut current: Option<PythonTopLevelClass> = None;
+    for (line_index, line) in parsed.text.lines().enumerate() {
+        let line_number = line_index + 1;
+        let trimmed = line.trim();
+        if line == line.trim_start()
+            && let Some(name) = python_class_name(trimmed)
+        {
+            if let Some(class) = current.take() {
+                classes.push(class);
+            }
+            current = Some(PythonTopLevelClass {
+                name,
+                line: line_number,
+                declaration: trimmed.to_string(),
+                body: Vec::new(),
+            });
+        } else if let Some(class) = current.as_mut() {
+            class.body.push((line_number, line.to_string()));
+        }
+    }
+    if let Some(class) = current {
+        classes.push(class);
+    }
+    classes
+}
+
+fn graphql_class_bases(class: &PythonTopLevelClass) -> Vec<String> {
+    let Some((_, rest)) = class.declaration.split_once('(') else {
+        return Vec::new();
+    };
+    let Some((bases, _)) = rest.rsplit_once(')') else {
+        return Vec::new();
+    };
+    bases
+        .split(',')
+        .map(|base| base.trim().to_string())
+        .filter(|base| !base.is_empty())
+        .collect()
+}
+
+fn graphql_schema_container_class(class: &PythonTopLevelClass) -> bool {
+    (class.name.ends_with("Queries") || class.name.ends_with("Mutations"))
+        && graphql_class_bases(class)
+            .iter()
+            .any(|base| graphql_terminal_base(base) == "ObjectType")
+}
+
+fn graphql_concrete_operation_class(class: &PythonTopLevelClass) -> bool {
+    if graphql_abstract_mutation_class_name(&class.name) || graphql_schema_container_class(class) {
+        return false;
+    }
+    graphql_class_bases(class).iter().any(|base| {
+        let terminal = graphql_terminal_base(base);
+        matches!(
+            terminal.as_str(),
+            "BaseMutation" | "ModelMutation" | "ModelDeleteMutation" | "DeprecatedModelMutation"
+        ) || terminal == "Mutation"
+            || terminal.ends_with("Mutation") && !matches!(terminal.as_str(), "InputObjectType")
+    })
+}
+
+fn graphql_abstract_mutation_class_name(name: &str) -> bool {
+    matches!(
+        name,
+        "BaseMutation" | "ModelMutation" | "ModelDeleteMutation" | "DeprecatedModelMutation"
+    )
+}
+
+fn graphql_terminal_base(base: &str) -> String {
+    base.rsplit('.').next().unwrap_or(base).trim().to_string()
+}
+
+fn graphql_route_from_class(parsed: &ParsedFile, class: &PythonTopLevelClass) -> Option<Route> {
+    if !graphql_concrete_operation_class(class) {
+        return None;
+    }
+    let permissions = graphql_class_permissions(class);
+    Some(graphql_route(
+        parsed,
+        class.line,
+        "mutation",
+        lower_camel(&class.name),
+        Some(class.name.clone()),
+        None,
+        permissions,
+        &class.name,
+        "graphql_operation_class",
+    ))
+}
+
+fn graphql_routes_from_container(parsed: &ParsedFile, class: &PythonTopLevelClass) -> Vec<Route> {
+    let operation_kind = if class.name.ends_with("Queries") {
+        "query"
+    } else {
+        "mutation"
+    };
+    let mut routes = Vec::new();
+    for block in graphql_container_field_blocks(class) {
+        let Some((field_name, target_name)) = graphql_field_operation(&block) else {
+            continue;
+        };
+        let operation_name = lower_camel(target_name.as_deref().unwrap_or(&field_name));
+        let permissions = graphql_permissions_from_lines(block.iter().map(|(_, line)| line));
+        let line = block.first().map_or(class.line, |(line, _)| *line);
+        let handler_name = target_name.clone().unwrap_or_else(|| field_name.clone());
+        routes.push(graphql_route(
+            parsed,
+            line,
+            operation_kind,
+            operation_name,
+            target_name,
+            Some(field_name),
+            permissions,
+            &handler_name,
+            "graphql_root_field",
+        ));
+    }
+    routes
+}
+
+fn graphql_container_field_blocks(class: &PythonTopLevelClass) -> Vec<Vec<(usize, String)>> {
+    let mut blocks = Vec::new();
+    let mut current: Option<Vec<(usize, String)>> = None;
+    for (line, text) in &class.body {
+        if graphql_direct_class_assignment(text) {
+            if let Some(block) = current.take() {
+                blocks.push(block);
+            }
+            current = Some(vec![(*line, text.clone())]);
+        } else if let Some(block) = current.as_mut()
+            && (text.trim().is_empty() || leading_spaces(text) > 4)
+        {
+            block.push((*line, text.clone()));
+        } else if let Some(block) = current.take() {
+            blocks.push(block);
+        }
+    }
+    if let Some(block) = current {
+        blocks.push(block);
+    }
+    blocks
+}
+
+fn graphql_direct_class_assignment(line: &str) -> bool {
+    leading_spaces(line) == 4
+        && !line.trim_start().starts_with('@')
+        && !line.trim_start().starts_with("def ")
+        && !line.trim_start().starts_with("class ")
+        && line.trim().contains(" = ")
+}
+
+fn leading_spaces(line: &str) -> usize {
+    line.chars().take_while(|ch| *ch == ' ').count()
+}
+
+fn graphql_field_operation(block: &[(usize, String)]) -> Option<(String, Option<String>)> {
+    let first = block.first()?.1.trim();
+    let (field, right) = first.split_once('=')?;
+    let field_name = field.trim().to_string();
+    if field_name.is_empty() || field_name.starts_with('_') {
+        return None;
+    }
+    if let Some((target, _)) = right.split_once(".Field(") {
+        let target = graphql_terminal_base(target.trim());
+        if !target.is_empty() {
+            return Some((field_name, Some(target)));
+        }
+    }
+    let joined = block
+        .iter()
+        .map(|(_, line)| line.trim())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if joined.contains("Field(")
+        || joined.contains("graphene.List(")
+        || joined.contains("graphene.Field(")
+    {
+        Some((field_name, None))
+    } else {
+        None
+    }
+}
+
+fn graphql_class_permissions(class: &PythonTopLevelClass) -> Option<String> {
+    graphql_permissions_from_lines(class.body.iter().map(|(_, line)| line))
+}
+
+fn graphql_permissions_from_lines<'a>(lines: impl Iterator<Item = &'a String>) -> Option<String> {
+    let lines = lines.collect::<Vec<_>>();
+    for (index, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        let permission_offset = trimmed
+            .find("permissions =")
+            .or_else(|| trimmed.find("permissions="));
+        if let Some(offset) = permission_offset {
+            let mut value = trimmed[offset..].trim_end_matches(',').to_string();
+            if !graphql_permissions_balanced(&value) {
+                for next in lines.iter().skip(index + 1) {
+                    let next_trimmed = next.trim();
+                    value.push(' ');
+                    value.push_str(next_trimmed.trim_end_matches(','));
+                    if graphql_permissions_balanced(&value) {
+                        break;
+                    }
+                }
+            }
+            return Some(value);
+        }
+    }
+    None
+}
+
+fn graphql_permissions_balanced(value: &str) -> bool {
+    let open_parens = value.matches('(').count();
+    let close_parens = value.matches(')').count();
+    let open_brackets = value.matches('[').count();
+    let close_brackets = value.matches(']').count();
+    open_parens <= close_parens && open_brackets <= close_brackets
+}
+
+fn graphql_route(
+    parsed: &ParsedFile,
+    line: usize,
+    operation_kind: &str,
+    operation_name: String,
+    class_name: Option<String>,
+    field_name: Option<String>,
+    permissions: Option<String>,
+    handler_name: &str,
+    source_mechanism: &str,
+) -> Route {
+    let span = Span {
+        file: parsed.source.path.clone(),
+        line: line as u32,
+        column: 0,
+        byte_range: None,
+    };
+    let mut extensions = authmap_core::ExtensionMap::new();
+    extensions.insert(
+        "authmap.graphql".to_string(),
+        serde_json::json!({
+            "operation": operation_name,
+            "operation_kind": operation_kind,
+            "class_name": class_name,
+            "field_name": field_name,
+            "permissions": permissions,
+        }),
+    );
+    Route {
+        id: String::new(),
+        framework: Framework::Graphql,
+        method: if operation_kind == "mutation" {
+            "MUTATION"
+        } else {
+            "QUERY"
+        }
+        .to_string(),
+        path: format!("/graphql/{operation_name}"),
+        name: Some(operation_name),
+        tags: Vec::new(),
+        middleware: Vec::new(),
+        handler: Some(SymbolRef {
+            name: handler_name.to_string(),
+            span: Some(span.clone()),
+        }),
+        span: Some(span.clone()),
+        source_evidence: vec![authmap_source_evidence(
+            source_mechanism,
+            handler_name,
+            span.clone(),
+            Confidence::Medium,
+        )],
+        confidence: Confidence::Medium,
+        notes: Vec::new(),
+        extensions,
+    }
+}
+
+fn dedup_graphql_routes(routes: Vec<Route>) -> Vec<Route> {
+    let mut deduped: BTreeMap<(String, String), Route> = BTreeMap::new();
+    for route in routes {
+        let key = (route.method.clone(), route.path.clone());
+        match deduped.get(&key) {
+            Some(existing) if graphql_route_rank(existing) >= graphql_route_rank(&route) => {}
+            _ => {
+                deduped.insert(key, route);
+            }
+        }
+    }
+    deduped.into_values().collect()
+}
+
+fn graphql_route_rank(route: &Route) -> u8 {
+    let has_permissions = route
+        .extensions
+        .get("authmap.graphql")
+        .and_then(|value| value.get("permissions"))
+        .is_some_and(|value| !value.is_null());
+    let is_class_route = route
+        .source_evidence
+        .iter()
+        .any(|item| item.mechanism == "graphql_operation_class");
+    match (has_permissions, is_class_route) {
+        (true, true) => 3,
+        (true, false) => 2,
+        (false, true) => 1,
+        (false, false) => 0,
+    }
+}
+
+fn lower_camel(value: &str) -> String {
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return String::new();
+    };
+    format!(
+        "{}{}",
+        first.to_ascii_lowercase(),
+        chars.collect::<String>()
+    )
+}
+
+fn authmap_source_evidence(
+    mechanism: &str,
+    symbol_name: &str,
+    span: Span,
+    confidence: Confidence,
+) -> SourceEvidence {
+    SourceEvidence {
+        mechanism: mechanism.to_string(),
+        symbol: Some(SymbolRef {
+            name: symbol_name.to_string(),
+            span: Some(span.clone()),
+        }),
+        span: Some(span),
+        confidence,
+        notes: Vec::new(),
+        extensions: authmap_core::ExtensionMap::new(),
+    }
+}
+
 impl AdapterRegistry {
     pub fn built_in() -> Self {
         Self {
@@ -75,6 +649,8 @@ impl AdapterRegistry {
                 Box::new(DjangoAdapter),
                 Box::new(ExpressAdapter),
                 Box::new(NextJsAdapter),
+                Box::new(TrpcAdapter),
+                Box::new(GraphqlAdapter),
             ],
         }
     }
@@ -136,6 +712,8 @@ impl FrameworkAdapter for FastApiAdapter {
                 parsed,
                 module_index: &module_index,
                 index: &mut index,
+                static_strings: HashMap::new(),
+                dependency_lists: Vec::new(),
             };
             collector.collect(root);
         }
@@ -157,6 +735,7 @@ struct Binding {
     kind: BindingKind,
     prefix: Option<String>,
     tags: Vec<String>,
+    dependencies: Vec<SymbolRef>,
     dynamic_prefix: bool,
 }
 
@@ -172,8 +751,46 @@ struct IncludeRouter {
     app_name: String,
     router_name: String,
     imported: Option<ImportBinding>,
+    collection_name: Option<String>,
     prefix: Option<String>,
+    dependencies: Vec<SymbolRef>,
     dynamic_prefix: bool,
+}
+
+#[derive(Clone, Debug)]
+struct RouterFactory {
+    file: String,
+    name: String,
+    router_name: String,
+}
+
+#[derive(Clone, Debug)]
+struct RouterReference {
+    file: String,
+    name: String,
+}
+
+#[derive(Clone, Debug)]
+struct RouterCollection {
+    file: String,
+    name: String,
+    routers: Vec<RouterReference>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DependencyListUpdateKind {
+    Assignment,
+    Mutation,
+}
+
+#[derive(Clone, Debug)]
+struct DependencyListUpdate {
+    name: String,
+    symbols: Vec<SymbolRef>,
+    dynamic: bool,
+    span: Span,
+    start_byte: usize,
+    kind: DependencyListUpdateKind,
 }
 
 #[derive(Clone, Debug)]
@@ -185,6 +802,7 @@ struct DiscoveredRoute {
     dynamic_path: bool,
     name: Option<String>,
     tags: Vec<String>,
+    dependencies: Vec<SymbolRef>,
     handler: SymbolRef,
     span: Span,
     notes: Vec<String>,
@@ -194,6 +812,8 @@ struct DiscoveredRoute {
 struct FastApiIndex {
     bindings: Vec<Binding>,
     imports_by_file: HashMap<String, HashMap<String, ImportBinding>>,
+    factories: Vec<RouterFactory>,
+    collections: Vec<RouterCollection>,
     includes: Vec<IncludeRouter>,
     routes: Vec<DiscoveredRoute>,
     diagnostics: Vec<Diagnostic>,
@@ -212,61 +832,124 @@ impl FastApiIndex {
             }
             bindings_by_file_name.insert((binding.file.clone(), binding.name.clone()), binding);
         }
+        let factories_by_file_name = self
+            .factories
+            .iter()
+            .map(|factory| {
+                (
+                    (factory.file.clone(), factory.name.clone()),
+                    factory.router_name.clone(),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+        let collections_by_file_name = self
+            .collections
+            .iter()
+            .map(|collection| {
+                (
+                    (collection.file.clone(), collection.name.clone()),
+                    collection.routers.clone(),
+                )
+            })
+            .collect::<HashMap<_, _>>();
 
         let mut emitted = Vec::<Route>::new();
         let mut seen = BTreeSet::<(String, u32, String, String, String)>::new();
 
-        for route in &self.routes {
-            let Some(binding) =
-                bindings_by_file_name.get(&(route.owner_file.clone(), route.owner_name.clone()))
-            else {
-                continue;
-            };
-
-            if binding.kind == BindingKind::App
-                && let Some(emitted_route) = build_route(route, None, false, binding)
-            {
-                push_unique(&mut emitted, &mut seen, emitted_route);
-            }
-        }
+        let mut includes_by_parent = HashMap::<(String, String), Vec<IncludeRouter>>::new();
 
         for include in &self.includes {
-            let Some(app_binding) =
+            let Some(parent_binding) =
                 bindings_by_file_name.get(&(include.file.clone(), include.app_name.clone()))
             else {
                 continue;
             };
-            if app_binding.kind != BindingKind::App {
-                continue;
-            }
+            includes_by_parent
+                .entry((parent_binding.file.clone(), parent_binding.name.clone()))
+                .or_default()
+                .push(include.clone());
+        }
 
-            let target = if let Some(imported) = &include.imported {
-                router_bindings_by_file_name
-                    .iter()
-                    .find(|((file, name), _)| {
-                        name == &imported.imported && module_matches(file, &imported.module)
-                    })
-                    .map(|(_, binding)| binding.clone())
-            } else {
-                router_bindings_by_file_name
-                    .get(&(include.file.clone(), include.router_name.clone()))
-                    .cloned()
-            };
+        let routes_by_owner = self.routes.iter().fold(
+            HashMap::<(String, String), Vec<&DiscoveredRoute>>::new(),
+            |mut routes, route| {
+                routes
+                    .entry((route.owner_file.clone(), route.owner_name.clone()))
+                    .or_default()
+                    .push(route);
+                routes
+            },
+        );
 
-            let Some(router_binding) = target else {
-                continue;
-            };
+        for app_binding in bindings_by_file_name
+            .values()
+            .filter(|binding| binding.kind == BindingKind::App)
+        {
+            let mut stack = vec![(
+                app_binding.clone(),
+                None::<String>,
+                Vec::<SymbolRef>::new(),
+                false,
+            )];
+            let mut visited = BTreeSet::<(String, String, String, String, bool)>::new();
+            while let Some((binding, prefix, dependencies, dynamic_prefix)) = stack.pop() {
+                let visit_key = (
+                    binding.file.clone(),
+                    binding.name.clone(),
+                    prefix.clone().unwrap_or_default(),
+                    dependencies
+                        .iter()
+                        .map(|dependency| dependency.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(","),
+                    dynamic_prefix,
+                );
+                if !visited.insert(visit_key) {
+                    continue;
+                }
 
-            for route in self.routes.iter().filter(|route| {
-                route.owner_file == router_binding.file && route.owner_name == router_binding.name
-            }) {
-                if let Some(emitted_route) = build_route(
-                    route,
-                    include.prefix.as_deref(),
-                    include.dynamic_prefix,
-                    &router_binding,
-                ) {
-                    push_unique(&mut emitted, &mut seen, emitted_route);
+                if let Some(routes) =
+                    routes_by_owner.get(&(binding.file.clone(), binding.name.clone()))
+                {
+                    for route in routes {
+                        if let Some(emitted_route) = build_route(
+                            route,
+                            prefix.as_deref(),
+                            &dependencies,
+                            dynamic_prefix,
+                            &binding,
+                        ) {
+                            push_unique(&mut emitted, &mut seen, emitted_route);
+                        }
+                    }
+                }
+
+                let parent_prefix = prefix_with_binding(prefix.as_deref(), &binding);
+                let Some(includes) =
+                    includes_by_parent.get(&(binding.file.clone(), binding.name.clone()))
+                else {
+                    continue;
+                };
+                for include in includes {
+                    let include_prefix =
+                        join_optional_paths(parent_prefix.as_deref(), include.prefix.as_deref());
+                    let mut include_dependencies = dependencies.clone();
+                    include_dependencies.extend(include.dependencies.clone());
+                    let include_dynamic_prefix =
+                        dynamic_prefix || binding.dynamic_prefix || include.dynamic_prefix;
+                    for target in resolve_fastapi_include_targets(
+                        include,
+                        &router_bindings_by_file_name,
+                        &factories_by_file_name,
+                        &collections_by_file_name,
+                    ) {
+                        stack.push((
+                            target,
+                            include_prefix.clone(),
+                            include_dependencies.clone(),
+                            include_dynamic_prefix,
+                        ));
+                    }
                 }
             }
         }
@@ -290,6 +973,7 @@ impl FastApiIndex {
 fn build_route(
     route: &DiscoveredRoute,
     include_prefix: Option<&str>,
+    include_dependencies: &[SymbolRef],
     include_dynamic_prefix: bool,
     owner_binding: &Binding,
 ) -> Option<Route> {
@@ -323,6 +1007,9 @@ fn build_route(
     }
     let mut tags = owner_binding.tags.clone();
     tags.extend(route.tags.clone());
+    let mut middleware = owner_binding.dependencies.clone();
+    middleware.extend(include_dependencies.iter().cloned());
+    middleware.extend(route.dependencies.clone());
 
     Some(Route {
         id: String::new(),
@@ -331,7 +1018,7 @@ fn build_route(
         path,
         name: route.name.clone(),
         tags,
-        middleware: Vec::new(),
+        middleware,
         handler: Some(route.handler.clone()),
         span: Some(route.span.clone()),
         source_evidence: Vec::new(),
@@ -345,7 +1032,7 @@ fn push_unique(
     routes: &mut Vec<Route>,
     seen: &mut BTreeSet<(String, u32, String, String, String)>,
     route: Route,
-) {
+) -> bool {
     let key = (
         route
             .span
@@ -361,6 +1048,9 @@ fn push_unique(
     );
     if seen.insert(key) {
         routes.push(route);
+        true
+    } else {
+        false
     }
 }
 
@@ -396,6 +1086,8 @@ struct FileCollector<'a> {
     parsed: &'a ParsedFile,
     module_index: &'a BTreeMap<String, String>,
     index: &'a mut FastApiIndex,
+    static_strings: HashMap<String, String>,
+    dependency_lists: Vec<DependencyListUpdate>,
 }
 
 impl<'a> FileCollector<'a> {
@@ -404,7 +1096,10 @@ impl<'a> FileCollector<'a> {
             self.parsed.source.path.clone(),
             parse_imports(self.parsed, self.module_index),
         );
+        self.static_strings = collect_module_static_strings(self.parsed, root);
         self.walk_for_bindings(root);
+        self.walk_for_dependency_lists(root);
+        self.walk_for_factories(root);
         self.walk_for_routes_and_includes(root);
     }
 
@@ -417,6 +1112,32 @@ impl<'a> FileCollector<'a> {
             let mut cursor = node.walk();
             stack.extend(node.children(&mut cursor));
         }
+    }
+
+    fn walk_for_factories(&mut self, node: Node<'_>) {
+        let mut stack = vec![node];
+        while let Some(node) = stack.pop() {
+            if node.kind() == "function_definition" {
+                self.collect_router_factory(node);
+            }
+            let mut cursor = node.walk();
+            stack.extend(node.children(&mut cursor));
+        }
+    }
+
+    fn walk_for_dependency_lists(&mut self, node: Node<'_>) {
+        let mut stack = vec![node];
+        while let Some(node) = stack.pop() {
+            match node.kind() {
+                "assignment" => self.collect_dependency_list_assignment(node),
+                "call" => self.collect_dependency_list_mutation(node),
+                _ => {}
+            }
+            let mut cursor = node.walk();
+            stack.extend(node.children(&mut cursor));
+        }
+        self.dependency_lists
+            .sort_by_key(|update| (update.start_byte, update.name.clone()));
     }
 
     fn walk_for_routes_and_includes(&mut self, node: Node<'_>) {
@@ -442,6 +1163,10 @@ impl<'a> FileCollector<'a> {
         let Some(name) = identifier_text(self.parsed, left) else {
             return;
         };
+        if is_router_collection_literal(self.parsed, right) {
+            self.collect_router_collection(name, right);
+            return;
+        }
         let Some(call) = find_first_kind(right, "call") else {
             return;
         };
@@ -455,6 +1180,7 @@ impl<'a> FileCollector<'a> {
         let kind = match function_name.as_str() {
             "FastAPI" => BindingKind::App,
             "APIRouter" => BindingKind::Router,
+            name if name.ends_with("Router") => BindingKind::Router,
             _ => return,
         };
         let prefix = keyword_string(self.parsed, call, "prefix");
@@ -473,8 +1199,106 @@ impl<'a> FileCollector<'a> {
             kind,
             prefix,
             tags: keyword_string_list(self.parsed, call, "tags"),
+            dependencies: fastapi_dependencies_from_keyword(self.parsed, call, "dependencies"),
             dynamic_prefix,
         });
+    }
+
+    fn collect_dependency_list_assignment(&mut self, node: Node<'_>) {
+        let Some(left) = node.child_by_field_name("left") else {
+            return;
+        };
+        let Some(right) = node.child_by_field_name("right") else {
+            return;
+        };
+        let Some(name) = identifier_text(self.parsed, left) else {
+            return;
+        };
+        let symbols = fastapi_dependency_symbols(self.parsed, right);
+        let sequence = matches!(right.kind(), "list" | "tuple");
+        if symbols.is_empty() && !(sequence && name.to_ascii_lowercase().contains("dependenc")) {
+            return;
+        }
+        self.dependency_lists.push(DependencyListUpdate {
+            name,
+            symbols,
+            dynamic: !sequence,
+            span: self.parsed.span_for(right),
+            start_byte: node.start_byte(),
+            kind: DependencyListUpdateKind::Assignment,
+        });
+    }
+
+    fn collect_dependency_list_mutation(&mut self, node: Node<'_>) {
+        let Some(function) = node.child_by_field_name("function") else {
+            return;
+        };
+        let Some((name, method)) = attribute_target(self.parsed, function) else {
+            return;
+        };
+        if !matches!(method.as_str(), "append" | "extend") {
+            return;
+        }
+        let Some(argument) = first_argument_node(node) else {
+            return;
+        };
+        let symbols = fastapi_dependency_symbols(self.parsed, argument);
+        if symbols.is_empty() && !name.to_ascii_lowercase().contains("dependenc") {
+            return;
+        }
+        let dynamic = symbols.is_empty();
+        self.dependency_lists.push(DependencyListUpdate {
+            name,
+            symbols,
+            dynamic,
+            span: self.parsed.span_for(argument),
+            start_byte: node.start_byte(),
+            kind: DependencyListUpdateKind::Mutation,
+        });
+    }
+
+    fn collect_router_collection(&mut self, name: String, value: Node<'_>) {
+        let routers = router_references_from_collection(
+            self.parsed,
+            value,
+            self.index.imports_by_file.get(&self.parsed.source.path),
+        );
+        if routers.is_empty() {
+            return;
+        }
+        self.index.collections.push(RouterCollection {
+            file: self.parsed.source.path.clone(),
+            name,
+            routers,
+        });
+    }
+
+    fn collect_router_factory(&mut self, node: Node<'_>) {
+        let Some(name_node) = node.child_by_field_name("name") else {
+            return;
+        };
+        let Some(name) = identifier_text(self.parsed, name_node) else {
+            return;
+        };
+        let Some(body) = node.child_by_field_name("body") else {
+            return;
+        };
+        let mut stack = vec![body];
+        while let Some(current) = stack.pop() {
+            if current.kind() == "return_statement"
+                && let Some(argument) = return_argument(current)
+                && let Some(router_name) = identifier_text(self.parsed, argument)
+            {
+                self.index.factories.push(RouterFactory {
+                    file: self.parsed.source.path.clone(),
+                    name,
+                    router_name,
+                });
+                return;
+            }
+            let mut cursor = current.walk();
+            stack.extend(current.children(&mut cursor));
+        }
     }
 
     fn collect_decorated_definition(&mut self, node: Node<'_>) {
@@ -506,7 +1330,17 @@ impl<'a> FileCollector<'a> {
             let Some(methods) = methods_for_decorator(self.parsed, call, &decorator_name) else {
                 continue;
             };
-            let (mut path, dynamic_path) = route_path(self.parsed, call);
+            let route_path_strings = route_path_static_strings(
+                self.parsed,
+                call,
+                function_default_static_strings(
+                    self.parsed,
+                    enclosing_python_function(call),
+                    &self.static_strings,
+                ),
+                &self.static_strings,
+            );
+            let (mut path, dynamic_path) = route_path(self.parsed, call, &route_path_strings);
             if path.is_none() {
                 self.index.diagnostics.push(diagnostic(
                     "fastapi_dynamic_route_path",
@@ -541,6 +1375,11 @@ impl<'a> FileCollector<'a> {
                     dynamic_path,
                     name: keyword_string(self.parsed, call, "name"),
                     tags: keyword_string_list(self.parsed, call, "tags"),
+                    dependencies: fastapi_dependencies_from_keyword(
+                        self.parsed,
+                        call,
+                        "dependencies",
+                    ),
                     handler: handler.clone(),
                     span: self.parsed.span_for(call),
                     notes: notes.clone(),
@@ -560,9 +1399,13 @@ impl<'a> FileCollector<'a> {
             return;
         }
 
-        let Some(router_name) = first_identifier_argument(self.parsed, node) else {
+        let Some((router_name, mut collection_name)) = first_router_argument(self.parsed, node)
+        else {
             return;
         };
+        if collection_name.is_none() {
+            collection_name = enclosing_for_collection(self.parsed, node, &router_name);
+        }
 
         let imported = self
             .index
@@ -585,7 +1428,9 @@ impl<'a> FileCollector<'a> {
             app_name: app_name.clone(),
             router_name,
             imported,
+            collection_name,
             prefix,
+            dependencies: self.fastapi_include_dependencies(node),
             dynamic_prefix,
         });
 
@@ -602,6 +1447,65 @@ impl<'a> FileCollector<'a> {
             ));
         }
     }
+
+    fn fastapi_include_dependencies(&self, call: Node<'_>) -> Vec<SymbolRef> {
+        let Some(value) = keyword_value(self.parsed, call, "dependencies") else {
+            return Vec::new();
+        };
+        let direct = fastapi_dependency_symbols(self.parsed, value);
+        if !direct.is_empty() || matches!(value.kind(), "list" | "tuple") {
+            return direct;
+        }
+        if let Some(name) = identifier_text(self.parsed, value) {
+            if let Some(mut resolved) = self.resolve_dependency_list(&name, call.start_byte()) {
+                if resolved.is_empty() {
+                    return Vec::new();
+                }
+                return resolved.drain(..).collect();
+            }
+        }
+        vec![dynamic_fastapi_dependency_symbol(self.parsed, value)]
+    }
+
+    fn resolve_dependency_list(&self, name: &str, before_byte: usize) -> Option<Vec<SymbolRef>> {
+        let updates = self
+            .dependency_lists
+            .iter()
+            .filter(|update| update.name == name && update.start_byte < before_byte)
+            .collect::<Vec<_>>();
+        if updates.is_empty() {
+            return None;
+        }
+        let start = updates
+            .iter()
+            .rposition(|update| update.kind == DependencyListUpdateKind::Assignment)
+            .unwrap_or(0);
+        let mut symbols = Vec::new();
+        let mut dynamic_span = None;
+        for update in updates.into_iter().skip(start) {
+            for symbol in &update.symbols {
+                push_unique_symbol_ref(&mut symbols, symbol.clone());
+            }
+            if update.dynamic {
+                dynamic_span = Some(update.span.clone());
+            }
+        }
+        if let Some(span) = dynamic_span {
+            push_unique_symbol_ref(
+                &mut symbols,
+                SymbolRef {
+                    name: "dynamic_policy_dependencies".to_string(),
+                    span: Some(span),
+                },
+            );
+        }
+        Some(symbols)
+    }
+}
+
+fn return_argument(node: Node<'_>) -> Option<Node<'_>> {
+    let mut cursor = node.walk();
+    node.children(&mut cursor).find(|child| child.is_named())
 }
 
 fn build_module_index(parsed_files: &[ParsedFile]) -> BTreeMap<String, String> {
@@ -714,6 +1618,193 @@ fn module_matches(file: &str, module: &str) -> bool {
     dotted.ends_with(module)
 }
 
+#[derive(Clone, Debug)]
+enum StaticStringExpr {
+    Literal(String),
+    Alias(String),
+}
+
+fn collect_module_static_strings(parsed: &ParsedFile, root: Node<'_>) -> HashMap<String, String> {
+    let mut raw = Vec::<(String, StaticStringExpr)>::new();
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if matches!(node.kind(), "assignment" | "annotated_assignment")
+            && !is_inside_python_definition(node)
+            && let Some((name, value)) = static_string_assignment(parsed, node)
+        {
+            raw.push((name, value));
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor).filter(|child| child.is_named()));
+    }
+    resolve_static_string_assignments(raw, &HashMap::new())
+}
+
+fn function_default_static_strings(
+    parsed: &ParsedFile,
+    function: Option<Node<'_>>,
+    module_strings: &HashMap<String, String>,
+) -> HashMap<String, String> {
+    let Some(function) = function else {
+        return HashMap::new();
+    };
+    let Some(parameters) = function.child_by_field_name("parameters") else {
+        return HashMap::new();
+    };
+    let mut raw = Vec::<(String, StaticStringExpr)>::new();
+    let mut stack = vec![parameters];
+    while let Some(node) = stack.pop() {
+        if matches!(node.kind(), "default_parameter" | "typed_default_parameter")
+            && let Some(name_node) = node
+                .child_by_field_name("name")
+                .or_else(|| node.child_by_field_name("pattern"))
+            && let Some(value_node) = node.child_by_field_name("value")
+            && let Some(name) = identifier_text(parsed, name_node)
+            && let Some(value) = static_string_expr(parsed, value_node)
+        {
+            raw.push((name, value));
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor).filter(|child| child.is_named()));
+    }
+    if raw.is_empty() {
+        raw = function_default_static_strings_from_text(parsed, parameters);
+    }
+    resolve_static_string_assignments(raw, module_strings)
+}
+
+fn function_local_static_strings(
+    parsed: &ParsedFile,
+    function: Node<'_>,
+    base_strings: &HashMap<String, String>,
+) -> HashMap<String, String> {
+    let Some(body) = function.child_by_field_name("body") else {
+        return HashMap::new();
+    };
+    let mut raw = Vec::<(String, StaticStringExpr)>::new();
+    let mut stack = vec![body];
+    while let Some(node) = stack.pop() {
+        if matches!(node.kind(), "assignment" | "annotated_assignment")
+            && enclosing_python_function(node).is_some_and(|parent| parent.id() == function.id())
+            && let Some((name, value)) = static_string_assignment(parsed, node)
+        {
+            raw.push((name, value));
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor).filter(|child| child.is_named()));
+    }
+    resolve_static_string_assignments(raw, base_strings)
+}
+
+fn static_string_assignment(
+    parsed: &ParsedFile,
+    node: Node<'_>,
+) -> Option<(String, StaticStringExpr)> {
+    let left = node
+        .child_by_field_name("left")
+        .or_else(|| node.child_by_field_name("name"))?;
+    let right = node
+        .child_by_field_name("right")
+        .or_else(|| node.child_by_field_name("value"))?;
+    let name = identifier_text(parsed, left)?;
+    let value = static_string_expr(parsed, right)?;
+    Some((name, value))
+}
+
+fn static_string_expr(parsed: &ParsedFile, node: Node<'_>) -> Option<StaticStringExpr> {
+    if let Some(value) = string_literal(parsed, node) {
+        return Some(StaticStringExpr::Literal(value));
+    }
+    identifier_text(parsed, node).map(StaticStringExpr::Alias)
+}
+
+fn resolve_static_string_assignments(
+    raw: Vec<(String, StaticStringExpr)>,
+    base: &HashMap<String, String>,
+) -> HashMap<String, String> {
+    let mut resolved = base.clone();
+    let mut pending = raw;
+    let mut changed = true;
+    while changed {
+        changed = false;
+        pending.retain(|(name, value)| {
+            let next = match value {
+                StaticStringExpr::Literal(value) => Some(value.clone()),
+                StaticStringExpr::Alias(alias) => resolved.get(alias).cloned(),
+            };
+            if let Some(next) = next {
+                resolved.insert(name.clone(), next);
+                changed = true;
+                false
+            } else {
+                true
+            }
+        });
+    }
+    resolved
+        .into_iter()
+        .filter(|(name, _)| !base.contains_key(name))
+        .collect()
+}
+
+fn function_default_static_strings_from_text(
+    parsed: &ParsedFile,
+    parameters: Node<'_>,
+) -> Vec<(String, StaticStringExpr)> {
+    let Some(text) = parsed.text_for(parameters) else {
+        return Vec::new();
+    };
+    text.trim()
+        .trim_start_matches('(')
+        .trim_end_matches(')')
+        .split(',')
+        .filter_map(|parameter| {
+            let (left, right) = parameter.split_once('=')?;
+            let name = left
+                .rsplit_once(':')
+                .map_or(left, |(name, _)| name)
+                .trim()
+                .trim_start_matches('*')
+                .trim();
+            if name.is_empty() {
+                return None;
+            }
+            let value = decode_python_string_literal(right.trim())
+                .map(StaticStringExpr::Literal)
+                .or_else(|| {
+                    right
+                        .trim()
+                        .chars()
+                        .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+                        .then(|| StaticStringExpr::Alias(right.trim().to_string()))
+                })?;
+            Some((name.to_string(), value))
+        })
+        .collect()
+}
+
+fn enclosing_python_function(node: Node<'_>) -> Option<Node<'_>> {
+    let mut current = node.parent();
+    while let Some(node) = current {
+        if node.kind() == "function_definition" {
+            return Some(node);
+        }
+        current = node.parent();
+    }
+    None
+}
+
+fn is_inside_python_definition(node: Node<'_>) -> bool {
+    let mut current = node.parent();
+    while let Some(node) = current {
+        if matches!(node.kind(), "function_definition" | "class_definition") {
+            return true;
+        }
+        current = node.parent();
+    }
+    false
+}
+
 fn find_first_kind<'tree>(node: Node<'tree>, kind: &str) -> Option<Node<'tree>> {
     let mut stack = vec![node];
     while let Some(node) = stack.pop() {
@@ -792,14 +1883,63 @@ fn methods_for_decorator(
     }
 }
 
-fn route_path(parsed: &ParsedFile, call: Node<'_>) -> (Option<String>, bool) {
-    if let Some(path) = first_string_argument(parsed, call) {
-        return (Some(path), false);
+fn route_path(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    static_strings: &HashMap<String, String>,
+) -> (Option<String>, bool) {
+    if let Some(argument) = first_argument_node(call) {
+        return (
+            static_string_value(parsed, argument, static_strings),
+            !static_string_expr_is_resolved(parsed, argument, static_strings),
+        );
     }
-    let keyword_path = keyword_string(parsed, call, "path");
+    let keyword_path = keyword_value(parsed, call, "path")
+        .and_then(|value| static_string_value(parsed, value, static_strings));
     let unresolved_keyword_path = keyword_path.is_none();
     let dynamic = keyword_exists(parsed, call, "path") || first_argument_exists(call);
     (keyword_path, dynamic && unresolved_keyword_path)
+}
+
+fn route_path_static_strings(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    function_strings: HashMap<String, String>,
+    module_strings: &HashMap<String, String>,
+) -> HashMap<String, String> {
+    let mut strings = module_strings.clone();
+    strings.extend(function_strings);
+    if let Some(function) = enclosing_python_function(call) {
+        strings.extend(function_local_static_strings(parsed, function, &strings));
+    }
+    strings
+}
+
+fn static_string_expr_is_resolved(
+    parsed: &ParsedFile,
+    node: Node<'_>,
+    static_strings: &HashMap<String, String>,
+) -> bool {
+    static_string_value(parsed, node, static_strings).is_some()
+}
+
+fn static_string_value(
+    parsed: &ParsedFile,
+    node: Node<'_>,
+    static_strings: &HashMap<String, String>,
+) -> Option<String> {
+    if let Some(value) = string_literal(parsed, node) {
+        return Some(value);
+    }
+    identifier_text(parsed, node).and_then(|name| static_strings.get(&name).cloned())
+}
+
+fn first_argument_node(call: Node<'_>) -> Option<Node<'_>> {
+    let arguments = call.child_by_field_name("arguments")?;
+    let mut cursor = arguments.walk();
+    arguments
+        .children(&mut cursor)
+        .find(|child| child.is_named() && child.kind() != "keyword_argument")
 }
 
 fn first_argument_exists(call: Node<'_>) -> bool {
@@ -812,28 +1952,221 @@ fn first_argument_exists(call: Node<'_>) -> bool {
         .any(|child| child.is_named() && child.kind() != "keyword_argument")
 }
 
-fn first_string_argument(parsed: &ParsedFile, call: Node<'_>) -> Option<String> {
+fn first_router_argument(parsed: &ParsedFile, call: Node<'_>) -> Option<(String, Option<String>)> {
     let arguments = call.child_by_field_name("arguments")?;
     let mut cursor = arguments.walk();
     for child in arguments.children(&mut cursor) {
         if !child.is_named() || child.kind() == "keyword_argument" {
             continue;
         }
-        return string_literal(parsed, child);
+        if let Some(name) = identifier_text(parsed, child) {
+            return Some((name, None));
+        }
+        if child.kind() == "call" {
+            let function = child.child_by_field_name("function")?;
+            if let Some(name) = terminal_name(parsed, function) {
+                return Some((name, None));
+            }
+        }
+        return None;
     }
     None
 }
 
-fn first_identifier_argument(parsed: &ParsedFile, call: Node<'_>) -> Option<String> {
-    let arguments = call.child_by_field_name("arguments")?;
-    let mut cursor = arguments.walk();
-    for child in arguments.children(&mut cursor) {
-        if !child.is_named() || child.kind() == "keyword_argument" {
-            continue;
+fn enclosing_for_collection(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    loop_variable: &str,
+) -> Option<String> {
+    let mut current = call.parent();
+    while let Some(node) = current {
+        if node.kind() == "for_statement"
+            && let Some(text) = parsed.text_for(node)
+            && let Some(rest) = text.trim_start().strip_prefix("for ")
+            && let Some((left, right)) = rest.split_once(" in ")
+            && left.trim() == loop_variable
+        {
+            let collection = right
+                .split([':', '\n'])
+                .next()
+                .map(str::trim)
+                .unwrap_or_default();
+            if collection
+                .chars()
+                .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+                && !collection.is_empty()
+            {
+                return Some(collection.to_string());
+            }
         }
-        return identifier_text(parsed, child);
+        current = node.parent();
     }
     None
+}
+
+fn router_references_from_collection(
+    parsed: &ParsedFile,
+    value: Node<'_>,
+    imports: Option<&HashMap<String, ImportBinding>>,
+) -> Vec<RouterReference> {
+    let mut routers = Vec::new();
+    let mut stack = vec![value];
+    while let Some(node) = stack.pop() {
+        if node != value
+            && let Some(reference) = router_reference_from_node(parsed, node, imports)
+        {
+            routers.push(reference);
+            continue;
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor).filter(|child| child.is_named()));
+    }
+    routers
+}
+
+fn is_router_collection_literal(parsed: &ParsedFile, node: Node<'_>) -> bool {
+    if matches!(node.kind(), "list" | "tuple") {
+        return true;
+    }
+    parsed
+        .text_for(node)
+        .is_some_and(|text| text.trim_start().starts_with('(') && text.contains(','))
+}
+
+fn router_reference_from_node(
+    parsed: &ParsedFile,
+    node: Node<'_>,
+    imports: Option<&HashMap<String, ImportBinding>>,
+) -> Option<RouterReference> {
+    if let Some(name) = identifier_text(parsed, node) {
+        if let Some(imported) = imports.and_then(|imports| imports.get(&name)) {
+            return Some(RouterReference {
+                file: imported.module.clone(),
+                name: imported.imported.clone(),
+            });
+        }
+        return Some(RouterReference {
+            file: parsed.source.path.clone(),
+            name,
+        });
+    }
+    if node.kind() == "call" {
+        let function = node.child_by_field_name("function")?;
+        let name = terminal_name(parsed, function)?;
+        if let Some(imported) = imports.and_then(|imports| imports.get(&name)) {
+            return Some(RouterReference {
+                file: imported.module.clone(),
+                name: imported.imported.clone(),
+            });
+        }
+        return Some(RouterReference {
+            file: parsed.source.path.clone(),
+            name,
+        });
+    }
+    let text = parsed.text_for(node)?;
+    let parts = text
+        .split('.')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    if parts.len() < 2 {
+        return None;
+    }
+    let local = parts[0];
+    let name = parts.last()?.to_string();
+    let module = if let Some(imported) = imports.and_then(|imports| imports.get(local)) {
+        let mut module = imported.module.clone();
+        module.push('.');
+        module.push_str(&imported.imported);
+        if parts.len() > 2 {
+            module.push('.');
+            module.push_str(&parts[1..parts.len() - 1].join("."));
+        }
+        module
+    } else {
+        parts[..parts.len() - 1].join(".")
+    };
+    Some(RouterReference { file: module, name })
+}
+
+fn resolve_fastapi_include_targets(
+    include: &IncludeRouter,
+    router_bindings: &HashMap<(String, String), Binding>,
+    factories: &HashMap<(String, String), String>,
+    collections: &HashMap<(String, String), Vec<RouterReference>>,
+) -> Vec<Binding> {
+    if let Some(collection_name) = &include.collection_name {
+        let Some(routers) = collections.get(&(include.file.clone(), collection_name.clone()))
+        else {
+            return Vec::new();
+        };
+        return routers
+            .iter()
+            .filter_map(|reference| {
+                resolve_fastapi_router_reference(reference, router_bindings, factories)
+            })
+            .collect();
+    }
+
+    let reference = if let Some(imported) = &include.imported {
+        RouterReference {
+            file: imported.module.clone(),
+            name: imported.imported.clone(),
+        }
+    } else {
+        RouterReference {
+            file: include.file.clone(),
+            name: include.router_name.clone(),
+        }
+    };
+    resolve_fastapi_router_reference(&reference, router_bindings, factories)
+        .into_iter()
+        .collect()
+}
+
+fn resolve_fastapi_router_reference(
+    reference: &RouterReference,
+    router_bindings: &HashMap<(String, String), Binding>,
+    factories: &HashMap<(String, String), String>,
+) -> Option<Binding> {
+    if let Some(binding) = router_bindings.get(&(reference.file.clone(), reference.name.clone())) {
+        return Some(binding.clone());
+    }
+    if let Some(router_name) = factories.get(&(reference.file.clone(), reference.name.clone())) {
+        return router_bindings
+            .get(&(reference.file.clone(), router_name.clone()))
+            .cloned();
+    }
+    router_bindings
+        .iter()
+        .find(|((file, name), _)| name == &reference.name && module_matches(file, &reference.file))
+        .map(|(_, binding)| binding.clone())
+        .or_else(|| {
+            factories
+                .iter()
+                .find(|((file, name), _)| {
+                    name == &reference.name && module_matches(file, &reference.file)
+                })
+                .and_then(|((file, _), router_name)| {
+                    router_bindings
+                        .get(&(file.clone(), router_name.clone()))
+                        .cloned()
+                })
+        })
+}
+
+fn prefix_with_binding(prefix: Option<&str>, binding: &Binding) -> Option<String> {
+    join_optional_paths(prefix, binding.prefix.as_deref())
+}
+
+fn join_optional_paths(left: Option<&str>, right: Option<&str>) -> Option<String> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(join_paths(left, right)),
+        (Some(left), None) => Some(left.to_string()),
+        (None, Some(right)) => Some(right.to_string()),
+        (None, None) => None,
+    }
 }
 
 fn keyword_exists(parsed: &ParsedFile, call: Node<'_>, name: &str) -> bool {
@@ -862,6 +2195,77 @@ fn keyword_string_list(parsed: &ParsedFile, call: Node<'_>, name: &str) -> Vec<S
         }
     }
     values
+}
+
+fn fastapi_dependencies_from_keyword(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    name: &str,
+) -> Vec<SymbolRef> {
+    let Some(value) = keyword_value(parsed, call, name) else {
+        return Vec::new();
+    };
+    fastapi_dependency_symbols(parsed, value)
+}
+
+fn fastapi_dependency_symbols(parsed: &ParsedFile, node: Node<'_>) -> Vec<SymbolRef> {
+    let mut symbols = Vec::new();
+    let mut stack = vec![node];
+    while let Some(current) = stack.pop() {
+        if current.kind() == "call"
+            && let Some(function) = current.child_by_field_name("function")
+            && terminal_name(parsed, function).as_deref() == Some("Depends")
+            && let Some(symbol) = first_python_symbol_argument(parsed, current)
+        {
+            symbols.push(symbol);
+            continue;
+        }
+        let mut cursor = current.walk();
+        stack.extend(
+            current
+                .children(&mut cursor)
+                .filter(|child| child.is_named()),
+        );
+    }
+    symbols
+}
+
+fn dynamic_fastapi_dependency_symbol(parsed: &ParsedFile, node: Node<'_>) -> SymbolRef {
+    SymbolRef {
+        name: "dynamic_policy_dependencies".to_string(),
+        span: Some(parsed.span_for(node)),
+    }
+}
+
+fn push_unique_symbol_ref(symbols: &mut Vec<SymbolRef>, candidate: SymbolRef) {
+    if symbols.iter().any(|symbol| symbol.name == candidate.name) {
+        return;
+    }
+    symbols.push(candidate);
+}
+
+fn first_python_symbol_argument(parsed: &ParsedFile, call: Node<'_>) -> Option<SymbolRef> {
+    let arguments = call.child_by_field_name("arguments")?;
+    let mut cursor = arguments.walk();
+    for child in arguments
+        .children(&mut cursor)
+        .filter(|child| child.is_named() && child.kind() != "keyword_argument")
+    {
+        let symbol_node = if child.kind() == "call" {
+            child.child_by_field_name("function")?
+        } else {
+            child
+        };
+        let name = match symbol_node.kind() {
+            "identifier" | "attribute" => parsed.text_for(symbol_node),
+            _ => None,
+        }?;
+        return Some(SymbolRef {
+            name: terminal_name(parsed, symbol_node).unwrap_or_else(|| name.to_string()),
+            span: Some(parsed.span_for(symbol_node)),
+        });
+    }
+    None
 }
 
 fn keyword_value<'tree>(parsed: &ParsedFile, call: Node<'tree>, name: &str) -> Option<Node<'tree>> {
@@ -1002,7 +2406,14 @@ struct ExpressMount {
     prefix: Option<String>,
     middleware: Vec<SymbolRef>,
     dynamic_prefix: bool,
+    dynamic_prefix_span: Option<Span>,
     span: Span,
+}
+
+#[derive(Clone, Debug)]
+struct ExpressPrefixMiddleware {
+    prefix: String,
+    middleware: Vec<SymbolRef>,
 }
 
 #[derive(Clone, Debug)]
@@ -1011,6 +2422,7 @@ struct MountedRouter {
     prefixes: Vec<String>,
     middleware: Vec<SymbolRef>,
     dynamic_prefix: bool,
+    dynamic_prefix_spans: Vec<Span>,
     lineage: Vec<(String, String)>,
 }
 
@@ -1018,13 +2430,31 @@ struct MountedRouter {
 struct ExpressRouteFact {
     owner_file: String,
     owner_name: String,
+    scope: Option<String>,
     method: String,
     path: String,
     dynamic_path: bool,
+    allow_unbound_owner: bool,
     handler: SymbolRef,
     middleware: Vec<SymbolRef>,
     span: Span,
     notes: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+struct ExpressFactory {
+    file: String,
+    name: String,
+    owner_param: String,
+    params: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+struct ExpressFactoryCall {
+    file: String,
+    factory_name: String,
+    owner_name: String,
+    param_values: HashMap<String, String>,
 }
 
 #[derive(Default)]
@@ -1034,31 +2464,57 @@ struct ExpressIndex {
     exports_by_file: HashMap<String, ExpressExports>,
     definitions_by_file: HashMap<String, HashMap<String, Span>>,
     mounts: Vec<ExpressMount>,
+    prefix_middleware: Vec<ExpressPrefixMiddleware>,
     routes: Vec<ExpressRouteFact>,
+    factories: Vec<ExpressFactory>,
+    factory_calls: Vec<ExpressFactoryCall>,
     diagnostics: Vec<Diagnostic>,
 }
 
 impl ExpressIndex {
     fn into_output(self) -> AdapterOutput {
+        let route_facts = self.expanded_route_facts();
         let mut diagnostics = self.diagnostics;
         let mut bindings = HashMap::<(String, String), ExpressBinding>::new();
-        for binding in self.bindings {
-            bindings.insert((binding.file.clone(), binding.name.clone()), binding);
+        for binding in &self.bindings {
+            bindings.insert(
+                (binding.file.clone(), binding.name.clone()),
+                binding.clone(),
+            );
         }
 
         let mut routes = Vec::<Route>::new();
         let mut seen = BTreeSet::<(String, u32, String, String, String)>::new();
-        for fact in &self.routes {
-            let Some(binding) = bindings.get(&(fact.owner_file.clone(), fact.owner_name.clone()))
-            else {
+        let mut route_diagnostics = BTreeSet::<(String, u32, String)>::new();
+        for fact in route_facts
+            .iter()
+            .filter(|fact| fact.scope.is_none() || fact.allow_unbound_owner)
+        {
+            let binding = bindings.get(&(fact.owner_file.clone(), fact.owner_name.clone()));
+            let Some(binding) = binding else {
+                if fact.allow_unbound_owner {
+                    if push_unique(
+                        &mut routes,
+                        &mut seen,
+                        express_route(fact, None, &[], false),
+                    ) {
+                        push_dynamic_route_diagnostic(
+                            &mut diagnostics,
+                            &mut route_diagnostics,
+                            fact,
+                        );
+                    }
+                }
                 continue;
             };
             if binding.kind == BindingKind::App {
-                push_unique(
+                if push_unique(
                     &mut routes,
                     &mut seen,
                     express_route(fact, None, &[], false),
-                );
+                ) {
+                    push_dynamic_route_diagnostic(&mut diagnostics, &mut route_diagnostics, fact);
+                }
             }
         }
 
@@ -1096,6 +2552,7 @@ impl ExpressIndex {
                 prefixes,
                 middleware: mount.middleware.clone(),
                 dynamic_prefix: mount.dynamic_prefix,
+                dynamic_prefix_spans: mount.dynamic_prefix_span.iter().cloned().collect(),
                 lineage,
             });
         }
@@ -1143,6 +2600,8 @@ impl ExpressIndex {
                 let mut middleware = parent_mount.middleware;
                 middleware.extend(mount.middleware.clone());
                 let dynamic = parent_mount.dynamic_prefix || mount.dynamic_prefix;
+                let mut dynamic_prefix_spans = parent_mount.dynamic_prefix_spans;
+                dynamic_prefix_spans.extend(mount.dynamic_prefix_span.iter().cloned());
                 let mut lineage = parent_mount.lineage;
                 lineage.push(child_key);
                 if mounted.iter().any(|mounted| {
@@ -1151,6 +2610,7 @@ impl ExpressIndex {
                         && mounted.prefixes == prefixes
                         && mounted.middleware == middleware
                         && mounted.dynamic_prefix == dynamic
+                        && mounted.dynamic_prefix_spans == dynamic_prefix_spans
                 }) {
                     continue;
                 }
@@ -1159,6 +2619,7 @@ impl ExpressIndex {
                     prefixes,
                     middleware,
                     dynamic_prefix: dynamic,
+                    dynamic_prefix_spans,
                     lineage,
                 });
                 changed = true;
@@ -1166,8 +2627,10 @@ impl ExpressIndex {
         }
 
         for mounted in &mounted {
-            for fact in self.routes.iter().filter(|fact| {
-                fact.owner_file == mounted.binding.file && fact.owner_name == mounted.binding.name
+            for fact in route_facts.iter().filter(|fact| {
+                fact.scope.is_none()
+                    && fact.owner_file == mounted.binding.file
+                    && fact.owner_name == mounted.binding.name
             }) {
                 let prefix = mounted.prefixes.iter().fold(String::new(), |prefix, next| {
                     if prefix.is_empty() {
@@ -1177,7 +2640,7 @@ impl ExpressIndex {
                     }
                 });
                 let prefix = (!prefix.is_empty()).then_some(prefix);
-                push_unique(
+                if push_unique(
                     &mut routes,
                     &mut seen,
                     express_route(
@@ -1186,10 +2649,19 @@ impl ExpressIndex {
                         &mounted.middleware,
                         mounted.dynamic_prefix,
                     ),
-                );
+                ) {
+                    push_dynamic_route_diagnostic(&mut diagnostics, &mut route_diagnostics, fact);
+                    push_dynamic_mount_prefix_diagnostics(
+                        &mut diagnostics,
+                        &mut route_diagnostics,
+                        &mounted.dynamic_prefix_spans,
+                    );
+                }
             }
         }
 
+        routes.sort_by_key(route_sort_key);
+        apply_express_prefix_middleware(&mut routes, &self.prefix_middleware);
         routes.sort_by_key(route_sort_key);
         for (index, route) in routes.iter_mut().enumerate() {
             route.id = format!("route_{:04}", index + 1);
@@ -1201,6 +2673,38 @@ impl ExpressIndex {
             diagnostics,
             ..AdapterOutput::default()
         }
+    }
+
+    fn expanded_route_facts(&self) -> Vec<ExpressRouteFact> {
+        let mut facts = self.routes.clone();
+        let factories = self
+            .factories
+            .iter()
+            .map(|factory| {
+                (
+                    (factory.file.clone(), factory.name.clone()),
+                    factory.clone(),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+        for call in &self.factory_calls {
+            let Some(factory) = factories.get(&(call.file.clone(), call.factory_name.clone()))
+            else {
+                continue;
+            };
+            for fact in self.routes.iter().filter(|fact| {
+                fact.owner_file == factory.file
+                    && fact.scope.as_deref() == Some(factory.name.as_str())
+                    && fact.owner_name == factory.owner_param
+            }) {
+                let mut fact = fact.clone();
+                fact.owner_name = call.owner_name.clone();
+                fact.scope = None;
+                fact.path = substitute_express_factory_params(&fact.path, &call.param_values);
+                facts.push(fact);
+            }
+        }
+        facts
     }
 }
 
@@ -1247,6 +2751,17 @@ fn express_route(
     }
 }
 
+fn substitute_express_factory_params(path: &str, values: &HashMap<String, String>) -> String {
+    let mut path = path.to_string();
+    for (name, value) in values {
+        let placeholder = format!("{{{name}}}");
+        if path.contains(&placeholder) {
+            path = path.replace(&placeholder, value.trim_matches('/'));
+        }
+    }
+    path
+}
+
 fn merged_middleware(
     mount_middleware: &[SymbolRef],
     route_middleware: &[SymbolRef],
@@ -1255,6 +2770,43 @@ fn merged_middleware(
     middleware.extend(mount_middleware.iter().cloned());
     middleware.extend(route_middleware.iter().cloned());
     middleware
+}
+
+fn apply_express_prefix_middleware(
+    routes: &mut [Route],
+    prefix_middleware: &[ExpressPrefixMiddleware],
+) {
+    for route in routes {
+        let mut added = Vec::new();
+        for prefix in prefix_middleware {
+            if express_path_matches_prefix(&route.path, &prefix.prefix) {
+                added.extend(prefix.middleware.clone());
+            }
+        }
+        if added.is_empty() {
+            continue;
+        }
+        added.extend(route.middleware.clone());
+        route.middleware = dedup_symbol_refs(added);
+    }
+}
+
+fn express_path_matches_prefix(path: &str, prefix: &str) -> bool {
+    if prefix == "/" {
+        return true;
+    }
+    path == prefix
+        || path
+            .strip_prefix(prefix)
+            .is_some_and(|rest| rest.starts_with('/'))
+}
+
+fn dedup_symbol_refs(symbols: Vec<SymbolRef>) -> Vec<SymbolRef> {
+    let mut seen = BTreeSet::new();
+    symbols
+        .into_iter()
+        .filter(|symbol| seen.insert(symbol.name.clone()))
+        .collect()
 }
 
 fn binding_key(binding: &ExpressBinding) -> (String, String) {
@@ -1271,6 +2823,51 @@ fn push_mount_diagnostic(
     let key = (mount.span.file.clone(), mount.span.line, code.to_string());
     if seen.insert(key) {
         diagnostics.push(diagnostic(code, mount.span.clone(), message));
+    }
+}
+
+fn push_span_diagnostic(
+    diagnostics: &mut Vec<Diagnostic>,
+    seen: &mut BTreeSet<(String, u32, String)>,
+    span: Span,
+    code: &str,
+    message: &str,
+) {
+    let key = (span.file.clone(), span.line, code.to_string());
+    if seen.insert(key) {
+        diagnostics.push(diagnostic(code, span, message));
+    }
+}
+
+fn push_dynamic_route_diagnostic(
+    diagnostics: &mut Vec<Diagnostic>,
+    seen: &mut BTreeSet<(String, u32, String)>,
+    fact: &ExpressRouteFact,
+) {
+    if fact.dynamic_path {
+        push_span_diagnostic(
+            diagnostics,
+            seen,
+            fact.span.clone(),
+            "express_dynamic_route_path",
+            "Express route path is dynamic and could not be resolved",
+        );
+    }
+}
+
+fn push_dynamic_mount_prefix_diagnostics(
+    diagnostics: &mut Vec<Diagnostic>,
+    seen: &mut BTreeSet<(String, u32, String)>,
+    spans: &[Span],
+) {
+    for span in spans {
+        push_span_diagnostic(
+            diagnostics,
+            seen,
+            span.clone(),
+            "express_dynamic_mount_prefix",
+            "Express mount prefix is dynamic and could not be resolved",
+        );
     }
 }
 
@@ -1340,6 +2937,7 @@ impl<'a> ExpressCollector<'a> {
     }
 
     fn collect_definition(&mut self, node: Node<'_>) {
+        self.collect_factory_definition(node);
         let name_node = match node.kind() {
             "function_declaration" => node.child_by_field_name("name"),
             "variable_declarator" => {
@@ -1369,6 +2967,30 @@ impl<'a> ExpressCollector<'a> {
             .or_default()
             .entry(name)
             .or_insert_with(|| self.parsed.span_for(name_node));
+    }
+
+    fn collect_factory_definition(&mut self, node: Node<'_>) {
+        let Some((name, function)) = express_factory_definition(self.parsed, node) else {
+            return;
+        };
+        let params = function_param_names(self.parsed, function);
+        let Some(owner_param) = params.first().cloned() else {
+            return;
+        };
+        if self
+            .index
+            .factories
+            .iter()
+            .any(|factory| factory.file == self.parsed.source.path && factory.name == name)
+        {
+            return;
+        }
+        self.index.factories.push(ExpressFactory {
+            file: self.parsed.source.path.clone(),
+            name,
+            owner_param,
+            params,
+        });
     }
 
     fn collect_binding(&mut self, call: Node<'_>) {
@@ -1406,6 +3028,23 @@ impl<'a> ExpressCollector<'a> {
         let Some(function) = call.child_by_field_name("function") else {
             return;
         };
+
+        if let Some(function_text) = self.parsed.text_for(function)
+            && self.collect_factory_call(call, function_text)
+        {
+            return;
+        }
+
+        if let Some(helper) = self.parsed.text_for(function).filter(|name| {
+            matches!(
+                *name,
+                "setupPageRoute" | "setupAdminPageRoute" | "setupApiRoute"
+            )
+        }) {
+            self.collect_helper_route(call, helper);
+            return;
+        }
+
         let Some((owner, member)) = js_member_target(self.parsed, function) else {
             return;
         };
@@ -1414,16 +3053,154 @@ impl<'a> ExpressCollector<'a> {
             self.collect_mount(call, &owner);
             return;
         }
+        if member == "all" {
+            self.collect_prefix_middleware(call);
+            return;
+        }
+
+        if matches!(
+            member.as_str(),
+            "setupPageRoute" | "setupAdminPageRoute" | "setupApiRoute"
+        ) {
+            self.collect_helper_route(call, &member);
+            return;
+        }
 
         if let Some(method) = express_method(&member) {
             let definitions = self.index.definitions_by_file.get(&self.parsed.source.path);
-            if let Some(chain) = express_route_chain(self.parsed, call, method, definitions) {
+            let scope = self.current_factory_scope(call);
+            if let Some(mut chain) = express_route_chain(self.parsed, call, method, definitions) {
+                chain.scope = scope.clone();
                 self.push_route(chain);
-            } else if let Some(direct) =
+            } else if let Some(mut direct) =
                 express_direct_route(self.parsed, call, &owner, method, definitions)
             {
+                direct.scope = scope;
                 self.push_route(direct);
             }
+        }
+    }
+
+    fn collect_factory_call(&mut self, call: Node<'_>, function_text: &str) -> bool {
+        let Some(factory) = self
+            .index
+            .factories
+            .iter()
+            .find(|factory| {
+                factory.file == self.parsed.source.path
+                    && express_factory_call_names(self.parsed, function_text)
+                        .iter()
+                        .any(|name| name == &factory.name)
+            })
+            .cloned()
+        else {
+            return false;
+        };
+        let args = call_arguments(call);
+        let Some(owner_node) = args.first().copied() else {
+            return false;
+        };
+        let Some(owner_name) = symbol_name(self.parsed, owner_node, "<inline_middleware>") else {
+            return false;
+        };
+        let mut param_values = HashMap::new();
+        for (param, arg) in factory.params.iter().zip(args.iter().copied()) {
+            if let Some(value) = js_path_literal(self.parsed, arg) {
+                param_values.insert(param.clone(), value);
+            }
+        }
+        self.index.factory_calls.push(ExpressFactoryCall {
+            file: self.parsed.source.path.clone(),
+            factory_name: factory.name,
+            owner_name,
+            param_values,
+        });
+        true
+    }
+
+    fn collect_helper_route(&mut self, call: Node<'_>, helper: &str) {
+        let args = call_arguments(call);
+        let Some(owner_node) = args.first() else {
+            return;
+        };
+        let Some(owner) = symbol_name(self.parsed, *owner_node, "<inline_middleware>") else {
+            return;
+        };
+        let definitions = self.index.definitions_by_file.get(&self.parsed.source.path);
+        let scope = self.current_factory_scope(call);
+        match helper {
+            "setupPageRoute" | "setupAdminPageRoute" => {
+                if args.len() < 3 {
+                    return;
+                }
+                let (path, dynamic_path) = express_path(self.parsed, args[1]);
+                let handler_node = *args.last().expect("args length checked");
+                let handler =
+                    symbol_ref(self.parsed, handler_node, "<inline_handler>", definitions)
+                        .unwrap_or_else(|| SymbolRef {
+                            name: "<inline_handler>".to_string(),
+                            span: Some(self.parsed.span_for(handler_node)),
+                        });
+                let mut middleware = helper_profile_middleware(self.parsed, call, helper);
+                if args.len() > 3 {
+                    symbols_from_route_args(self.parsed, &args[2..args.len() - 1], definitions)
+                } else {
+                    Vec::new()
+                }
+                .into_iter()
+                .for_each(|symbol| middleware.push(symbol));
+                for emitted_path in [path.clone(), join_paths("/api", &path)] {
+                    self.push_route(ExpressRouteCandidate {
+                        owner: owner.clone(),
+                        method: "GET".to_string(),
+                        path: emitted_path,
+                        dynamic_path,
+                        allow_unbound_owner: true,
+                        handler: handler.clone(),
+                        middleware: middleware.clone(),
+                        scope: scope.clone(),
+                        span: self.parsed.span_for(call),
+                    });
+                }
+            }
+            "setupApiRoute" => {
+                if args.len() < 4 {
+                    return;
+                }
+                let Some(method) =
+                    string_literal(self.parsed, args[1]).map(|value| value.to_uppercase())
+                else {
+                    return;
+                };
+                let (path, dynamic_path) = express_path(self.parsed, args[2]);
+                let handler_node = *args.last().expect("args length checked");
+                let handler =
+                    symbol_ref(self.parsed, handler_node, "<inline_handler>", definitions)
+                        .unwrap_or_else(|| SymbolRef {
+                            name: "<inline_handler>".to_string(),
+                            span: Some(self.parsed.span_for(handler_node)),
+                        });
+                let mut middleware = helper_profile_middleware(self.parsed, call, helper);
+                if args.len() > 4 {
+                    symbols_from_route_args(self.parsed, &args[3..args.len() - 1], definitions)
+                } else {
+                    Vec::new()
+                }
+                .into_iter()
+                .for_each(|symbol| middleware.push(symbol));
+                self.push_route(ExpressRouteCandidate {
+                    owner,
+                    method,
+                    path,
+                    dynamic_path,
+                    allow_unbound_owner: true,
+                    handler,
+                    middleware,
+                    scope,
+                    span: self.parsed.span_for(call),
+                });
+            }
+            _ => {}
         }
     }
 
@@ -1434,30 +3211,30 @@ impl<'a> ExpressCollector<'a> {
         }
 
         let mut dynamic_prefix = false;
+        let mut dynamic_prefix_span = None;
         let (prefix, child_candidates) = if let Some(prefix) = js_path_literal(self.parsed, args[0])
         {
             (Some(prefix), &args[1..])
         } else if args.len() >= 2 {
             dynamic_prefix = true;
-            self.index.diagnostics.push(diagnostic(
-                "express_dynamic_mount_prefix",
-                self.parsed.span_for(args[0]),
-                "Express mount prefix is dynamic and could not be resolved",
-            ));
+            dynamic_prefix_span = Some(self.parsed.span_for(args[0]));
             (None, &args[1..])
         } else if is_symbol_reference(args[0]) {
             (None, &args[..])
         } else {
             dynamic_prefix = true;
-            self.index.diagnostics.push(diagnostic(
-                "express_dynamic_mount_prefix",
-                self.parsed.span_for(args[0]),
-                "Express mount prefix is dynamic and could not be resolved",
-            ));
+            dynamic_prefix_span = Some(self.parsed.span_for(args[0]));
             (None, &args[1..])
         };
 
         let selected = select_mount_child(self.parsed, child_candidates, self.index);
+        if selected.is_none() {
+            if let Some(prefix) = prefix.clone() {
+                let middleware = symbols_from_route_args(self.parsed, child_candidates, None);
+                self.push_prefix_middleware(vec![prefix], middleware);
+            }
+            return;
+        }
         let Some((child_index, child_node)) = selected else {
             return;
         };
@@ -1481,28 +3258,72 @@ impl<'a> ExpressCollector<'a> {
             prefix,
             middleware,
             dynamic_prefix,
+            dynamic_prefix_span,
             span: self.parsed.span_for(call),
         });
+    }
+
+    fn current_factory_scope(&self, node: Node<'_>) -> Option<String> {
+        let factories = self
+            .index
+            .factories
+            .iter()
+            .filter(|factory| factory.file == self.parsed.source.path)
+            .map(|factory| factory.name.as_str())
+            .collect::<BTreeSet<_>>();
+        let mut current = node.parent();
+        while let Some(node) = current {
+            if is_js_function_node(node)
+                && let Some(name) = express_factory_name_for_function(self.parsed, node)
+                && factories.contains(name.as_str())
+            {
+                return Some(name);
+            }
+            current = node.parent();
+        }
+        None
+    }
+
+    fn collect_prefix_middleware(&mut self, call: Node<'_>) {
+        let args = call_arguments(call);
+        if args.len() < 2 {
+            return;
+        }
+        let prefixes = express_prefixes(self.parsed, args[0]);
+        if prefixes.is_empty() {
+            return;
+        }
+        let middleware = symbols_from_route_args(self.parsed, &args[1..], None);
+        self.push_prefix_middleware(prefixes, middleware);
+    }
+
+    fn push_prefix_middleware(&mut self, prefixes: Vec<String>, middleware: Vec<SymbolRef>) {
+        if middleware.is_empty() {
+            return;
+        }
+        for prefix in prefixes {
+            self.index.prefix_middleware.push(ExpressPrefixMiddleware {
+                prefix,
+                middleware: middleware.clone(),
+            });
+        }
     }
 
     fn push_route(&mut self, candidate: ExpressRouteCandidate) {
         let mut route = ExpressRouteFact {
             owner_file: self.parsed.source.path.clone(),
             owner_name: candidate.owner,
+            scope: candidate.scope,
             method: candidate.method,
             path: candidate.path,
             dynamic_path: candidate.dynamic_path,
+            allow_unbound_owner: candidate.allow_unbound_owner,
             handler: candidate.handler,
             middleware: candidate.middleware,
             span: candidate.span,
             notes: Vec::new(),
         };
         if route.dynamic_path {
-            self.index.diagnostics.push(diagnostic(
-                "express_dynamic_route_path",
-                route.span.clone(),
-                "Express route path is dynamic and could not be resolved",
-            ));
             route
                 .notes
                 .push("Express route path is dynamic and was emitted as <dynamic>".to_string());
@@ -1516,8 +3337,10 @@ struct ExpressRouteCandidate {
     method: String,
     path: String,
     dynamic_path: bool,
+    allow_unbound_owner: bool,
     handler: SymbolRef,
     middleware: Vec<SymbolRef>,
+    scope: Option<String>,
     span: Span,
 }
 
@@ -1540,8 +3363,10 @@ fn express_direct_route(
         method: method.to_string(),
         path,
         dynamic_path,
+        allow_unbound_owner: false,
         handler,
         middleware,
+        scope: None,
         span: parsed.span_for(call),
     })
 }
@@ -1571,8 +3396,10 @@ fn express_route_chain(
         method: method.to_string(),
         path,
         dynamic_path,
+        allow_unbound_owner: false,
         handler,
         middleware,
+        scope: None,
         span: parsed.span_for(call),
     })
 }
@@ -1620,6 +3447,64 @@ fn express_method(member: &str) -> Option<&'static str> {
 fn express_path(parsed: &ParsedFile, node: Node<'_>) -> (String, bool) {
     js_path_literal(parsed, node)
         .map_or_else(|| ("<dynamic>".to_string(), true), |path| (path, false))
+}
+
+fn express_prefixes(parsed: &ParsedFile, node: Node<'_>) -> Vec<String> {
+    if let Some(path) = js_path_literal(parsed, node) {
+        return vec![path];
+    }
+    parsed
+        .text_for(node)
+        .map(prefixes_from_js_route_pattern)
+        .unwrap_or_default()
+}
+
+fn prefixes_from_js_route_pattern(text: &str) -> Vec<String> {
+    let normalized = text
+        .trim()
+        .trim_matches(|ch| matches!(ch, '`' | '\'' | '"' | '/'));
+    let mut prefixes = BTreeSet::new();
+    let bytes = normalized.as_bytes();
+    let mut index = 0;
+    while index + 1 < bytes.len() {
+        if bytes[index] == b'/' && bytes[index + 1] == b'+' {
+            index += 2;
+            let start = index;
+            while index < bytes.len() {
+                let ch = bytes[index] as char;
+                if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '/') {
+                    index += 1;
+                } else {
+                    break;
+                }
+            }
+            if index > start {
+                prefixes.insert(format!("/{}", &normalized[start..index]));
+            }
+        } else {
+            index += 1;
+        }
+    }
+    prefixes.into_iter().collect()
+}
+
+fn helper_profile_middleware(parsed: &ParsedFile, call: Node<'_>, helper: &str) -> Vec<SymbolRef> {
+    let names: &[&str] = match helper {
+        "setupAdminPageRoute" => &[
+            "middleware.ensureLoggedIn",
+            "middleware.admin.checkPrivileges",
+        ],
+        "setupPageRoute" => &["middleware.authenticateRequest"],
+        "setupApiRoute" => &["middleware.authenticateRequest"],
+        _ => &[],
+    };
+    names
+        .iter()
+        .map(|name| SymbolRef {
+            name: (*name).to_string(),
+            span: Some(parsed.span_for(call)),
+        })
+        .collect()
 }
 
 fn symbols_from_route_args(
@@ -1677,6 +3562,147 @@ fn is_symbol_reference(node: Node<'_>) -> bool {
     )
 }
 
+fn express_factory_definition<'tree>(
+    parsed: &ParsedFile,
+    node: Node<'tree>,
+) -> Option<(String, Node<'tree>)> {
+    match node.kind() {
+        "function_declaration" => {
+            let name = node
+                .child_by_field_name("name")
+                .and_then(|name| parsed.text_for(name))?;
+            Some((name.to_string(), node))
+        }
+        "variable_declarator" => {
+            let function = node.child_by_field_name("value")?;
+            if !is_js_function_node(function) {
+                return None;
+            }
+            let name = node
+                .child_by_field_name("name")
+                .and_then(|name| parsed.text_for(name))?;
+            Some((name.to_string(), function))
+        }
+        "assignment_expression" => {
+            let left = node.child_by_field_name("left")?;
+            let right = node.child_by_field_name("right")?;
+            if !is_js_function_node(right) {
+                return None;
+            }
+            let name = parsed.text_for(left)?.to_string();
+            Some((name, right))
+        }
+        "pair" => {
+            let value = node.child_by_field_name("value")?;
+            if !is_js_function_node(value) {
+                return None;
+            }
+            let key = node.child_by_field_name("key")?;
+            let name = parsed.text_for(key).map(|name| {
+                name.trim_matches(|ch| matches!(ch, '"' | '\'' | '`'))
+                    .to_string()
+            })?;
+            Some((name, value))
+        }
+        _ => None,
+    }
+}
+
+fn express_factory_call_names(parsed: &ParsedFile, function_text: &str) -> Vec<String> {
+    let mut names = vec![function_text.to_string()];
+    let Some((object, rest)) = function_text.split_once('[') else {
+        return names;
+    };
+    let Some(key_expr) = rest.strip_suffix(']') else {
+        return names;
+    };
+    if let Some(key) = resolve_js_static_key(parsed, key_expr.trim()) {
+        names.push(key.clone());
+        names.push(format!("{object}.{key}"));
+    }
+    names
+}
+
+fn resolve_js_static_key(parsed: &ParsedFile, expr: &str) -> Option<String> {
+    decode_js_string(expr)
+        .or_else(|| decode_js_template(expr))
+        .or_else(|| js_static_string_binding(parsed, expr))
+}
+
+fn js_static_string_binding(parsed: &ParsedFile, name: &str) -> Option<String> {
+    if name.is_empty()
+        || !name
+            .chars()
+            .all(|ch| ch == '_' || ch == '$' || ch.is_ascii_alphanumeric())
+    {
+        return None;
+    }
+    for line in parsed.text.lines() {
+        let trimmed = line.trim().trim_end_matches(';');
+        let Some(rest) = trimmed
+            .strip_prefix("const ")
+            .or_else(|| trimmed.strip_prefix("let "))
+            .or_else(|| trimmed.strip_prefix("var "))
+        else {
+            continue;
+        };
+        let Some((left, right)) = rest.split_once('=') else {
+            continue;
+        };
+        if left.trim() == name
+            && let Some(value) =
+                decode_js_string(right.trim()).or_else(|| decode_js_template(right.trim()))
+        {
+            return Some(value);
+        }
+    }
+    None
+}
+
+fn express_factory_name_for_function(parsed: &ParsedFile, function: Node<'_>) -> Option<String> {
+    let parent = function.parent()?;
+    express_factory_definition(parsed, parent)
+        .filter(|(_, candidate)| candidate.id() == function.id())
+        .map(|(name, _)| name)
+}
+
+fn is_js_function_node(node: Node<'_>) -> bool {
+    matches!(
+        node.kind(),
+        "arrow_function" | "function" | "function_declaration" | "function_expression"
+    )
+}
+
+fn function_param_names(parsed: &ParsedFile, function: Node<'_>) -> Vec<String> {
+    let Some(parameters) = function.child_by_field_name("parameters") else {
+        return Vec::new();
+    };
+    if parameters.kind() == "identifier" {
+        return parsed
+            .text_for(parameters)
+            .map(|name| vec![name.to_string()])
+            .unwrap_or_default();
+    }
+    let mut params = Vec::new();
+    let mut cursor = parameters.walk();
+    for child in parameters
+        .children(&mut cursor)
+        .filter(|child| child.is_named())
+    {
+        if child.kind() == "identifier" {
+            if let Some(name) = parsed.text_for(child) {
+                params.push(name.to_string());
+            }
+        } else if let Some(pattern) = child.child_by_field_name("pattern")
+            && pattern.kind() == "identifier"
+            && let Some(name) = parsed.text_for(pattern)
+        {
+            params.push(name.to_string());
+        }
+    }
+    params
+}
+
 fn select_mount_child<'tree>(
     parsed: &ParsedFile,
     candidates: &[Node<'tree>],
@@ -1689,7 +3715,7 @@ fn select_mount_child<'tree>(
         .filter(|(_, candidate)| is_symbol_reference(*candidate))
         .collect::<Vec<_>>();
 
-    symbol_candidates
+    if let Some(candidate) = symbol_candidates
         .iter()
         .rev()
         .copied()
@@ -1706,7 +3732,25 @@ fn select_mount_child<'tree>(
                 .get(&parsed.source.path)
                 .is_some_and(|imports| imports.contains_key(&name))
         })
-        .or_else(|| symbol_candidates.last().copied())
+    {
+        return Some(candidate);
+    }
+
+    symbol_candidates
+        .iter()
+        .rev()
+        .copied()
+        .find(|(_, candidate)| {
+            matches!(candidate.kind(), "identifier" | "member_expression")
+                && symbol_name(parsed, *candidate, "<inline_middleware>")
+                    .is_some_and(|name| looks_like_express_router_symbol(&name))
+        })
+}
+
+fn looks_like_express_router_symbol(name: &str) -> bool {
+    let terminal = terminal_js_symbol_name(name);
+    let lower = terminal.to_ascii_lowercase();
+    lower == "router" || lower.ends_with("router")
 }
 
 fn call_arguments(call: Node<'_>) -> Vec<Node<'_>> {
@@ -1757,10 +3801,47 @@ fn decode_js_string(text: &str) -> Option<String> {
 
 fn decode_js_template(text: &str) -> Option<String> {
     let trimmed = text.trim();
-    if !trimmed.starts_with('`') || !trimmed.ends_with('`') || trimmed.contains("${") {
+    if !trimmed.starts_with('`') || !trimmed.ends_with('`') {
         return None;
     }
-    Some(trimmed[1..trimmed.len() - 1].to_string())
+    let inner = &trimmed[1..trimmed.len() - 1];
+    if !inner.contains("${") {
+        return Some(inner.to_string());
+    }
+    decode_js_template_with_placeholders(inner)
+}
+
+fn decode_js_template_with_placeholders(inner: &str) -> Option<String> {
+    let mut output = String::new();
+    let mut rest = inner;
+    while let Some(start) = rest.find("${") {
+        output.push_str(&rest[..start]);
+        let after_start = &rest[start + 2..];
+        let end = after_start.find('}')?;
+        let expression = after_start[..end].trim();
+        if expression.is_empty()
+            || expression.contains('?')
+            || expression.contains(':')
+            || expression.contains('(')
+            || expression.contains(')')
+        {
+            return None;
+        }
+        output.push('{');
+        output.push_str(&terminal_js_symbol_name(expression));
+        output.push('}');
+        rest = &after_start[end + 1..];
+    }
+    output.push_str(rest);
+    Some(output)
+}
+
+fn terminal_js_symbol_name(text: &str) -> String {
+    text.rsplit(['.', ':'])
+        .next()
+        .unwrap_or(text)
+        .trim()
+        .to_string()
 }
 
 fn assigned_name(parsed: &ParsedFile, call: Node<'_>) -> Option<String> {
@@ -2025,6 +4106,7 @@ fn normalize_js_module_path(current_dir: &str, module: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
     use std::fs;
 
     use authmap_core::{Confidence, Framework, Language, SourceFile};
@@ -2033,7 +4115,7 @@ mod tests {
 
     use super::{
         AdapterContext, DjangoAdapter, ExpressAdapter, FastApiAdapter, FrameworkAdapter,
-        NextJsAdapter,
+        GraphqlAdapter, NextJsAdapter, TrpcAdapter,
     };
 
     #[test]
@@ -2042,6 +4124,9 @@ mod tests {
             "fastapi/main.py",
             "fastapi/app/main_relative.py",
             "fastapi/app/routes/users.py",
+            "fastapi/app/factories/collection.py",
+            "fastapi/app/factories/custom.py",
+            "fastapi/app/factories/nested.py",
         ]);
         let output = FastApiAdapter.discover_routes(&parsed, &AdapterContext::default());
 
@@ -2060,7 +4145,39 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        assert_eq!(output.routes.len(), 15);
+        assert_eq!(output.routes.len(), 26);
+        assert!(summaries.contains(&(
+            "POST",
+            "/service/accounts",
+            Some("service_account"),
+            None,
+            Vec::new(),
+            authmap_core::Confidence::High,
+        )));
+        assert!(summaries.contains(&(
+            "DELETE",
+            "/collection/items/{item_id}",
+            Some("delete_collection_item"),
+            None,
+            Vec::new(),
+            authmap_core::Confidence::High,
+        )));
+        assert!(summaries.contains(&(
+            "POST",
+            "/factory/items",
+            Some("create_factory_item"),
+            None,
+            Vec::new(),
+            authmap_core::Confidence::High,
+        )));
+        assert!(summaries.contains(&(
+            "GET",
+            "/factory/nested/status",
+            Some("nested_status"),
+            None,
+            Vec::new(),
+            authmap_core::Confidence::High,
+        )));
         assert!(summaries.contains(&(
             "GET",
             "/health",
@@ -2151,8 +4268,48 @@ mod tests {
         )));
         assert!(summaries.contains(&(
             "GET",
-            "<dynamic>",
+            "/generated",
             Some("generated_path"),
+            None,
+            Vec::<String>::new(),
+            authmap_core::Confidence::High,
+        )));
+        assert!(summaries.contains(&(
+            "GET",
+            "/constant",
+            Some("constant_alias_path"),
+            None,
+            Vec::<String>::new(),
+            authmap_core::Confidence::High,
+        )));
+        assert!(summaries.contains(&(
+            "GET",
+            "/factory/status",
+            Some("default_status_path"),
+            None,
+            Vec::<String>::new(),
+            authmap_core::Confidence::High,
+        )));
+        assert!(summaries.contains(&(
+            "GET",
+            "/factory/ready",
+            Some("default_ready_path"),
+            None,
+            Vec::<String>::new(),
+            authmap_core::Confidence::High,
+        )));
+        assert!(summaries.contains(&(
+            "GET",
+            "/shared/variable/settings",
+            Some("variable_settings"),
+            None,
+            Vec::<String>::new(),
+            authmap_core::Confidence::High,
+        )));
+        assert!(summaries.contains(&(
+            "GET",
+            "<dynamic>",
+            Some("unresolved_runtime_path"),
             None,
             Vec::<String>::new(),
             authmap_core::Confidence::Medium,
@@ -2188,7 +4345,53 @@ mod tests {
             output
                 .diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.code == "fastapi_dynamic_route_path")
+                .filter(|diagnostic| diagnostic.code == "fastapi_dynamic_route_path")
+                .count()
+                == 1
+        );
+
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/shared/variable/settings")),
+            vec![
+                "require_user",
+                "can_edit_account",
+                "provide_database_interface"
+            ]
+        );
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/shared/users/{user_id}")),
+            vec![
+                "require_user",
+                "can_edit_account",
+                "provide_database_interface"
+            ]
+        );
+    }
+
+    #[test]
+    fn marks_unresolved_fastapi_include_dependencies_as_dynamic_context() {
+        let parsed = parse_sources(&[(
+            "app.py".to_string(),
+            Language::Python,
+            r#"
+from fastapi import APIRouter, FastAPI
+
+app = FastAPI()
+router = APIRouter()
+
+@router.get("/items")
+def list_items():
+    return []
+
+app.include_router(router, dependencies=build_runtime_dependencies())
+"#
+            .to_string(),
+        )]);
+        let output = FastApiAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/items")),
+            vec!["dynamic_policy_dependencies"]
         );
     }
 
@@ -2196,13 +4399,14 @@ mod tests {
     fn discovers_express_routes_middleware_chains_and_mounted_prefixes() {
         let parsed = parse_fixtures(&[
             "express/app.js",
+            "express/helpers/app.js",
             "express/routes/admin.js",
             "express/routes/exported.ts",
             "express/routes/users.ts",
         ]);
         let output = ExpressAdapter.discover_routes(&parsed, &AdapterContext::default());
 
-        assert_eq!(output.routes.len(), 16);
+        assert_eq!(output.routes.len(), 26);
         assert!(
             output
                 .routes
@@ -2226,6 +4430,45 @@ mod tests {
         assert_eq!(middleware_names(health), vec!["requireAuth"]);
         assert_eq!(health.confidence, Confidence::High);
 
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/profile")),
+            vec!["middleware.authenticateRequest", "requireAuth"]
+        );
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/api/profile")),
+            vec!["middleware.authenticateRequest", "requireAuth"]
+        );
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/admin")),
+            vec![
+                "requireAuth",
+                "requirePermission",
+                "middleware.ensureLoggedIn",
+                "middleware.admin.checkPrivileges",
+                "requireAdmin"
+            ]
+        );
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/api/admin")),
+            vec![
+                "middleware.ensureLoggedIn",
+                "middleware.admin.checkPrivileges",
+                "requireAdmin"
+            ]
+        );
+        assert_eq!(
+            middleware_names(route(&output, "POST", "/api/write")),
+            vec!["middleware.authenticateRequest", "requirePermission"]
+        );
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/direct")),
+            vec!["middleware.authenticateRequest", "requireAuth"]
+        );
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/api/direct")),
+            vec!["middleware.authenticateRequest", "requireAuth"]
+        );
+
         let accounts = route(&output, "POST", "/accounts");
         assert_eq!(
             accounts
@@ -2241,13 +4484,17 @@ mod tests {
                 .as_ref()
                 .and_then(|handler| handler.span.as_ref())
                 .map(|span| span.line),
-            Some(42)
+            Some(44)
         );
 
         let admin_jobs = route(&output, "POST", "/admin/jobs");
         assert_eq!(
             middleware_names(admin_jobs),
-            vec!["requireAuth", "requireRole"]
+            vec!["requireAuth", "requirePermission", "requireRole"]
+        );
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/{tenant}/reports")),
+            vec!["requireAuth"]
         );
 
         let permissions = route(&output, "PATCH", "/accounts/:id/permissions");
@@ -2272,6 +4519,26 @@ mod tests {
         );
         assert_eq!(middleware_names(nested), vec!["requireAuth", "audit"]);
 
+        let mapped_factory = route(&output, "GET", "/api/mapped/factory");
+        assert_eq!(
+            mapped_factory
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("listAccounts")
+        );
+        assert_eq!(middleware_names(mapped_factory), vec!["requireAuth"]);
+
+        let indexed_factory = route(&output, "GET", "/api/mapped/indexed");
+        assert_eq!(
+            indexed_factory
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("listAccounts")
+        );
+        assert_eq!(middleware_names(indexed_factory), vec!["requireAuth"]);
+
         let dynamic_mount = route(&output, "GET", "/child");
         assert_eq!(dynamic_mount.confidence, Confidence::Medium);
         assert!(
@@ -2286,7 +4553,10 @@ mod tests {
             admin.handler.as_ref().map(|handler| handler.name.as_str()),
             Some("listAdmins")
         );
-        assert_eq!(middleware_names(admin), vec!["requireAdmin"]);
+        assert_eq!(
+            middleware_names(admin),
+            vec!["requireAuth", "requirePermission", "requireAdmin"]
+        );
 
         let users_get = route(&output, "GET", "/v1/:userId");
         assert_eq!(
@@ -2339,11 +4609,27 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.code == "express_dynamic_route_path")
         );
+        assert_eq!(
+            output
+                .diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic.code == "express_dynamic_route_path")
+                .count(),
+            1
+        );
         assert!(
             output
                 .diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic.code == "express_dynamic_mount_prefix")
+        );
+        assert_eq!(
+            output
+                .diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic.code == "express_dynamic_mount_prefix")
+                .count(),
+            1
         );
         assert!(
             output
@@ -2363,6 +4649,7 @@ mod tests {
     fn discovers_django_urlpatterns_drf_routers_and_uncertainty() {
         let parsed = parse_fixtures(&[
             "django/project/urls.py",
+            "django/accounts/api_urls.py",
             "django/accounts/urls.py",
             "django/accounts/views.py",
             "django/accounts/services.py",
@@ -2370,7 +4657,7 @@ mod tests {
         ]);
         let output = DjangoAdapter.discover_routes(&parsed, &AdapterContext::default());
 
-        assert_eq!(output.routes.len(), 20);
+        assert_eq!(output.routes.len(), 34);
         assert!(output.routes.iter().all(|route| route.span.is_some()));
         assert!(output.routes.iter().all(|route| {
             route
@@ -2462,6 +4749,58 @@ mod tests {
             matches!(route.method.as_str(), "PUT" | "PATCH" | "DELETE")
                 && route.path.starts_with("/accounts/api/custom-model")
         }));
+        assert!(output.routes.iter().any(|route| {
+            route.method == "DELETE" && route.path == "/accounts/api/inherited/{pk}"
+        }));
+        assert!(output.routes.iter().any(|route| {
+            route.method == "GET" && route.path == "/accounts/api/inherited-readonly/{pk}"
+        }));
+        assert!(!output.routes.iter().any(|route| {
+            matches!(route.method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE")
+                && route.path.starts_with("/accounts/api/inherited-readonly")
+        }));
+        assert!(
+            output.routes.iter().any(|route| {
+                route.method == "POST" && route.path == "/accounts/api/mixin-backed"
+            })
+        );
+        assert!(!output.routes.iter().any(|route| {
+            matches!(route.method.as_str(), "PUT" | "PATCH" | "DELETE")
+                && route.path.starts_with("/accounts/api/mixin-backed")
+        }));
+        assert!(
+            output.routes.iter().any(|route| {
+                route.method == "GET" && route.path == "/exported-api/exported/{pk}"
+            })
+        );
+        let generated_list = route(&output, "ANY", "/accounts/generated");
+        assert_eq!(
+            generated_list
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("GeneratedAccountListView")
+        );
+        assert!(
+            generated_list
+                .source_evidence
+                .iter()
+                .any(|evidence| { evidence.mechanism == "django_generated_include" })
+        );
+        let generated_detail = route(&output, "ANY", "/accounts/generated/<int:pk>/edit");
+        assert_eq!(
+            generated_detail
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("GeneratedAccountEditView")
+        );
+        assert!(
+            generated_detail
+                .source_evidence
+                .iter()
+                .any(|evidence| { evidence.mechanism == "django_model_view_registration" })
+        );
         assert_eq!(
             route(&output, "ANY", "/legacy/{slug}/").path,
             "/legacy/{slug}/"
@@ -2480,13 +4819,12 @@ mod tests {
         );
 
         for code in [
-            "django_dynamic_include",
+            "django_dynamic_include_helper",
             "django_dynamic_url_path",
             "drf_dynamic_router_prefix",
             "drf_dynamic_basename",
             "django_custom_router",
             "django_urlpattern_context_uncertain",
-            "drf_unresolved_viewset_base",
         ] {
             assert!(
                 output
@@ -2496,6 +4834,53 @@ mod tests {
                 "missing diagnostic {code}"
             );
         }
+        assert!(
+            !output
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "drf_unresolved_viewset_base")
+        );
+    }
+
+    #[test]
+    fn django_local_model_viewset_shadow_does_not_emit_drf_crud_routes() {
+        let parsed = parse_sources(&[
+            (
+                "tests/fixtures/generated_django_shadow/urls.py".to_string(),
+                Language::Python,
+                r#"
+from rest_framework.routers import DefaultRouter
+from .views import ShadowedViewSet
+
+router = DefaultRouter()
+router.register("shadowed", ShadowedViewSet, basename="shadowed")
+urlpatterns = router.urls
+"#
+                .to_string(),
+            ),
+            (
+                "tests/fixtures/generated_django_shadow/views.py".to_string(),
+                Language::Python,
+                r#"
+class ModelViewSet:
+    pass
+
+
+class ShadowedViewSet(ModelViewSet):
+    pass
+"#
+                .to_string(),
+            ),
+        ]);
+        let output = DjangoAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert!(output.routes.is_empty());
+        assert!(
+            output
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "drf_unresolved_viewset_base")
+        );
     }
 
     #[test]
@@ -2518,7 +4903,7 @@ mod tests {
         ]);
         let output = NextJsAdapter.discover_routes(&parsed, &AdapterContext::default());
 
-        assert_eq!(output.routes.len(), 16);
+        assert_eq!(output.routes.len(), 17);
         assert!(output.routes.iter().all(|route| route.span.is_some()));
         assert!(output.routes.iter().all(|route| {
             route
@@ -2617,6 +5002,22 @@ mod tests {
                 .is_some_and(|file| file.ends_with("tests/fixtures/nextjs/app/external/handler.ts")),
             true
         );
+        let external_delete = route(&output, "DELETE", "/external");
+        assert_eq!(
+            external_delete
+                .extensions
+                .get("authmap.nextjs")
+                .and_then(|value| value.get("wrapper"))
+                .and_then(serde_json::Value::as_str),
+            Some("withAuth")
+        );
+        assert_eq!(
+            external_delete
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("deleteExternal")
+        );
         assert!(output.routes.iter().all(|route| {
             route
                 .source_evidence
@@ -2685,6 +5086,70 @@ mod tests {
             ),
             "/home/runner/project/tests/fixtures/express/shared/index"
         );
+    }
+
+    #[test]
+    fn discovers_trpc_procedures_as_operations() {
+        let parsed = parse_fixtures(&["trpc/router.ts"]);
+        let output = TrpcAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert_eq!(output.routes.len(), 4);
+        assert_eq!(
+            route(&output, "GET", "/trpc/router/publicInfo").framework,
+            Framework::Trpc
+        );
+        assert_eq!(
+            route(&output, "POST", "/trpc/router/updateProfile").framework,
+            Framework::Trpc
+        );
+        assert_eq!(
+            route(&output, "POST", "/trpc/router/updateSettings").framework,
+            Framework::Trpc
+        );
+        assert_eq!(
+            route(&output, "GET", "/trpc/router/adminStats")
+                .extensions
+                .get("authmap.trpc")
+                .and_then(|value| value.get("procedure_root"))
+                .and_then(serde_json::Value::as_str),
+            Some("authedAdminProcedure")
+        );
+    }
+
+    #[test]
+    fn discovers_graphql_graphene_operations() {
+        let parsed = parse_fixtures(&["graphql/mutations.py"]);
+        let output = GraphqlAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        let paths = output
+            .routes
+            .iter()
+            .map(|route| route.path.as_str())
+            .collect::<BTreeSet<_>>();
+        assert!(output.routes.iter().any(|route| {
+            route.framework == Framework::Graphql
+                && route.method == "MUTATION"
+                && route.path == "/graphql/productCreate"
+        }));
+        assert!(output.routes.iter().any(|route| {
+            route.framework == Framework::Graphql
+                && route.method == "QUERY"
+                && route.path == "/graphql/customers"
+        }));
+        assert!(paths.contains("/graphql/createToken"));
+        assert!(paths.contains("/graphql/requestPasswordReset"));
+        assert!(paths.contains("/graphql/checkoutCreate"));
+        assert!(paths.contains("/graphql/products"));
+        for excluded in [
+            "/graphql/accountQueries",
+            "/graphql/accountMutations",
+            "/graphql/choiceValue",
+            "/graphql/baseMutation",
+            "/graphql/modelDeleteMutation",
+            "/graphql/generatedSchemaField",
+        ] {
+            assert!(!paths.contains(excluded), "unexpected route {excluded}");
+        }
     }
 
     fn route<'a>(

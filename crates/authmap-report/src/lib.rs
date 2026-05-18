@@ -1772,6 +1772,8 @@ fn framework_label(framework: Framework) -> &'static str {
         Framework::DjangoRestFramework => "django_rest_framework",
         Framework::Express => "express",
         Framework::NextJs => "next_js",
+        Framework::Trpc => "trpc",
+        Framework::Graphql => "graphql",
         Framework::Unknown => "unknown",
     }
 }

@@ -13,7 +13,10 @@ use authmap_core::{
     ReachabilityLink, Recoverability, RiskLevel, ScanMetadata, Span, SymbolRef,
 };
 use authmap_discovery::discover_sources;
-use authmap_parsers::{ParseError, ParsedFile, TreeSitterBackend, parse_files_in_parallel};
+use authmap_parsers::{
+    ParseError, ParsedFile, TreeSitterBackend, parse_files_in_parallel,
+    parse_files_in_parallel_selective,
+};
 use serde::Serialize;
 use thiserror::Error;
 use tree_sitter::Node;
@@ -102,6 +105,21 @@ impl EvidenceExtractor for BuiltInEvidenceExtractor {
             .iter()
             .map(|parsed| (parsed.source.path.as_str(), parsed))
             .collect::<BTreeMap<_, _>>();
+        let service_index = input
+            .routes
+            .iter()
+            .any(route_supports_service_evidence)
+            .then(|| ReachabilityIndex::new(input.parsed_files));
+        let django_class_index = input
+            .routes
+            .iter()
+            .any(|route| {
+                matches!(
+                    route.framework,
+                    Framework::Django | Framework::DjangoRestFramework
+                )
+            })
+            .then(|| PythonClassIndex::new(input.parsed_files));
 
         for route in input.routes {
             let mut route_evidence = match route.framework {
@@ -112,11 +130,30 @@ impl EvidenceExtractor for BuiltInEvidenceExtractor {
                     extract_fastapi_route_evidence(route, &parsed_by_path, &rules)
                 }
                 Framework::Django | Framework::DjangoRestFramework => {
-                    extract_django_route_evidence(route, &parsed_by_path, &rules)
+                    if let Some(django_class_index) = &django_class_index {
+                        extract_django_route_evidence(
+                            route,
+                            &parsed_by_path,
+                            &rules,
+                            django_class_index,
+                        )
+                    } else {
+                        Vec::new()
+                    }
                 }
                 Framework::NextJs => extract_nextjs_route_evidence(route, &parsed_by_path, &rules),
+                Framework::Trpc => extract_trpc_route_evidence(route),
+                Framework::Graphql => extract_graphql_route_evidence(route),
                 _ => Vec::new(),
             };
+            if let Some(service_index) = &service_index {
+                route_evidence.extend(extract_service_call_evidence(
+                    route,
+                    &parsed_by_path,
+                    &rules,
+                    service_index,
+                ));
+            }
             evidence.append(&mut route_evidence);
         }
 
@@ -151,7 +188,9 @@ impl MutationExtractor for BuiltInMutationExtractor {
                     mutations.extend(extract_prisma_mutations(parsed, root));
                 }
                 authmap_core::Language::Python => {
-                    mutations.extend(extract_python_mutations(parsed, root));
+                    if python_may_contain_mutation(parsed) {
+                        mutations.extend(extract_python_mutations(parsed, root));
+                    }
                 }
                 authmap_core::Language::Unknown => {}
             }
@@ -175,6 +214,19 @@ pub struct BuiltInReachabilityLinker;
 
 impl ReachabilityLinker for BuiltInReachabilityLinker {
     fn link_reachability(&self, input: &AnalysisInput<'_>) -> AnalysisFacts {
+        if !input.routes.iter().any(|route| {
+            matches!(
+                route.framework,
+                Framework::Express
+                    | Framework::FastApi
+                    | Framework::Django
+                    | Framework::DjangoRestFramework
+                    | Framework::NextJs
+            )
+        }) {
+            return AnalysisFacts::default();
+        }
+
         let index = ReachabilityIndex::new(input.parsed_files);
         let parsed_by_path = input
             .parsed_files
@@ -231,6 +283,183 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
     run_scan_with_started_at(plan, Instant::now())
 }
 
+fn source_needs_syntax_tree(
+    language: authmap_core::Language,
+    text: &str,
+    config: &ScanConfig,
+) -> bool {
+    if !config.authorization.rules.is_empty() {
+        return true;
+    }
+    match language {
+        authmap_core::Language::Python => python_needs_syntax_tree(text),
+        authmap_core::Language::JavaScript
+        | authmap_core::Language::JavaScriptReact
+        | authmap_core::Language::TypeScript
+        | authmap_core::Language::TypeScriptReact
+        | authmap_core::Language::Unknown => true,
+    }
+}
+
+fn python_needs_syntax_tree(text: &str) -> bool {
+    if contains_any(text, &["def ", "class ", "import ", "from "]) {
+        return true;
+    }
+    if python_text_may_contain_mutation(text) {
+        return true;
+    }
+    if contains_any(text, &["authorize(", "authorise("]) {
+        return true;
+    }
+    if contains_any(
+        text,
+        &[
+            "FastAPI(",
+            "APIRouter(",
+            "@app.",
+            "@router.",
+            "Depends(",
+            "include_router(",
+            "urlpatterns",
+            "path(",
+            "re_path(",
+            "DefaultRouter(",
+            ".register(",
+            "@api_view",
+            "APIView",
+            "ViewSet",
+            "BasePermission",
+            "PermissionRequiredMixin",
+            "permission_classes",
+            "permission_required",
+            "get_permissions",
+            "get_queryset",
+        ],
+    ) {
+        return true;
+    }
+    if text.contains("class ") && text.contains("View") {
+        return true;
+    }
+    let lower = text.to_ascii_lowercase();
+    contains_any(
+        &lower,
+        &[
+            "from fastapi",
+            "import fastapi",
+            "django.urls",
+            "rest_framework",
+            "django.views",
+            "django.contrib.auth",
+        ],
+    )
+}
+
+fn enabled_frameworks_for_sources(parsed_files: &[ParsedFile]) -> Vec<String> {
+    let mut frameworks = BTreeSet::<String>::new();
+    for parsed in parsed_files {
+        match parsed.language {
+            authmap_core::Language::Python => {
+                if python_has_fastapi_route_indicators(&parsed.text) {
+                    frameworks.insert("fastapi".to_string());
+                }
+                if python_has_django_route_indicators(&parsed.text) {
+                    frameworks.insert("django".to_string());
+                }
+                if python_has_graphql_route_indicators(&parsed.text) {
+                    frameworks.insert("graphql".to_string());
+                }
+            }
+            authmap_core::Language::JavaScript
+            | authmap_core::Language::JavaScriptReact
+            | authmap_core::Language::TypeScript
+            | authmap_core::Language::TypeScriptReact => {
+                if js_has_express_route_indicators(&parsed.text) {
+                    frameworks.insert("express".to_string());
+                }
+                if js_has_nextjs_route_indicators(parsed, &parsed.text) {
+                    frameworks.insert("nextjs".to_string());
+                }
+                if parsed.text.contains("Procedure") || parsed.text.contains("procedure") {
+                    frameworks.insert("trpc".to_string());
+                }
+            }
+            authmap_core::Language::Unknown => {}
+        }
+    }
+    frameworks.into_iter().collect()
+}
+
+fn python_has_fastapi_route_indicators(text: &str) -> bool {
+    contains_any(
+        text,
+        &[
+            "FastAPI(",
+            "APIRouter(",
+            "@app.",
+            "@router.",
+            "include_router(",
+        ],
+    ) || contains_any(
+        &text.to_ascii_lowercase(),
+        &["from fastapi", "import fastapi"],
+    )
+}
+
+fn python_has_django_route_indicators(text: &str) -> bool {
+    contains_any(
+        text,
+        &[
+            "urlpatterns",
+            "DefaultRouter(",
+            "@api_view",
+            "APIView",
+            "ViewSet",
+        ],
+    ) || contains_any(&text.to_ascii_lowercase(), &["rest_framework.routers"])
+}
+
+fn python_has_graphql_route_indicators(text: &str) -> bool {
+    contains_any(
+        text,
+        &[
+            "graphene",
+            "BaseMutation",
+            "ModelMutation",
+            "ModelDeleteMutation",
+            "DeprecatedModelMutation",
+        ],
+    )
+}
+
+fn js_has_express_route_indicators(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    contains_any(
+        &lower,
+        &[
+            "from \"express\"",
+            "from 'express'",
+            "require(\"express\")",
+            "require('express')",
+            "express.router(",
+            "setupapiroute(",
+            "setuppageroute(",
+            "setupadminpageroute(",
+            "app.use(",
+            "router.use(",
+        ],
+    )
+}
+
+fn js_has_nextjs_route_indicators(parsed: &ParsedFile, text: &str) -> bool {
+    let path = parsed.source.path.replace('\\', "/").to_ascii_lowercase();
+    path.contains("/app/api/")
+        || contains_any(
+            &text.to_ascii_lowercase(),
+            &["next/server", "from \"next", "from 'next"],
+        )
+}
+
 fn run_scan_with_started_at(
     plan: &ScanPlan,
     started_at: Instant,
@@ -247,12 +476,17 @@ fn run_scan_with_started_at(
         return Ok(document);
     }
 
-    let parse_output = parse_files_in_parallel(&backend, &document.source_files, |file| {
-        fs::read_to_string(&file.path).map_err(|source| ParseError::Read {
-            path: file.path.clone(),
-            message: source.to_string(),
-        })
-    });
+    let parse_output = parse_files_in_parallel_selective(
+        &backend,
+        &document.source_files,
+        |file| {
+            fs::read_to_string(&file.path).map_err(|source| ParseError::Read {
+                path: file.path.clone(),
+                message: source.to_string(),
+            })
+        },
+        |file, text| source_needs_syntax_tree(file.language, text, &plan.config),
+    );
     document.diagnostics.extend(parse_output.diagnostics);
     if budget.is_exceeded() {
         push_runtime_limit_diagnostic(&mut document, plan);
@@ -261,8 +495,11 @@ fn run_scan_with_started_at(
     }
 
     let adapter_registry = AdapterRegistry::built_in();
+    let adapter_context = AdapterContext {
+        enabled_frameworks: enabled_frameworks_for_sources(&parse_output.parsed_files),
+    };
     let adapter_output =
-        adapter_registry.discover_routes(&parse_output.parsed_files, &AdapterContext::default());
+        adapter_registry.discover_routes(&parse_output.parsed_files, &adapter_context);
 
     document.routes = adapter_output.routes;
     document.diagnostics.extend(adapter_output.diagnostics);
@@ -541,11 +778,29 @@ fn suggest_rules_with_started_at(
         .map(|handler| handler.name.as_str())
         .filter(|name| !name.starts_with('<'))
         .collect::<BTreeSet<_>>();
+    let route_files = adapter_output
+        .routes
+        .iter()
+        .filter_map(|route| {
+            route
+                .handler
+                .as_ref()
+                .and_then(|handler| handler.span.as_ref())
+                .or(route.span.as_ref())
+        })
+        .map(|span| span.file.as_str())
+        .collect::<BTreeSet<_>>();
 
     let rules = EvidenceRules::new(&plan.config);
     let mut candidates = BTreeMap::<String, RuleCandidate>::new();
     for parsed in &parse_output.parsed_files {
-        collect_rule_candidates(parsed, &route_handlers, &rules, &mut candidates);
+        collect_rule_candidates(
+            parsed,
+            &route_files,
+            &route_handlers,
+            &rules,
+            &mut candidates,
+        );
     }
 
     let mut suggestions = candidates
@@ -616,10 +871,14 @@ impl RuleCandidate {
 
 fn collect_rule_candidates(
     parsed: &ParsedFile,
+    route_files: &BTreeSet<&str>,
     route_handlers: &BTreeSet<&str>,
     rules: &EvidenceRules,
     candidates: &mut BTreeMap<String, RuleCandidate>,
 ) {
+    if !route_files.is_empty() && !route_files.contains(parsed.source.path.as_str()) {
+        return;
+    }
     let Some(root) = parsed.root_node() else {
         return;
     };
@@ -802,7 +1061,7 @@ fn add_rule_candidate(
     rules: &EvidenceRules,
 ) {
     let symbol = symbol.trim();
-    if should_skip_rule_candidate(symbol, route_handlers, rules) {
+    if should_skip_rule_candidate(parsed, symbol, context, route_handlers, rules) {
         return;
     }
     let Some((evidence_type, confidence, rationale)) = classify_rule_candidate(symbol, context)
@@ -836,15 +1095,39 @@ fn add_rule_candidate(
 }
 
 fn should_skip_rule_candidate(
+    parsed: &ParsedFile,
     symbol: &str,
+    context: &str,
     route_handlers: &BTreeSet<&str>,
     rules: &EvidenceRules,
 ) -> bool {
     let lower = symbol.to_ascii_lowercase();
+    let path = parsed.source.path.replace('\\', "/").to_ascii_lowercase();
+    if context == "FastAPI dependency" && is_operational_dependency_symbol(&lower) {
+        return true;
+    }
     if symbol.is_empty()
         || symbol.starts_with('<')
         || route_handlers.contains(symbol)
         || rules.match_symbol(symbol).is_some()
+        || path.contains("/tests/")
+        || path.contains("/models/")
+        || path.contains("/tables/")
+        || path.contains("/forms/")
+        || path.contains("/migrations/")
+        || path.ends_with("_test.py")
+        || path.ends_with(".test.js")
+        || path.ends_with(".test.ts")
+    {
+        return true;
+    }
+    if context == "call expression"
+        && (lower.ends_with("serializer")
+            || lower.ends_with("serializer_")
+            || lower.ends_with("panel")
+            || lower.ends_with("panels")
+            || lower.ends_with("table")
+            || lower.ends_with("form"))
     {
         return true;
     }
@@ -876,6 +1159,36 @@ fn should_skip_rule_candidate(
             | "index"
             | "handler"
             | "depends"
+    )
+}
+
+fn is_operational_dependency_symbol(lower: &str) -> bool {
+    let tokens = symbol_tokens(lower);
+    if tokens.iter().any(|token| token == "db") {
+        return true;
+    }
+    contains_any(
+        lower,
+        &[
+            "database",
+            "session_context",
+            "api_version",
+            "client_version",
+            "minimum_version",
+            "pagination",
+            "page_size",
+            "limit",
+            "settings",
+            "config",
+            "configuration",
+            "logger",
+            "cache",
+            "clock",
+            "metrics",
+            "telemetry",
+            "request_id",
+            "correlation_id",
+        ],
     )
 }
 
@@ -933,7 +1246,8 @@ fn classify_rule_candidate(
             "name suggests owner or resource ownership checks".to_string(),
         ));
     }
-    if lower.starts_with("can")
+    let tokens = symbol_tokens(symbol);
+    if tokens.first().is_some_and(|token| token == "can")
         || contains_any(
             &lower,
             &[
@@ -956,7 +1270,9 @@ fn classify_rule_candidate(
             "name suggests a permission, entitlement, or access guard".to_string(),
         ));
     }
-    if contains_any(&lower, &["role", "group"]) {
+    if lower.contains("role")
+        || (lower.contains("group") && (guard_like || context_lower.contains("permission")))
+    {
         return Some((
             EvidenceType::RoleCheck,
             Confidence::Medium,
@@ -1119,8 +1435,40 @@ fn extract_python_mutations(parsed: &ParsedFile, root: Node<'_>) -> Vec<Mutation
     mutations
 }
 
+fn python_may_contain_mutation(parsed: &ParsedFile) -> bool {
+    python_text_may_contain_mutation(parsed.text.as_str())
+}
+
+fn python_text_may_contain_mutation(text: &str) -> bool {
+    [
+        ".save(",
+        ".delete(",
+        ".update(",
+        ".create(",
+        ".bulk_create(",
+        ".bulk_update(",
+        ".get_or_create(",
+        ".update_or_create(",
+        ".add(",
+        ".merge(",
+        ".execute(",
+        ".objects.",
+        "session.",
+        "insert(",
+        "update(",
+        "delete(",
+        "raw(",
+    ]
+    .iter()
+    .any(|needle| text.contains(needle))
+}
+
 fn extract_python_function_mutations(parsed: &ParsedFile, function: Node<'_>) -> Vec<Mutation> {
     let mut mutations = Vec::new();
+    let function_text = parsed.text_for(function).unwrap_or_default();
+    if !python_text_may_contain_mutation(function_text) {
+        return mutations;
+    }
     let mut model_by_var = BTreeMap::<String, String>::new();
     let session_symbols = collect_python_session_symbols(parsed, function);
     collect_python_model_bindings(parsed, function, &session_symbols, &mut model_by_var);
@@ -1670,6 +2018,7 @@ fn looks_like_model_name(value: &str) -> bool {
 #[derive(Clone, Debug)]
 struct ReachabilityIndex<'a> {
     functions: BTreeMap<(String, String), FunctionDef<'a>>,
+    class_methods: BTreeMap<(String, String, String), FunctionDef<'a>>,
     imports: BTreeMap<(String, String), ImportTarget>,
     default_exports: BTreeMap<String, String>,
     parsed_by_file: BTreeMap<String, &'a ParsedFile>,
@@ -1700,6 +2049,7 @@ impl<'a> ReachabilityIndex<'a> {
         let js_modules = build_js_module_index(parsed_files);
         let mut index = Self {
             functions: BTreeMap::new(),
+            class_methods: BTreeMap::new(),
             imports: BTreeMap::new(),
             default_exports: BTreeMap::new(),
             parsed_by_file: parsed_files
@@ -1711,6 +2061,7 @@ impl<'a> ReachabilityIndex<'a> {
         for parsed in parsed_files {
             if let Some(root) = parsed.root_node() {
                 collect_function_defs(parsed, root, &mut index.functions);
+                collect_class_method_defs(parsed, root, &mut index.class_methods);
             }
             match parsed.language {
                 authmap_core::Language::Python => {
@@ -1773,6 +2124,32 @@ impl<'a> ReachabilityIndex<'a> {
                 });
         }
         None
+    }
+
+    fn resolve_call_with_receiver_types(
+        &self,
+        source_file: &str,
+        function_text: &str,
+        receiver_types: &BTreeMap<String, String>,
+    ) -> Option<ResolvedFunction<'a>> {
+        let trimmed = function_text.trim();
+        let (receiver, method) = trimmed.rsplit_once('.')?;
+        let receiver = clean_symbol(receiver);
+        let class_name = receiver_types.get(&receiver)?;
+        let target = self
+            .imports
+            .get(&(source_file.to_string(), class_name.clone()))?;
+        self.class_methods
+            .get(&(
+                target.file.clone(),
+                target.name.clone().unwrap_or_else(|| class_name.clone()),
+                clean_symbol(method),
+            ))
+            .cloned()
+            .map(|def| ResolvedFunction {
+                def,
+                confidence: Confidence::Medium,
+            })
     }
 }
 
@@ -2092,6 +2469,56 @@ fn collect_function_defs<'tree>(
     }
 }
 
+fn collect_class_method_defs<'tree>(
+    parsed: &'tree ParsedFile,
+    root: Node<'tree>,
+    methods: &mut BTreeMap<(String, String, String), FunctionDef<'tree>>,
+) {
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "class_definition"
+            && let Some(class_name) = function_name(parsed, node)
+        {
+            for method in direct_class_methods(node) {
+                if let Some(method_name) = function_name(parsed, method) {
+                    methods.insert(
+                        (
+                            parsed.source.path.clone(),
+                            class_name.clone(),
+                            method_name.clone(),
+                        ),
+                        FunctionDef {
+                            file: parsed.source.path.clone(),
+                            name: method_name,
+                            node: method,
+                        },
+                    );
+                }
+            }
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+}
+
+fn direct_class_methods(class_node: Node<'_>) -> Vec<Node<'_>> {
+    let Some(body) = class_node.child_by_field_name("body") else {
+        return Vec::new();
+    };
+    let mut methods = Vec::new();
+    let mut cursor = body.walk();
+    for child in body.children(&mut cursor).filter(|child| child.is_named()) {
+        if child.kind() == "function_definition" {
+            methods.push(child);
+        } else if child.kind() == "decorated_definition"
+            && let Some(function) = find_direct_child_kind(child, "function_definition")
+        {
+            methods.push(function);
+        }
+    }
+    methods
+}
+
 fn build_python_module_index(parsed_files: &[ParsedFile]) -> BTreeMap<String, String> {
     let mut index = BTreeMap::new();
     for parsed in parsed_files
@@ -2100,9 +2527,10 @@ fn build_python_module_index(parsed_files: &[ParsedFile]) -> BTreeMap<String, St
     {
         let normalized = parsed.source.path.replace('\\', "/");
         if let Some(stem) = normalized.strip_suffix(".py") {
-            index.insert(stem.to_string(), parsed.source.path.clone());
-            index.insert(stem.replace('/', "."), parsed.source.path.clone());
-            if let Some((_, file_stem)) = stem.rsplit_once('/') {
+            let module_stem = stem.strip_suffix("/__init__").unwrap_or(stem);
+            index.insert(module_stem.to_string(), parsed.source.path.clone());
+            index.insert(module_stem.replace('/', "."), parsed.source.path.clone());
+            if let Some((_, file_stem)) = module_stem.rsplit_once('/') {
                 index.insert(file_stem.to_string(), parsed.source.path.clone());
             }
         }
@@ -2136,6 +2564,20 @@ fn collect_python_imports(
                 .map_or((part, part), |(export_name, local_name)| {
                     (export_name.trim(), local_name.trim())
                 });
+            if let Some(imported_module_file) = resolve_python_module(
+                parsed,
+                module_index,
+                &python_imported_module(module, export_name),
+            ) {
+                imports.insert(
+                    (parsed.source.path.clone(), local_name.to_string()),
+                    ImportTarget {
+                        file: imported_module_file,
+                        name: None,
+                    },
+                );
+                continue;
+            }
             imports.insert(
                 (parsed.source.path.clone(), local_name.to_string()),
                 ImportTarget {
@@ -2144,6 +2586,16 @@ fn collect_python_imports(
                 },
             );
         }
+    }
+}
+
+fn python_imported_module(module: &str, export_name: &str) -> String {
+    let module = module.trim();
+    let export_name = export_name.trim();
+    if module.chars().all(|ch| ch == '.') {
+        format!("{module}{export_name}")
+    } else {
+        format!("{module}.{export_name}")
     }
 }
 
@@ -2615,8 +3067,12 @@ fn builtin_rules() -> Vec<EvidenceRuleSpec> {
                 "requirePermission",
                 "require_permission",
                 "can_edit_account",
+                "checkPrivileges",
+                "canViewUsers",
+                "canViewGroups",
+                "canChat",
             ],
-            &["permission", "permissions"],
+            &["permission", "permissions", "privilege", "privileges"],
         ),
         rule(
             EvidenceType::RoleCheck,
@@ -2657,16 +3113,25 @@ fn builtin_rules() -> Vec<EvidenceRuleSpec> {
                 "current_user",
                 "get_current_user",
                 "getCurrentUser",
+                "authenticateRequest",
+                "ensureLoggedIn",
                 "session",
                 "auth",
             ],
-            &["auth", "session", "authenticated"],
+            &["auth", "session", "authenticated", "logged"],
         ),
         rule(
             EvidenceType::UnknownDynamicCheck,
             "dynamic_policy",
             Confidence::Low,
-            &["policy", "checkPolicy", "enforcePolicy", "dynamicPolicy"],
+            &[
+                "authorize",
+                "authorise",
+                "policy",
+                "checkPolicy",
+                "enforcePolicy",
+                "dynamicPolicy",
+            ],
             &["policy", "dynamic"],
         ),
     ]
@@ -2748,13 +3213,65 @@ fn extract_fastapi_route_evidence(
     evidence.extend(extract_guard_condition_evidence(
         parsed, node, route, handler,
     ));
+    for dependency in &route.middleware {
+        if let Some(rule) = rules.match_symbol(&dependency.name) {
+            push_fastapi_dependency_evidence(&mut evidence, route, rule, dependency.clone());
+        } else if looks_dynamic_policy(&dependency.name) {
+            push_unique_symbol_evidence(
+                &mut evidence,
+                Evidence {
+                    id: String::new(),
+                    route_id: Some(route.id.clone()),
+                    evidence_type: EvidenceType::UnknownDynamicCheck,
+                    mechanism: "fastapi_dependency".to_string(),
+                    symbol: Some(dependency.clone()),
+                    span: dependency.span.clone(),
+                    confidence: Confidence::Low,
+                    notes: vec![
+                    "FastAPI dependency looks policy-related but no specific guard type matched"
+                        .to_string(),
+                ],
+                    extensions: authmap_core::ExtensionMap::new(),
+                },
+            );
+        }
+    }
     evidence
+}
+
+fn push_fastapi_dependency_evidence(
+    evidence: &mut Vec<Evidence>,
+    route: &authmap_core::Route,
+    rule: &EvidenceRuleSpec,
+    dependency: SymbolRef,
+) {
+    push_unique_symbol_evidence(
+        evidence,
+        evidence_from_rule(
+            route,
+            rule,
+            Some(dependency.clone()),
+            dependency.span.clone(),
+        ),
+    );
+}
+
+fn push_unique_symbol_evidence(evidence: &mut Vec<Evidence>, candidate: Evidence) {
+    let candidate_symbol = candidate.symbol.as_ref().map(|symbol| symbol.name.as_str());
+    if evidence.iter().any(|existing| {
+        existing.evidence_type == candidate.evidence_type
+            && existing.symbol.as_ref().map(|symbol| symbol.name.as_str()) == candidate_symbol
+    }) {
+        return;
+    }
+    evidence.push(candidate);
 }
 
 fn extract_django_route_evidence(
     route: &authmap_core::Route,
     parsed_by_path: &BTreeMap<&str, &ParsedFile>,
     rules: &EvidenceRules,
+    class_index: &PythonClassIndex<'_>,
 ) -> Vec<Evidence> {
     let Some(handler) = &route.handler else {
         return Vec::new();
@@ -2778,6 +3295,18 @@ fn extract_django_route_evidence(
             parsed, node, route, handler,
         ));
     }
+    if let Some(metadata) = django_route_metadata(route)
+        && let Some(class_name) = metadata.class_name.as_deref()
+        && let Some(class_file) = handler.span.as_ref().map(|span| span.file.as_str())
+    {
+        evidence.extend(extract_django_class_evidence(
+            route,
+            rules,
+            class_index,
+            class_file,
+            class_name,
+        ));
+    }
     evidence
 }
 
@@ -2796,6 +3325,12 @@ fn extract_nextjs_route_evidence(
     };
 
     let mut evidence = Vec::new();
+    if let Some(metadata) = nextjs_route_metadata(route)
+        && let Some(wrapper) = metadata.wrapper.as_deref()
+        && let Some(wrapper_evidence) = evidence_from_nextjs_wrapper(route, wrapper)
+    {
+        evidence.push(wrapper_evidence);
+    }
     for node in nextjs_handler_nodes(parsed, route, handler) {
         evidence.extend(extract_calls_from_node(
             parsed,
@@ -2809,6 +3344,234 @@ fn extract_nextjs_route_evidence(
         ));
     }
     evidence
+}
+
+fn extract_trpc_route_evidence(route: &authmap_core::Route) -> Vec<Evidence> {
+    let Some(value) = route.extensions.get("authmap.trpc") else {
+        return Vec::new();
+    };
+    let root = value
+        .get("procedure_root")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let lower = root.to_ascii_lowercase();
+    let (evidence_type, mechanism) = if lower.contains("admin") {
+        (EvidenceType::RoleCheck, "trpc_procedure")
+    } else if lower.contains("authed") || lower.contains("protected") {
+        (EvidenceType::Authn, "trpc_procedure")
+    } else if lower.contains("public") {
+        (EvidenceType::ExplicitPublic, "trpc_public_procedure")
+    } else {
+        return Vec::new();
+    };
+    vec![Evidence {
+        id: String::new(),
+        route_id: Some(route.id.clone()),
+        evidence_type,
+        mechanism: mechanism.to_string(),
+        symbol: Some(SymbolRef {
+            name: root.to_string(),
+            span: route.span.clone(),
+        }),
+        span: route.span.clone(),
+        confidence: Confidence::Medium,
+        notes: Vec::new(),
+        extensions: authmap_core::ExtensionMap::new(),
+    }]
+}
+
+fn extract_graphql_route_evidence(route: &authmap_core::Route) -> Vec<Evidence> {
+    let Some(value) = route.extensions.get("authmap.graphql") else {
+        return Vec::new();
+    };
+    let Some(permissions) = value.get("permissions").and_then(serde_json::Value::as_str) else {
+        return Vec::new();
+    };
+    if permissions.trim().is_empty() {
+        return Vec::new();
+    }
+    let (evidence_type, mechanism) = if graphql_permissions_explicitly_public(permissions) {
+        (EvidenceType::ExplicitPublic, "graphql_public_permissions")
+    } else {
+        (EvidenceType::PermissionCheck, "graphql_permissions")
+    };
+    vec![Evidence {
+        id: String::new(),
+        route_id: Some(route.id.clone()),
+        evidence_type,
+        mechanism: mechanism.to_string(),
+        symbol: Some(SymbolRef {
+            name: permissions.to_string(),
+            span: route.span.clone(),
+        }),
+        span: route.span.clone(),
+        confidence: Confidence::Medium,
+        notes: Vec::new(),
+        extensions: authmap_core::ExtensionMap::new(),
+    }]
+}
+
+fn graphql_permissions_explicitly_public(permissions: &str) -> bool {
+    let normalized = permissions
+        .chars()
+        .filter(|ch| !ch.is_whitespace() && *ch != ',')
+        .collect::<String>()
+        .to_ascii_lowercase();
+    normalized.contains("permissions=()")
+        || normalized.contains("permissions=[]")
+        || normalized.contains("permissions={}")
+}
+
+fn route_supports_service_evidence(route: &authmap_core::Route) -> bool {
+    matches!(
+        route.framework,
+        Framework::Express
+            | Framework::FastApi
+            | Framework::Django
+            | Framework::DjangoRestFramework
+            | Framework::NextJs
+    )
+}
+
+fn extract_service_call_evidence(
+    route: &authmap_core::Route,
+    parsed_by_path: &BTreeMap<&str, &ParsedFile>,
+    rules: &EvidenceRules,
+    index: &ReachabilityIndex<'_>,
+) -> Vec<Evidence> {
+    let Some(handler) = &route.handler else {
+        return Vec::new();
+    };
+    let Some(parsed) =
+        route_file(route).and_then(|file| parsed_by_path.get(file.as_str()).copied())
+    else {
+        return Vec::new();
+    };
+    let handler_nodes = match route.framework {
+        Framework::Express => express_handler_node(parsed, handler).into_iter().collect(),
+        Framework::FastApi => fastapi_handler_function_node(parsed, &handler.name)
+            .into_iter()
+            .collect(),
+        Framework::Django | Framework::DjangoRestFramework => {
+            django_handler_nodes(parsed, route, handler)
+        }
+        Framework::NextJs => nextjs_handler_nodes(parsed, route, handler),
+        _ => Vec::new(),
+    };
+
+    let mut evidence = Vec::new();
+    for handler_node in handler_nodes {
+        let receiver_types = python_receiver_type_bindings(parsed, handler_node);
+        for call in service_call_candidates(parsed, handler_node) {
+            let Some(function) = call.child_by_field_name("function") else {
+                continue;
+            };
+            let function_text = parsed.text_for(function).unwrap_or_default();
+            let resolved = index
+                .resolve_call_with_receiver_types(
+                    &parsed.source.path,
+                    function_text,
+                    &receiver_types,
+                )
+                .or_else(|| index.resolve_call(&parsed.source.path, function_text));
+            let Some(resolved) = resolved else {
+                continue;
+            };
+            let Some(resolved_parsed) = index.parsed_by_file.get(&resolved.def.file).copied()
+            else {
+                continue;
+            };
+            let mut service_evidence = extract_calls_from_node(
+                resolved_parsed,
+                resolved.def.node,
+                route,
+                rules,
+                "service_call",
+            );
+            for item in &mut service_evidence {
+                if item.confidence > resolved.confidence {
+                    item.confidence = resolved.confidence;
+                }
+                item.notes.push(format!(
+                    "One-hop service call `{}` reaches `{}`",
+                    function_text.trim(),
+                    resolved.def.name
+                ));
+            }
+            evidence.extend(service_evidence);
+        }
+    }
+    evidence
+}
+
+fn python_receiver_type_bindings(
+    parsed: &ParsedFile,
+    function: Node<'_>,
+) -> BTreeMap<String, String> {
+    if parsed.language != authmap_core::Language::Python {
+        return BTreeMap::new();
+    }
+    let Some(parameters) = function.child_by_field_name("parameters") else {
+        return BTreeMap::new();
+    };
+    let Some(text) = parsed.text_for(parameters) else {
+        return BTreeMap::new();
+    };
+    let mut bindings = BTreeMap::new();
+    for parameter in
+        split_top_level_commas(text.trim().trim_start_matches('(').trim_end_matches(')'))
+    {
+        let Some((name, annotation)) = parameter.split_once(':') else {
+            continue;
+        };
+        let name = name.trim().trim_start_matches('*').trim();
+        if name.is_empty() {
+            continue;
+        }
+        if let Some(class_name) = python_annotation_class_name(annotation) {
+            bindings.insert(name.to_string(), class_name);
+        }
+    }
+    bindings
+}
+
+fn split_top_level_commas(value: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    let mut depth = 0i32;
+    for (index, ch) in value.char_indices() {
+        match ch {
+            '[' | '(' | '{' => depth += 1,
+            ']' | ')' | '}' => depth -= 1,
+            ',' if depth == 0 => {
+                parts.push(value[start..index].trim());
+                start = index + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+    if start < value.len() {
+        parts.push(value[start..].trim());
+    }
+    parts
+}
+
+fn python_annotation_class_name(annotation: &str) -> Option<String> {
+    let annotation = annotation.split('=').next().unwrap_or(annotation).trim();
+    let candidate = if let Some((_, rest)) = annotation.rsplit_once('[') {
+        rest.trim_end_matches(']')
+            .rsplit(',')
+            .next()
+            .unwrap_or(rest)
+    } else {
+        annotation
+    };
+    let class_name = terminal_symbol_name(candidate.trim());
+    class_name
+        .chars()
+        .next()
+        .is_some_and(|ch| ch.is_ascii_uppercase())
+        .then_some(class_name)
 }
 
 fn extract_calls_from_node(
@@ -2920,6 +3683,261 @@ fn extract_guard_condition_evidence(
         stack.extend(current.children(&mut cursor));
     }
     evidence
+}
+
+fn extract_django_class_evidence(
+    route: &authmap_core::Route,
+    rules: &EvidenceRules,
+    class_index: &PythonClassIndex<'_>,
+    class_file: &str,
+    class_name: &str,
+) -> Vec<Evidence> {
+    let mut evidence = Vec::new();
+    let chain = class_index.class_chain(class_file, class_name);
+    let Some(route_class) = chain.first() else {
+        return evidence;
+    };
+
+    for class in &chain {
+        let inherited = class.file != route_class.file || class.name != route_class.name;
+        evidence.extend(extract_django_base_evidence(route, class, inherited));
+        evidence.extend(extract_django_class_attribute_evidence(
+            route, class, inherited,
+        ));
+        for method_name in [
+            "initial",
+            "dispatch",
+            "has_permission",
+            "get_permissions",
+            "check_permissions",
+            "get_queryset",
+        ] {
+            if let Some(method) = python_class_method_node(class.node, class.parsed, method_name) {
+                evidence.extend(extract_calls_from_node(
+                    class.parsed,
+                    method,
+                    route,
+                    rules,
+                    if inherited {
+                        "inherited_handler_call"
+                    } else {
+                        "handler_call"
+                    },
+                ));
+                evidence.extend(extract_django_builtin_evidence_from_node(
+                    route, class, method, inherited,
+                ));
+            }
+        }
+    }
+    evidence
+}
+
+fn extract_django_base_evidence(
+    route: &authmap_core::Route,
+    class: &PythonClassDef<'_>,
+    inherited: bool,
+) -> Vec<Evidence> {
+    class
+        .bases
+        .iter()
+        .filter_map(|base| {
+            let clean = terminal_symbol_name(base);
+            let lower = clean.to_ascii_lowercase();
+            let (evidence_type, mechanism) = if lower.contains("loginrequired") {
+                (EvidenceType::Authn, "django_login_required_mixin")
+            } else if lower.contains("permissionrequired") || lower.contains("objectpermission") {
+                (EvidenceType::PermissionCheck, "django_permission_mixin")
+            } else if lower.contains("userpassestest") {
+                (EvidenceType::UnknownDynamicCheck, "django_user_test_mixin")
+            } else {
+                return None;
+            };
+            Some(Evidence {
+                id: String::new(),
+                route_id: Some(route.id.clone()),
+                evidence_type,
+                mechanism: mechanism.to_string(),
+                symbol: Some(SymbolRef {
+                    name: clean,
+                    span: Some(class.span.clone()),
+                }),
+                span: Some(class.span.clone()),
+                confidence: if inherited {
+                    Confidence::Medium
+                } else {
+                    Confidence::High
+                },
+                notes: inherited_note(inherited, class),
+                extensions: authmap_core::ExtensionMap::new(),
+            })
+        })
+        .collect()
+}
+
+fn extract_django_class_attribute_evidence(
+    route: &authmap_core::Route,
+    class: &PythonClassDef<'_>,
+    inherited: bool,
+) -> Vec<Evidence> {
+    let mut evidence = Vec::new();
+    for assignment in direct_class_assignments(class.node) {
+        let Some((left, right)) = assignment_sides(class.parsed, assignment) else {
+            continue;
+        };
+        let attr = left.trim();
+        if attr != "permission_classes" && attr != "authentication_classes" {
+            continue;
+        }
+        let lower = right.to_ascii_lowercase();
+        let (evidence_type, mechanism, symbol_name) = if attr == "authentication_classes" {
+            (
+                EvidenceType::Authn,
+                "django_authentication_classes",
+                "authentication_classes".to_string(),
+            )
+        } else if lower.contains("allowany") {
+            (
+                EvidenceType::ExplicitPublic,
+                "drf_permission_classes",
+                "AllowAny".to_string(),
+            )
+        } else if lower.contains("isadminuser") || lower.contains("issuperuser") {
+            (
+                EvidenceType::AdminCheck,
+                "drf_permission_classes",
+                "IsAdminUser".to_string(),
+            )
+        } else if lower.contains("isauthenticated") {
+            (
+                EvidenceType::Authn,
+                "drf_permission_classes",
+                "IsAuthenticated".to_string(),
+            )
+        } else if lower.contains("permission") {
+            (
+                EvidenceType::PermissionCheck,
+                "drf_permission_classes",
+                "permission_classes".to_string(),
+            )
+        } else {
+            (
+                EvidenceType::UnknownDynamicCheck,
+                "drf_permission_classes",
+                "permission_classes".to_string(),
+            )
+        };
+        evidence.push(Evidence {
+            id: String::new(),
+            route_id: Some(route.id.clone()),
+            evidence_type,
+            mechanism: mechanism.to_string(),
+            symbol: Some(SymbolRef {
+                name: symbol_name,
+                span: Some(class.parsed.span_for(assignment)),
+            }),
+            span: Some(class.parsed.span_for(assignment)),
+            confidence: if inherited {
+                Confidence::Medium
+            } else {
+                Confidence::High
+            },
+            notes: inherited_note(inherited, class),
+            extensions: authmap_core::ExtensionMap::new(),
+        });
+    }
+    evidence
+}
+
+fn extract_django_builtin_evidence_from_node(
+    route: &authmap_core::Route,
+    class: &PythonClassDef<'_>,
+    node: Node<'_>,
+    inherited: bool,
+) -> Vec<Evidence> {
+    let mut evidence = Vec::new();
+    let mut stack = vec![node];
+    while let Some(current) = stack.pop() {
+        if let Some(text) = class.parsed.text_for(current) {
+            let lower = text.to_ascii_lowercase();
+            if current.kind() == "attribute" || current.kind() == "call" {
+                if lower.contains("has_perm") || lower.contains("has_perms") {
+                    evidence.push(django_builtin_evidence(
+                        route,
+                        class,
+                        current,
+                        EvidenceType::PermissionCheck,
+                        "django_user_permission_call",
+                        "has_perm",
+                        inherited,
+                    ));
+                } else if lower.contains(".restrict") {
+                    evidence.push(django_builtin_evidence(
+                        route,
+                        class,
+                        current,
+                        EvidenceType::PermissionCheck,
+                        "django_queryset_restrict",
+                        "restrict",
+                        inherited,
+                    ));
+                } else if lower.contains("is_authenticated") {
+                    evidence.push(django_builtin_evidence(
+                        route,
+                        class,
+                        current,
+                        EvidenceType::Authn,
+                        "django_authenticated_user_check",
+                        "is_authenticated",
+                        inherited,
+                    ));
+                }
+            }
+        }
+        let mut cursor = current.walk();
+        stack.extend(current.children(&mut cursor));
+    }
+    evidence
+}
+
+fn django_builtin_evidence(
+    route: &authmap_core::Route,
+    class: &PythonClassDef<'_>,
+    node: Node<'_>,
+    evidence_type: EvidenceType,
+    mechanism: &str,
+    symbol_name: &str,
+    inherited: bool,
+) -> Evidence {
+    Evidence {
+        id: String::new(),
+        route_id: Some(route.id.clone()),
+        evidence_type,
+        mechanism: mechanism.to_string(),
+        symbol: Some(SymbolRef {
+            name: symbol_name.to_string(),
+            span: Some(class.parsed.span_for(node)),
+        }),
+        span: Some(class.parsed.span_for(node)),
+        confidence: if inherited {
+            Confidence::Medium
+        } else {
+            Confidence::High
+        },
+        notes: inherited_note(inherited, class),
+        extensions: authmap_core::ExtensionMap::new(),
+    }
+}
+
+fn inherited_note(inherited: bool, class: &PythonClassDef<'_>) -> Vec<String> {
+    if inherited {
+        vec![format!(
+            "Authorization evidence inherited from {}",
+            class.name
+        )]
+    } else {
+        Vec::new()
+    }
 }
 
 fn condition_node(node: Node<'_>) -> Option<Node<'_>> {
@@ -3101,6 +4119,7 @@ fn nextjs_handler_nodes<'tree>(
 struct NextJsRouteMetadata {
     export_name: String,
     export_kind: Option<String>,
+    wrapper: Option<String>,
 }
 
 fn nextjs_route_metadata(route: &authmap_core::Route) -> Option<NextJsRouteMetadata> {
@@ -3115,6 +4134,61 @@ fn nextjs_route_metadata(route: &authmap_core::Route) -> Option<NextJsRouteMetad
             .get("export_kind")
             .and_then(serde_json::Value::as_str)
             .map(str::to_string),
+        wrapper: value
+            .get("wrapper")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+    })
+}
+
+fn evidence_from_nextjs_wrapper(route: &authmap_core::Route, wrapper: &str) -> Option<Evidence> {
+    let clean = terminal_symbol_name(wrapper);
+    let lower = clean.to_ascii_lowercase();
+    let (evidence_type, mechanism, confidence) = if lower.contains("admin") {
+        (
+            EvidenceType::RoleCheck,
+            "nextjs_auth_wrapper",
+            Confidence::Medium,
+        )
+    } else if lower.contains("workspace")
+        || lower.contains("permission")
+        || lower.contains("tenant")
+        || lower.contains("team")
+    {
+        (
+            EvidenceType::PermissionCheck,
+            "nextjs_auth_wrapper",
+            Confidence::Medium,
+        )
+    } else if lower.contains("session") || lower.contains("auth") || lower.contains("user") {
+        (
+            EvidenceType::Authn,
+            "nextjs_auth_wrapper",
+            Confidence::Medium,
+        )
+    } else {
+        (
+            EvidenceType::UnknownDynamicCheck,
+            "nextjs_unknown_wrapper",
+            Confidence::Low,
+        )
+    };
+    Some(Evidence {
+        id: String::new(),
+        route_id: Some(route.id.clone()),
+        evidence_type,
+        mechanism: mechanism.to_string(),
+        symbol: Some(SymbolRef {
+            name: clean,
+            span: route
+                .handler
+                .as_ref()
+                .and_then(|handler| handler.span.clone()),
+        }),
+        span: route.span.clone(),
+        confidence,
+        notes: vec!["Next.js route handler is wrapped by an auth-like helper".to_string()],
+        extensions: authmap_core::ExtensionMap::new(),
     })
 }
 
@@ -3211,6 +4285,250 @@ fn js_variable_declarator_node<'tree>(
         }
         let mut cursor = node.walk();
         stack.extend(node.children(&mut cursor));
+    }
+    None
+}
+
+#[derive(Clone, Debug)]
+struct PythonClassDef<'a> {
+    parsed: &'a ParsedFile,
+    file: String,
+    name: String,
+    span: Span,
+    bases: Vec<String>,
+    node: Node<'a>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct PythonClassIndex<'a> {
+    classes: BTreeMap<(String, String), PythonClassDef<'a>>,
+    imports: BTreeMap<(String, String), ImportTarget>,
+    wildcard_imports: BTreeMap<String, Vec<String>>,
+}
+
+impl<'a> PythonClassIndex<'a> {
+    fn new(parsed_files: &'a [ParsedFile]) -> Self {
+        let module_index = build_python_module_index(parsed_files);
+        let mut imports = BTreeMap::new();
+        let mut wildcard_imports = BTreeMap::new();
+        for parsed in parsed_files
+            .iter()
+            .filter(|parsed| parsed.language == authmap_core::Language::Python)
+        {
+            collect_python_imports(parsed, &module_index, &mut imports);
+            collect_python_wildcard_imports(parsed, &module_index, &mut wildcard_imports);
+        }
+        let mut classes = BTreeMap::new();
+        for parsed in parsed_files
+            .iter()
+            .filter(|parsed| parsed.language == authmap_core::Language::Python)
+        {
+            let Some(root) = parsed.root_node() else {
+                continue;
+            };
+            let mut stack = vec![root];
+            while let Some(node) = stack.pop() {
+                if node.kind() == "class_definition"
+                    && let Some(name_node) = node.child_by_field_name("name")
+                    && let Some(name) = parsed.text_for(name_node)
+                {
+                    classes.insert(
+                        (parsed.source.path.clone(), name.to_string()),
+                        PythonClassDef {
+                            parsed,
+                            file: parsed.source.path.clone(),
+                            name: name.to_string(),
+                            span: parsed.span_for(name_node),
+                            bases: python_class_bases(parsed, node),
+                            node,
+                        },
+                    );
+                }
+                let mut cursor = node.walk();
+                stack.extend(node.children(&mut cursor));
+            }
+        }
+        Self {
+            classes,
+            imports,
+            wildcard_imports,
+        }
+    }
+
+    fn class_chain(&self, file: &str, class_name: &str) -> Vec<PythonClassDef<'a>> {
+        let mut chain = Vec::new();
+        self.collect_class_chain(
+            &(file.to_string(), class_name.to_string()),
+            &mut BTreeSet::new(),
+            &mut chain,
+            0,
+        );
+        chain
+    }
+
+    fn collect_class_chain(
+        &self,
+        key: &(String, String),
+        active: &mut BTreeSet<(String, String)>,
+        chain: &mut Vec<PythonClassDef<'a>>,
+        depth: usize,
+    ) {
+        if depth >= 64 || !active.insert(key.clone()) {
+            return;
+        }
+        let Some(class) = self.classes.get(key) else {
+            active.remove(key);
+            return;
+        };
+        chain.push(class.clone());
+        for base in &class.bases {
+            if let Some(base_key) = self.resolve_class_key(&class.file, base) {
+                self.collect_class_chain(&base_key, active, chain, depth + 1);
+            }
+        }
+        active.remove(key);
+    }
+
+    fn resolve_class_key(&self, file: &str, symbol: &str) -> Option<(String, String)> {
+        if let Some((object, member)) = symbol.rsplit_once('.')
+            && let Some(target) = self.imports.get(&(file.to_string(), object.to_string()))
+        {
+            return self.resolve_exported_class(&target.file, &clean_symbol(member), 0);
+        }
+        let name = clean_symbol(symbol);
+        let local_key = (file.to_string(), name.clone());
+        if self.classes.contains_key(&local_key) {
+            return Some(local_key);
+        }
+        if let Some(target) = self.imports.get(&(file.to_string(), name.clone())) {
+            return self.resolve_exported_class(
+                &target.file,
+                &target.name.clone().unwrap_or(name),
+                0,
+            );
+        }
+        None
+    }
+
+    fn resolve_exported_class(
+        &self,
+        file: &str,
+        name: &str,
+        depth: usize,
+    ) -> Option<(String, String)> {
+        if depth >= 64 {
+            return None;
+        }
+        let key = (file.to_string(), name.to_string());
+        if self.classes.contains_key(&key) {
+            return Some(key);
+        }
+        if let Some(target) = self.imports.get(&(file.to_string(), name.to_string()))
+            && let Some(key) = self.resolve_exported_class(
+                &target.file,
+                target.name.as_deref().unwrap_or(name),
+                depth + 1,
+            )
+        {
+            return Some(key);
+        }
+        for target_file in self.wildcard_imports.get(file).into_iter().flatten() {
+            if let Some(key) = self.resolve_exported_class(target_file, name, depth + 1) {
+                return Some(key);
+            }
+        }
+        None
+    }
+}
+
+fn collect_python_wildcard_imports(
+    parsed: &ParsedFile,
+    module_index: &BTreeMap<String, String>,
+    wildcard_imports: &mut BTreeMap<String, Vec<String>>,
+) {
+    for line in parsed.text.lines() {
+        let trimmed = line.trim();
+        let Some(rest) = trimmed.strip_prefix("from ") else {
+            continue;
+        };
+        let Some((module, imported)) = rest.split_once(" import ") else {
+            continue;
+        };
+        if imported.trim() != "*" {
+            continue;
+        }
+        if let Some(module_file) = resolve_python_module(parsed, module_index, module.trim()) {
+            wildcard_imports
+                .entry(parsed.source.path.clone())
+                .or_default()
+                .push(module_file);
+        }
+    }
+}
+
+fn python_class_bases(parsed: &ParsedFile, node: Node<'_>) -> Vec<String> {
+    node.child_by_field_name("superclasses")
+        .or_else(|| {
+            let mut cursor = node.walk();
+            node.children(&mut cursor)
+                .find(|child| child.kind() == "argument_list")
+        })
+        .map(|bases| {
+            let mut cursor = bases.walk();
+            bases
+                .children(&mut cursor)
+                .filter(|base| base.is_named())
+                .filter_map(|base| parsed.text_for(base).map(clean_python_base))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn clean_python_base(value: &str) -> String {
+    value
+        .trim()
+        .trim_matches(|ch: char| matches!(ch, '"' | '\'' | '`' | ' ' | '\n' | '\r' | '\t'))
+        .to_string()
+}
+
+fn direct_class_assignments(class_node: Node<'_>) -> Vec<Node<'_>> {
+    let Some(body) = class_node.child_by_field_name("body") else {
+        return Vec::new();
+    };
+    let mut assignments = Vec::new();
+    let mut cursor = body.walk();
+    for child in body.children(&mut cursor).filter(|child| child.is_named()) {
+        if child.kind() == "assignment" {
+            assignments.push(child);
+        } else if child.kind() == "expression_statement"
+            && let Some(assignment) = find_direct_child_kind(child, "assignment")
+        {
+            assignments.push(assignment);
+        }
+    }
+    assignments
+}
+
+fn python_class_method_node<'tree>(
+    class_node: Node<'tree>,
+    parsed: &ParsedFile,
+    method_name: &str,
+) -> Option<Node<'tree>> {
+    let body = class_node.child_by_field_name("body")?;
+    let mut cursor = body.walk();
+    for child in body.children(&mut cursor).filter(|child| child.is_named()) {
+        let method = if child.kind() == "function_definition" {
+            Some(child)
+        } else if child.kind() == "decorated_definition" {
+            find_direct_child_kind(child, "function_definition")
+        } else {
+            None
+        };
+        if let Some(method) = method
+            && function_name(parsed, method).as_deref() == Some(method_name)
+        {
+            return Some(method);
+        }
     }
     None
 }
@@ -3401,6 +4719,12 @@ fn first_symbol_argument(parsed: &ParsedFile, call: Node<'_>) -> Option<SymbolRe
         }
     }
     None
+}
+
+fn find_direct_child_kind<'tree>(node: Node<'tree>, kind: &str) -> Option<Node<'tree>> {
+    let mut cursor = node.walk();
+    node.children(&mut cursor)
+        .find(|child| child.kind() == kind)
 }
 
 fn terminal_symbol_name(text: &str) -> String {
@@ -4033,10 +5357,136 @@ mod tests {
     use authmap_testkit::fixture_path;
 
     use super::{
-        classify_coverage, normalize_adapter_evidence, normalize_module_path,
-        resolve_python_module, route_id_remaps, run_scan, run_scan_with_started_at, suggest_rules,
+        classify_coverage, enabled_frameworks_for_sources, normalize_adapter_evidence,
+        normalize_module_path, resolve_python_module, route_id_remaps, run_scan,
+        run_scan_with_started_at, source_needs_syntax_tree, suggest_rules,
         suggest_rules_with_started_at,
     };
+
+    #[test]
+    fn python_syntax_tree_relevance_keeps_tree_backed_patterns_only() {
+        let config = ScanConfig::default();
+
+        assert!(source_needs_syntax_tree(
+            authmap_core::Language::Python,
+            "from fastapi import FastAPI\napp = FastAPI()\n",
+            &config
+        ));
+        assert!(source_needs_syntax_tree(
+            authmap_core::Language::Python,
+            "urlpatterns = [path('items/', view)]\n",
+            &config
+        ));
+        assert!(source_needs_syntax_tree(
+            authmap_core::Language::Python,
+            "class AccountDetailView:\n    permission_required = 'accounts.view_account'\n",
+            &config
+        ));
+        assert!(source_needs_syntax_tree(
+            authmap_core::Language::Python,
+            "def save_item(item):\n    item.save()\n",
+            &config
+        ));
+        assert!(source_needs_syntax_tree(
+            authmap_core::Language::Python,
+            &format!(
+                "class ProductCreate(BaseMutation):\n    class Meta:\n        permissions = ()\n{}",
+                "# generated schema\n".repeat(80)
+            ),
+            &config
+        ));
+        assert!(source_needs_syntax_tree(
+            authmap_core::Language::Python,
+            &format!(
+                "class Mutation(sgqlc.types.Type):\n    field = sgqlc.types.Field(String)\n{}",
+                "# generated schema\n".repeat(80)
+            ),
+            &config
+        ));
+        assert!(source_needs_syntax_tree(
+            authmap_core::Language::Python,
+            &format!(
+                "from django.urls import path\n\ndef require_permission(user):\n    return user.is_staff\n{}",
+                "# ordinary module padding\n".repeat(80)
+            ),
+            &config
+        ));
+        assert!(!source_needs_syntax_tree(
+            authmap_core::Language::Python,
+            &"# generated metadata only\n".repeat(80),
+            &config
+        ));
+    }
+
+    #[test]
+    fn adapter_gating_keeps_graphql_schema_helpers_out_of_django_discovery() {
+        let parsed = ParsedFile {
+            source: SourceFile {
+                path: "schema.py".to_string(),
+                language: authmap_core::Language::Python,
+                size_bytes: 0,
+                sha256: None,
+                project_hints: Vec::new(),
+                skipped: None,
+            },
+            language: authmap_core::Language::Python,
+            text: "\
+from django.urls import reverse
+
+class ProductCreate(BaseMutation):
+    class Meta:
+        permissions = ()
+"
+            .to_string(),
+            tree: None,
+            status: ParseStatus::TextOnly,
+            diagnostics: Vec::new(),
+        };
+
+        assert_eq!(
+            enabled_frameworks_for_sources(&[parsed]),
+            vec!["graphql".to_string()]
+        );
+    }
+
+    #[test]
+    fn adapter_gating_keeps_express_helpers_in_mixed_projects() {
+        let helper = ParsedFile {
+            source: SourceFile {
+                path: "routes.js".to_string(),
+                language: authmap_core::Language::JavaScript,
+                size_bytes: 0,
+                sha256: None,
+                project_hints: Vec::new(),
+                skipped: None,
+            },
+            language: authmap_core::Language::JavaScript,
+            text: "setupApiRoute(router, 'GET', '/items', requireAuth, listItems);\n".to_string(),
+            tree: None,
+            status: ParseStatus::TextOnly,
+            diagnostics: Vec::new(),
+        };
+        let next = ParsedFile {
+            source: SourceFile {
+                path: "app/api/items/route.ts".to_string(),
+                language: authmap_core::Language::TypeScript,
+                size_bytes: 0,
+                sha256: None,
+                project_hints: Vec::new(),
+                skipped: None,
+            },
+            language: authmap_core::Language::TypeScript,
+            text: "import { NextResponse } from 'next/server';\n".to_string(),
+            tree: None,
+            status: ParseStatus::TextOnly,
+            diagnostics: Vec::new(),
+        };
+
+        assert_eq!(
+            enabled_frameworks_for_sources(&[helper, next]),
+            vec!["express".to_string(), "nextjs".to_string()]
+        );
+    }
 
     #[test]
     fn classifier_covers_all_coverage_classes() {
@@ -4483,15 +5933,71 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 15);
+        assert_eq!(document.routes.len(), 26);
         assert_eq!(
             document.routes.first().map(|route| route.id.as_str()),
             Some("route_0001")
         );
         assert_eq!(
             document.routes.last().map(|route| route.id.as_str()),
-            Some("route_0015")
+            Some("route_0026")
         );
+        assert!(document.routes.iter().any(|route| {
+            route.method == "DELETE"
+                && route.path == "/collection/items/{item_id}"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "delete_collection_item")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.method == "POST"
+                && route.path == "/factory/items"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "create_factory_item")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.method == "GET"
+                && route.path == "/factory/nested/status"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "nested_status")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.method == "GET"
+                && route.path == "/generated"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "generated_path")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.method == "GET"
+                && route.path == "/constant"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "constant_alias_path")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.method == "GET"
+                && route.path == "/factory/status"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "default_status_path")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.method == "GET"
+                && route.path == "/factory/ready"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "default_ready_path")
+        }));
         assert!(document.routes.iter().any(|route| {
             route.method == "GET"
                 && route.path == "/v1/users/{user_id}"
@@ -4500,16 +6006,77 @@ sensitivity:
                     .as_ref()
                     .is_some_and(|handler| handler.name == "get_user")
         }));
+        let shared_route = document
+            .routes
+            .iter()
+            .find(|route| route.method == "GET" && route.path == "/shared/variable/settings")
+            .expect("shared dependency route should be discovered");
+        assert_eq!(
+            shared_route
+                .middleware
+                .iter()
+                .map(|middleware| middleware.name.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "require_user",
+                "can_edit_account",
+                "provide_database_interface"
+            ]
+        );
+        let service_route = document
+            .routes
+            .iter()
+            .find(|route| route.method == "POST" && route.path == "/service/accounts")
+            .expect("service route should be discovered");
         assert!(
             document
                 .diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic.code == "fastapi_dynamic_api_route_methods")
         );
+        assert_eq!(
+            document
+                .diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic.code == "fastapi_dynamic_route_path")
+                .count(),
+            1
+        );
         assert!(document.evidence.iter().any(|evidence| {
             evidence.evidence_type == EvidenceType::AdminCheck
                 && evidence.route_id.as_deref().is_some()
                 && evidence.span.is_some()
+        }));
+        assert!(document.evidence.iter().any(|evidence| {
+            evidence.route_id.as_deref() == Some(shared_route.id.as_str())
+                && evidence.evidence_type == EvidenceType::Authn
+                && evidence
+                    .symbol
+                    .as_ref()
+                    .is_some_and(|symbol| symbol.name == "require_user")
+        }));
+        assert!(document.evidence.iter().any(|evidence| {
+            evidence.route_id.as_deref() == Some(shared_route.id.as_str())
+                && evidence.evidence_type == EvidenceType::PermissionCheck
+                && evidence
+                    .symbol
+                    .as_ref()
+                    .is_some_and(|symbol| symbol.name == "can_edit_account")
+        }));
+        assert!(!document.evidence.iter().any(|evidence| {
+            evidence.route_id.as_deref() == Some(shared_route.id.as_str())
+                && evidence
+                    .symbol
+                    .as_ref()
+                    .is_some_and(|symbol| symbol.name == "provide_database_interface")
+        }));
+        assert!(document.evidence.iter().any(|evidence| {
+            evidence.route_id.as_deref() == Some(service_route.id.as_str())
+                && evidence.evidence_type == EvidenceType::UnknownDynamicCheck
+                && evidence
+                    .notes
+                    .iter()
+                    .any(|note| note.contains("One-hop service call"))
         }));
         assert!(document.coverage.iter().any(|coverage| {
             coverage.class == CoverageClass::PermissionGuarded && coverage.risk == RiskLevel::Low
@@ -4522,7 +6089,7 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 16);
+        assert_eq!(document.routes.len(), 26);
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::Express
                 && route.method == "POST"
@@ -4543,7 +6110,62 @@ sensitivity:
                     .iter()
                     .map(|middleware| middleware.name.as_str())
                     .collect::<Vec<_>>()
-                    == vec!["requireAuth", "requireRole"]
+                    == vec!["requireAuth", "requirePermission", "requireRole"]
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Express
+                && route.method == "GET"
+                && route.path == "/{tenant}/reports"
+                && route
+                    .middleware
+                    .iter()
+                    .map(|middleware| middleware.name.as_str())
+                    .collect::<Vec<_>>()
+                    == vec!["requireAuth"]
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Express
+                && route.method == "GET"
+                && route.path == "/api/profile"
+                && route
+                    .middleware
+                    .iter()
+                    .map(|middleware| middleware.name.as_str())
+                    .collect::<Vec<_>>()
+                    == vec!["middleware.authenticateRequest", "requireAuth"]
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Express
+                && route.method == "GET"
+                && route.path == "/api/direct"
+                && route
+                    .middleware
+                    .iter()
+                    .map(|middleware| middleware.name.as_str())
+                    .collect::<Vec<_>>()
+                    == vec!["middleware.authenticateRequest", "requireAuth"]
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Express
+                && route.method == "GET"
+                && route.path == "/api/mapped/factory"
+                && route
+                    .middleware
+                    .iter()
+                    .map(|middleware| middleware.name.as_str())
+                    .collect::<Vec<_>>()
+                    == vec!["requireAuth"]
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Express
+                && route.method == "GET"
+                && route.path == "/api/mapped/indexed"
+                && route
+                    .middleware
+                    .iter()
+                    .map(|middleware| middleware.name.as_str())
+                    .collect::<Vec<_>>()
+                    == vec!["requireAuth"]
         }));
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::Express
@@ -4590,7 +6212,7 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 20);
+        assert_eq!(document.routes.len(), 34);
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::Django
                 && route.method == "ANY"
@@ -4639,6 +6261,52 @@ sensitivity:
                 && matches!(route.method.as_str(), "PUT" | "PATCH" | "DELETE")
         }));
         assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::DjangoRestFramework
+                && route.method == "DELETE"
+                && route.path == "/accounts/api/inherited/{pk}"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "InheritedProjectViewSet.destroy")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::DjangoRestFramework
+                && route.method == "GET"
+                && route.path == "/accounts/api/inherited-readonly/{pk}"
+        }));
+        assert!(!document.routes.iter().any(|route| {
+            route.path.starts_with("/accounts/api/inherited-readonly")
+                && matches!(route.method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::DjangoRestFramework
+                && route.method == "POST"
+                && route.path == "/accounts/api/mixin-backed"
+        }));
+        assert!(!document.routes.iter().any(|route| {
+            route.path.starts_with("/accounts/api/mixin-backed")
+                && matches!(route.method.as_str(), "PUT" | "PATCH" | "DELETE")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::DjangoRestFramework
+                && route.method == "GET"
+                && route.path == "/exported-api/exported/{pk}"
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Django
+                && route.method == "ANY"
+                && route.path == "/accounts/generated/<int:pk>/edit"
+                && route
+                    .handler
+                    .as_ref()
+                    .is_some_and(|handler| handler.name == "GeneratedAccountEditView")
+        }));
+        let generated_detail = route_by_path(&document, "/accounts/generated/<int:pk>/edit");
+        assert!(document.coverage.iter().any(|coverage| {
+            coverage.route_id == generated_detail.id
+                && coverage.class == CoverageClass::PermissionGuarded
+        }));
+        assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::Django
                 && route.method == "ANY"
                 && route.path == "/legacy/{slug}/"
@@ -4650,6 +6318,30 @@ sensitivity:
                     .symbol
                     .as_ref()
                     .is_some_and(|symbol| symbol.name == "require_permission")
+        }));
+        assert!(document.evidence.iter().any(|evidence| {
+            evidence.evidence_type == EvidenceType::Authn
+                && evidence.mechanism == "drf_permission_classes"
+                && evidence
+                    .notes
+                    .iter()
+                    .any(|note| note.contains("ProjectModelViewSet"))
+        }));
+        assert!(document.evidence.iter().any(|evidence| {
+            evidence.evidence_type == EvidenceType::PermissionCheck
+                && evidence.mechanism == "django_queryset_restrict"
+                && evidence
+                    .notes
+                    .iter()
+                    .any(|note| note.contains("ProjectModelViewSet"))
+        }));
+        assert!(document.evidence.iter().any(|evidence| {
+            evidence.evidence_type == EvidenceType::PermissionCheck
+                && evidence.mechanism == "drf_permission_classes"
+                && evidence
+                    .notes
+                    .iter()
+                    .any(|note| note.contains("ProjectReadOnlyViewSet"))
         }));
         assert!(document.links.iter().any(|link| {
             document.routes.iter().any(|route| {
@@ -4670,12 +6362,11 @@ sensitivity:
                 && link.mutation_id.as_ref().is_some()
         }));
         for code in [
-            "django_dynamic_include",
+            "django_dynamic_include_helper",
             "django_dynamic_url_path",
             "django_urlpattern_context_uncertain",
             "drf_dynamic_router_prefix",
             "drf_dynamic_basename",
-            "drf_unresolved_viewset_base",
         ] {
             assert!(
                 document
@@ -4685,6 +6376,12 @@ sensitivity:
                 "missing diagnostic {code}"
             );
         }
+        assert!(
+            !document
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "drf_unresolved_viewset_base")
+        );
     }
 
     #[test]
@@ -4693,7 +6390,7 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 16);
+        assert_eq!(document.routes.len(), 17);
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::NextJs
                 && route.method == "GET"
@@ -4751,6 +6448,21 @@ sensitivity:
                     .as_ref()
                     .is_some_and(|symbol| symbol.name == "requireAuth")
         }));
+        assert!(document.evidence.iter().any(|evidence| {
+            evidence.evidence_type == EvidenceType::Authn
+                && evidence.mechanism == "nextjs_auth_wrapper"
+                && evidence
+                    .symbol
+                    .as_ref()
+                    .is_some_and(|symbol| symbol.name == "withAuth")
+                && evidence.route_id.as_ref().is_some_and(|route_id| {
+                    document.routes.iter().any(|route| {
+                        &route.id == route_id
+                            && route.method == "DELETE"
+                            && route.path == "/external"
+                    })
+                })
+        }));
         assert!(document.links.iter().any(|link| {
             document.routes.iter().any(|route| {
                 route.id == link.route_id && route.method == "PATCH" && route.path == "/users/[id]"
@@ -4795,6 +6507,71 @@ sensitivity:
                 "missing diagnostic {code}"
             );
         }
+    }
+
+    #[test]
+    fn scan_pipeline_includes_trpc_and_graphql_operations() {
+        let trpc_target = fixture_path("trpc");
+        let trpc_plan = ScanPlan::new(vec![trpc_target], None, ScanConfig::default());
+        let trpc_document = run_scan(&trpc_plan).expect("trpc scan should succeed");
+
+        assert!(trpc_document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Trpc
+                && route.method == "POST"
+                && route.path == "/trpc/router/updateProfile"
+        }));
+        assert!(trpc_document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Trpc
+                && route.method == "POST"
+                && route.path == "/trpc/router/updateSettings"
+        }));
+        assert!(trpc_document.coverage.iter().any(|coverage| {
+            coverage.class == CoverageClass::AuthnOnly
+                && trpc_document.routes.iter().any(|route| {
+                    route.id == coverage.route_id && route.path == "/trpc/router/updateProfile"
+                })
+        }));
+        assert!(trpc_document.coverage.iter().any(|coverage| {
+            coverage.class == CoverageClass::PublicDeclared
+                && trpc_document.routes.iter().any(|route| {
+                    route.id == coverage.route_id && route.path == "/trpc/router/publicInfo"
+                })
+        }));
+
+        let graphql_target = fixture_path("graphql");
+        let graphql_plan = ScanPlan::new(vec![graphql_target], None, ScanConfig::default());
+        let graphql_document = run_scan(&graphql_plan).expect("graphql scan should succeed");
+
+        assert!(graphql_document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Graphql
+                && route.method == "MUTATION"
+                && route.path == "/graphql/productCreate"
+        }));
+        assert!(graphql_document.coverage.iter().any(|coverage| {
+            coverage.class == CoverageClass::PermissionGuarded
+                && graphql_document.routes.iter().any(|route| {
+                    route.id == coverage.route_id && route.path == "/graphql/productCreate"
+                })
+        }));
+        assert!(graphql_document.coverage.iter().any(|coverage| {
+            coverage.class == CoverageClass::PublicDeclared
+                && graphql_document.routes.iter().any(|route| {
+                    route.id == coverage.route_id && route.path == "/graphql/createToken"
+                })
+        }));
+        assert!(graphql_document.coverage.iter().any(|coverage| {
+            coverage.class == CoverageClass::Unauthenticated
+                && graphql_document.routes.iter().any(|route| {
+                    route.id == coverage.route_id && route.path == "/graphql/checkoutCreate"
+                })
+        }));
+        assert!(!graphql_document.routes.iter().any(|route| {
+            route.path == "/graphql/accountQueries"
+                || route.path == "/graphql/accountMutations"
+                || route.path == "/graphql/choiceValue"
+                || route.path == "/graphql/baseMutation"
+                || route.path == "/graphql/modelDeleteMutation"
+        }));
     }
 
     #[test]
@@ -5376,6 +7153,53 @@ def me(user=Depends(require_user)):
     }
 
     #[test]
+    fn unresolved_fastapi_include_dependencies_emit_dynamic_context_only() {
+        let temp = TestDir::new("fastapi-unresolved-include-dependencies");
+        write_file(
+            &temp.path().join("app.py"),
+            r#"
+from fastapi import APIRouter, FastAPI
+
+app = FastAPI()
+router = APIRouter()
+
+@router.get("/items")
+def list_items():
+    return []
+
+app.include_router(router, dependencies=build_runtime_dependencies())
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        let route = document
+            .routes
+            .iter()
+            .find(|route| route.path == "/items")
+            .expect("GET /items should exist");
+        let evidence = document
+            .evidence
+            .iter()
+            .find(|evidence| evidence.route_id.as_deref() == Some(route.id.as_str()))
+            .expect("dynamic include dependency should emit review context");
+        assert_eq!(evidence.evidence_type, EvidenceType::UnknownDynamicCheck);
+        assert_eq!(evidence.confidence, Confidence::Low);
+        assert_eq!(
+            evidence.symbol.as_ref().map(|symbol| symbol.name.as_str()),
+            Some("dynamic_policy_dependencies")
+        );
+        let coverage = document
+            .coverage
+            .iter()
+            .find(|coverage| coverage.route_id == route.id)
+            .expect("route should have coverage");
+        assert_eq!(coverage.class, CoverageClass::UnknownOrDynamic);
+        assert_eq!(coverage.risk, RiskLevel::ReviewRequired);
+    }
+
+    #[test]
     fn broad_symbols_comments_strings_and_plain_user_reads_do_not_emit_strong_evidence() {
         let temp = TestDir::new("express-false-positive-hardening");
         write_file(
@@ -5485,8 +7309,12 @@ app = FastAPI()
 def ensure_paid_plan():
     return True
 
+def cancel():
+    return True
+
 @app.get("/billing")
 def get_billing(user=Depends(ensure_paid_plan)):
+    cancel()
     return {}
 "#,
         );
@@ -5507,6 +7335,65 @@ def get_billing(user=Depends(ensure_paid_plan)):
                 .iter()
                 .any(|item| item.contains("permission"))
         );
+        assert!(
+            suggestion
+                .examples
+                .iter()
+                .any(|example| example.context == "FastAPI dependency")
+        );
+        assert!(
+            report
+                .suggestions
+                .iter()
+                .all(|suggestion| suggestion.matcher.exact != vec!["cancel"])
+        );
+    }
+
+    #[test]
+    fn suggest_rules_filters_operational_fastapi_dependencies() {
+        let temp = TestDir::new("suggest-fastapi-operational");
+        write_file(
+            &temp.path().join("app.py"),
+            r#"
+from fastapi import APIRouter, Depends, FastAPI
+
+app = FastAPI()
+router = APIRouter(dependencies=[Depends(provide_database_interface)])
+
+def provide_database_interface():
+    return object()
+
+def provide_request_api_version():
+    return "1"
+
+def ensure_workspace_access():
+    return True
+
+@router.get("/items", dependencies=[Depends(provide_request_api_version)])
+def list_items():
+    return []
+
+app.include_router(router, dependencies=[Depends(ensure_workspace_access)])
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let report = suggest_rules(&plan).expect("suggestions should run");
+        let symbols = report
+            .suggestions
+            .iter()
+            .flat_map(|suggestion| suggestion.matcher.exact.iter().map(String::as_str))
+            .collect::<Vec<_>>();
+
+        assert!(symbols.contains(&"ensure_workspace_access"));
+        assert!(!symbols.contains(&"provide_database_interface"));
+        assert!(!symbols.contains(&"provide_request_api_version"));
+        let suggestion = report
+            .suggestions
+            .iter()
+            .find(|suggestion| suggestion.matcher.exact == vec!["ensure_workspace_access"])
+            .expect("workspace dependency should be suggested");
+        assert_eq!(suggestion.evidence_type, EvidenceType::TenantCheck);
         assert!(
             suggestion
                 .examples
@@ -5579,6 +7466,28 @@ function listUsers(req, res) {
 app.get("/users", listUsers);
 "#,
         );
+        std::fs::create_dir_all(temp.path().join("circuits/tests"))
+            .expect("test fixture directory should be created");
+        write_file(
+            &temp.path().join("circuits/tests/test_api.py"),
+            r#"
+class CircuitGroup:
+    pass
+
+def test_groups():
+    CircuitGroup()
+"#,
+        );
+        write_file(
+            &temp.path().join("serializers.py"),
+            r#"
+class ClusterGroupSerializer:
+    pass
+
+def build():
+    ClusterGroupSerializer()
+"#,
+        );
         let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
         let report = suggest_rules(&plan).expect("suggestions should run");
 
@@ -5588,6 +7497,10 @@ app.get("/users", listUsers);
                 .iter()
                 .all(|suggestion| suggestion.matcher.exact != vec!["listUsers"])
         );
+        assert!(report.suggestions.iter().all(|suggestion| {
+            suggestion.matcher.exact != vec!["CircuitGroup"]
+                && suggestion.matcher.exact != vec!["ClusterGroupSerializer"]
+        }));
     }
 
     #[test]
@@ -5643,7 +7556,7 @@ authorization:
             &temp.path().join("guards.js"),
             r#"
 function ensureLogin(req, res, next) { next(); }
-function groupGate(req, res, next) { next(); }
+function roleGate(req, res, next) { next(); }
 function paidAccess(req, res, next) { next(); }
 function owningResource(req, res, next) { next(); }
 function workspaceGate(req, res, next) { next(); }

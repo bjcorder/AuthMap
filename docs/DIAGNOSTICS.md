@@ -48,6 +48,7 @@ emitting them.
 | `adapter.partial_result` | Adapter emitted partial facts with caveats |
 | `django_custom_router` | DRF custom router behavior could not be resolved statically |
 | `django_dynamic_include` | Django include target is dynamic or missing |
+| `django_dynamic_include_helper` | Django include target is a helper call that could not be expanded statically |
 | `django_include_depth_exceeded` | Django include chain exceeded the maximum static include depth |
 | `django_dynamic_url_path` | Django URL path is dynamic and could not be resolved |
 | `django_unresolved_handler` | Django URL handler could not be resolved statically |
