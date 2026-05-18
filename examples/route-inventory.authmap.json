@@ -26,6 +26,15 @@
       "name": null,
       "tags": ["accounts"],
       "middleware": [],
+      "params": [
+        {
+          "name": "id",
+          "syntax": ":id",
+          "span": null,
+          "confidence": "high",
+          "notes": []
+        }
+      ],
       "handler": {
         "name": "deleteAccount",
         "span": {

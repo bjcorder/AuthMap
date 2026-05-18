@@ -10,7 +10,8 @@ use authmap_config::{
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticCategory,
     DiagnosticSeverity, Evidence, EvidenceType, Framework, Mutation, MutationOperation,
-    ReachabilityLink, Recoverability, RiskLevel, ScanMetadata, Span, SymbolRef,
+    ReachabilityLink, Recoverability, RiskLevel, RouteParam, RouteProtection, RouteProtectionKind,
+    ScanMetadata, Span, SymbolRef,
 };
 use authmap_discovery::discover_sources;
 use authmap_parsers::{
@@ -527,6 +528,7 @@ fn run_scan_with_started_at(
     let facts = BuiltInEvidenceExtractor.extract_evidence(&input);
     let mutation_facts = BuiltInMutationExtractor.extract_mutations(&input);
     document.evidence = facts.evidence;
+    enrich_route_metadata(&mut document.routes, &document.evidence);
     document.mutations = mutation_facts.mutations;
     document.diagnostics.extend(facts.diagnostics);
     document.diagnostics.extend(mutation_facts.diagnostics);
@@ -655,6 +657,238 @@ fn route_id_remaps(routes: &mut [authmap_core::Route]) -> BTreeMap<String, BTree
         route.id = new_id;
     }
     remaps
+}
+
+fn enrich_route_metadata(routes: &mut [authmap_core::Route], evidence: &[Evidence]) {
+    let evidence_by_route = evidence.iter().fold(
+        BTreeMap::<&str, Vec<&Evidence>>::new(),
+        |mut by_route, item| {
+            if let Some(route_id) = item.route_id.as_deref() {
+                by_route.entry(route_id).or_default().push(item);
+            }
+            by_route
+        },
+    );
+
+    for route in routes {
+        route.params = route_params(&route.path);
+        route.declared_protection = route_protection(
+            route,
+            evidence_by_route
+                .get(route.id.as_str())
+                .map_or(&[], Vec::as_slice),
+        );
+    }
+}
+
+fn route_params(path: &str) -> Vec<RouteParam> {
+    let mut params = Vec::new();
+    let bytes = path.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b':' => {
+                let start = index + 1;
+                let mut end = start;
+                while end < bytes.len()
+                    && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_')
+                {
+                    end += 1;
+                }
+                if end > start {
+                    params.push(route_param(
+                        &path[start..end],
+                        &path[index..end],
+                        Confidence::High,
+                    ));
+                }
+                index = end;
+            }
+            b'{' => {
+                if let Some(relative_end) = path[index + 1..].find('}') {
+                    let end = index + 1 + relative_end;
+                    let name = &path[index + 1..end];
+                    if !name.is_empty() {
+                        params.push(route_param(name, &path[index..=end], Confidence::High));
+                    }
+                    index = end + 1;
+                } else {
+                    index += 1;
+                }
+            }
+            b'<' => {
+                if let Some(relative_end) = path[index + 1..].find('>') {
+                    let end = index + 1 + relative_end;
+                    let raw = &path[index + 1..end];
+                    let name = raw.rsplit_once(':').map_or(raw, |(_, name)| name);
+                    if !name.is_empty() && name != "dynamic" {
+                        params.push(route_param(name, &path[index..=end], Confidence::Medium));
+                    }
+                    index = end + 1;
+                } else {
+                    index += 1;
+                }
+            }
+            b'[' => {
+                if let Some((end, raw)) = nextjs_param(path, index) {
+                    let name = raw.trim_start_matches("...").trim_matches('.');
+                    if !name.is_empty() {
+                        params.push(route_param(name, &path[index..end], Confidence::Medium));
+                    }
+                    index = end;
+                } else {
+                    index += 1;
+                }
+            }
+            _ => index += 1,
+        }
+    }
+
+    let mut seen = BTreeSet::new();
+    params.retain(|param| seen.insert((param.name.clone(), param.syntax.clone())));
+    params
+}
+
+fn nextjs_param(path: &str, index: usize) -> Option<(usize, &str)> {
+    if path[index..].starts_with("[[") {
+        let relative_end = path[index + 2..].find("]]")?;
+        let end = index + 2 + relative_end;
+        Some((end + 2, &path[index + 2..end]))
+    } else {
+        let relative_end = path[index + 1..].find(']')?;
+        let end = index + 1 + relative_end;
+        Some((end + 1, &path[index + 1..end]))
+    }
+}
+
+fn route_param(name: &str, syntax: &str, confidence: Confidence) -> RouteParam {
+    RouteParam {
+        name: name.to_string(),
+        syntax: syntax.to_string(),
+        span: None,
+        confidence,
+        notes: Vec::new(),
+    }
+}
+
+fn route_protection(route: &authmap_core::Route, evidence: &[&Evidence]) -> Vec<RouteProtection> {
+    let mut protections = Vec::new();
+    for middleware in &route.middleware {
+        let inherited = protection_is_inherited(route, middleware);
+        let matching_evidence = evidence
+            .iter()
+            .copied()
+            .filter(|item| {
+                item.symbol
+                    .as_ref()
+                    .is_some_and(|symbol| symbol.name == middleware.name)
+            })
+            .collect::<Vec<_>>();
+        protections.push(RouteProtection {
+            kind: if inherited {
+                RouteProtectionKind::InheritedGuard
+            } else {
+                RouteProtectionKind::RouteGuard
+            },
+            mechanism: route_middleware_mechanism(route.framework).to_string(),
+            symbol: Some(middleware.clone()),
+            span: middleware.span.clone(),
+            inherited,
+            confidence: matching_evidence
+                .iter()
+                .map(|item| item.confidence)
+                .min()
+                .unwrap_or(route.confidence),
+            evidence_ids: matching_evidence
+                .iter()
+                .map(|item| item.id.clone())
+                .collect(),
+            notes: Vec::new(),
+        });
+    }
+
+    for item in evidence {
+        if protections.iter().any(|protection| {
+            protection
+                .symbol
+                .as_ref()
+                .zip(item.symbol.as_ref())
+                .is_some_and(|(left, right)| left.name == right.name)
+        }) {
+            continue;
+        }
+        let Some(kind) = protection_kind_for_evidence(item.evidence_type) else {
+            continue;
+        };
+        protections.push(RouteProtection {
+            kind,
+            mechanism: item.mechanism.clone(),
+            symbol: item.symbol.clone(),
+            span: item.span.clone(),
+            inherited: false,
+            confidence: item.confidence,
+            evidence_ids: vec![item.id.clone()],
+            notes: item.notes.clone(),
+        });
+    }
+
+    protections.sort_by_key(route_protection_sort_key);
+    protections
+}
+
+fn route_context_is_inherited(route: &authmap_core::Route) -> bool {
+    route.source_evidence.iter().any(|item| {
+        item.mechanism.contains("include")
+            || item.mechanism.contains("mount")
+            || item.mechanism.contains("router_registration")
+    })
+}
+
+fn protection_is_inherited(route: &authmap_core::Route, symbol: &SymbolRef) -> bool {
+    if route_context_is_inherited(route) {
+        return true;
+    }
+    match (route.span.as_ref(), symbol.span.as_ref()) {
+        (Some(route_span), Some(symbol_span)) => route_span.file != symbol_span.file,
+        _ => false,
+    }
+}
+
+fn route_middleware_mechanism(framework: Framework) -> &'static str {
+    match framework {
+        Framework::FastApi => "fastapi_dependency",
+        Framework::Express => "express_middleware",
+        Framework::Django | Framework::DjangoRestFramework => "django_decorator",
+        Framework::NextJs => "nextjs_middleware",
+        Framework::Trpc => "trpc_procedure",
+        Framework::Graphql => "graphql_permissions",
+        Framework::Unknown => "route_middleware",
+    }
+}
+
+fn protection_kind_for_evidence(evidence_type: EvidenceType) -> Option<RouteProtectionKind> {
+    match evidence_type {
+        EvidenceType::ExplicitPublic => Some(RouteProtectionKind::PublicDeclared),
+        EvidenceType::UnknownDynamicCheck => Some(RouteProtectionKind::UnknownDynamic),
+        EvidenceType::Authn
+        | EvidenceType::RoleCheck
+        | EvidenceType::PermissionCheck
+        | EvidenceType::OwnershipCheck
+        | EvidenceType::TenantCheck
+        | EvidenceType::AdminCheck => Some(RouteProtectionKind::RouteGuard),
+        EvidenceType::AuditLog => None,
+    }
+}
+
+fn route_protection_sort_key(item: &RouteProtection) -> (RouteProtectionKind, String, String) {
+    (
+        item.kind,
+        item.mechanism.clone(),
+        item.symbol
+            .as_ref()
+            .map(|symbol| symbol.name.clone())
+            .unwrap_or_default(),
+    )
 }
 
 fn normalize_adapter_evidence(
@@ -7635,6 +7869,8 @@ function authorizeRecord(req, res, next) { next(); }
             name: None,
             tags: Vec::new(),
             middleware: Vec::new(),
+            params: Vec::new(),
+            declared_protection: Vec::new(),
             handler: None,
             span: None,
             source_evidence: Vec::new(),

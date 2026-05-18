@@ -1015,6 +1015,8 @@ mod tests {
             name: None,
             tags: Vec::new(),
             middleware: Vec::new(),
+            params: Vec::new(),
+            declared_protection: Vec::new(),
             handler: Some(SymbolRef {
                 name: handler.to_string(),
                 span: None,

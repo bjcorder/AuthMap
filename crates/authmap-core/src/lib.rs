@@ -374,6 +374,10 @@ pub struct Route {
     pub name: Option<String>,
     pub tags: Vec<String>,
     pub middleware: Vec<SymbolRef>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub params: Vec<RouteParam>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub declared_protection: Vec<RouteProtection>,
     pub handler: Option<SymbolRef>,
     pub span: Option<Span>,
     #[serde(default)]
@@ -401,6 +405,38 @@ pub enum Framework {
 pub struct SymbolRef {
     pub name: String,
     pub span: Option<Span>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RouteParam {
+    pub name: String,
+    pub syntax: String,
+    pub span: Option<Span>,
+    pub confidence: Confidence,
+    pub notes: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct RouteProtection {
+    pub kind: RouteProtectionKind,
+    pub mechanism: String,
+    pub symbol: Option<SymbolRef>,
+    pub span: Option<Span>,
+    pub inherited: bool,
+    pub confidence: Confidence,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evidence_ids: Vec<String>,
+    pub notes: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RouteProtectionKind {
+    PublicDeclared,
+    FrameworkAuth,
+    RouteGuard,
+    InheritedGuard,
+    UnknownDynamic,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

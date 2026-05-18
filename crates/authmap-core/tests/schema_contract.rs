@@ -4,7 +4,8 @@ use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticCategory,
     DiagnosticSeverity, Evidence, EvidenceType, ExtensionMap, FIRST_PARTY_DIAGNOSTIC_CODES,
     Framework, Mutation, MutationOperation, ReachabilityLink, Recoverability, RiskLevel, Route,
-    SCHEMA_VERSION, ScanMetadata, ScanMode, SourceEvidence, Span, SymbolRef, diagnostic_codes,
+    RouteParam, RouteProtection, RouteProtectionKind, SCHEMA_VERSION, ScanMetadata, ScanMode,
+    SourceEvidence, Span, SymbolRef, diagnostic_codes,
 };
 use serde_json::{Value, json};
 
@@ -91,6 +92,23 @@ fn rust_document_serialization_validates_against_schema() {
         name: Some("deleteAccount".to_string()),
         tags: vec!["accounts".to_string()],
         middleware: vec![symbol("requireUser", "src/routes/accounts.ts", 8, 8)],
+        params: vec![RouteParam {
+            name: "id".to_string(),
+            syntax: ":id".to_string(),
+            span: Some(span("src/routes/accounts.ts", 9, 12)),
+            confidence: Confidence::High,
+            notes: Vec::new(),
+        }],
+        declared_protection: vec![RouteProtection {
+            kind: RouteProtectionKind::RouteGuard,
+            mechanism: "middleware".to_string(),
+            symbol: Some(symbol("requireUser", "src/routes/accounts.ts", 8, 8)),
+            span: Some(span("src/routes/accounts.ts", 8, 8)),
+            inherited: false,
+            confidence: Confidence::High,
+            evidence_ids: vec!["evidence.accounts.authn".to_string()],
+            notes: Vec::new(),
+        }],
         handler: Some(symbol("deleteAccount", "src/routes/accounts.ts", 10, 14)),
         span: Some(span("src/routes/accounts.ts", 9, 1)),
         source_evidence: vec![SourceEvidence {
