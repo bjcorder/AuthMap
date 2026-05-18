@@ -5860,14 +5860,14 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 23);
+        assert_eq!(document.routes.len(), 26);
         assert_eq!(
             document.routes.first().map(|route| route.id.as_str()),
             Some("route_0001")
         );
         assert_eq!(
             document.routes.last().map(|route| route.id.as_str()),
-            Some("route_0023")
+            Some("route_0026")
         );
         assert!(document.routes.iter().any(|route| {
             route.method == "DELETE"
@@ -5933,6 +5933,23 @@ sensitivity:
                     .as_ref()
                     .is_some_and(|handler| handler.name == "get_user")
         }));
+        let shared_route = document
+            .routes
+            .iter()
+            .find(|route| route.method == "GET" && route.path == "/shared/variable/settings")
+            .expect("shared dependency route should be discovered");
+        assert_eq!(
+            shared_route
+                .middleware
+                .iter()
+                .map(|middleware| middleware.name.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "require_user",
+                "can_edit_account",
+                "provide_database_interface"
+            ]
+        );
         let service_route = document
             .routes
             .iter()
@@ -5956,6 +5973,29 @@ sensitivity:
             evidence.evidence_type == EvidenceType::AdminCheck
                 && evidence.route_id.as_deref().is_some()
                 && evidence.span.is_some()
+        }));
+        assert!(document.evidence.iter().any(|evidence| {
+            evidence.route_id.as_deref() == Some(shared_route.id.as_str())
+                && evidence.evidence_type == EvidenceType::Authn
+                && evidence
+                    .symbol
+                    .as_ref()
+                    .is_some_and(|symbol| symbol.name == "require_user")
+        }));
+        assert!(document.evidence.iter().any(|evidence| {
+            evidence.route_id.as_deref() == Some(shared_route.id.as_str())
+                && evidence.evidence_type == EvidenceType::PermissionCheck
+                && evidence
+                    .symbol
+                    .as_ref()
+                    .is_some_and(|symbol| symbol.name == "can_edit_account")
+        }));
+        assert!(!document.evidence.iter().any(|evidence| {
+            evidence.route_id.as_deref() == Some(shared_route.id.as_str())
+                && evidence
+                    .symbol
+                    .as_ref()
+                    .is_some_and(|symbol| symbol.name == "provide_database_interface")
         }));
         assert!(document.evidence.iter().any(|evidence| {
             evidence.route_id.as_deref() == Some(service_route.id.as_str())
@@ -7002,6 +7042,53 @@ def me(user=Depends(require_user)):
                     .as_ref()
                     .is_some_and(|symbol| symbol.name == "require_user")
         }));
+    }
+
+    #[test]
+    fn unresolved_fastapi_include_dependencies_emit_dynamic_context_only() {
+        let temp = TestDir::new("fastapi-unresolved-include-dependencies");
+        write_file(
+            &temp.path().join("app.py"),
+            r#"
+from fastapi import APIRouter, FastAPI
+
+app = FastAPI()
+router = APIRouter()
+
+@router.get("/items")
+def list_items():
+    return []
+
+app.include_router(router, dependencies=build_runtime_dependencies())
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        let route = document
+            .routes
+            .iter()
+            .find(|route| route.path == "/items")
+            .expect("GET /items should exist");
+        let evidence = document
+            .evidence
+            .iter()
+            .find(|evidence| evidence.route_id.as_deref() == Some(route.id.as_str()))
+            .expect("dynamic include dependency should emit review context");
+        assert_eq!(evidence.evidence_type, EvidenceType::UnknownDynamicCheck);
+        assert_eq!(evidence.confidence, Confidence::Low);
+        assert_eq!(
+            evidence.symbol.as_ref().map(|symbol| symbol.name.as_str()),
+            Some("dynamic_policy_dependencies")
+        );
+        let coverage = document
+            .coverage
+            .iter()
+            .find(|coverage| coverage.route_id == route.id)
+            .expect("route should have coverage");
+        assert_eq!(coverage.class, CoverageClass::UnknownOrDynamic);
+        assert_eq!(coverage.risk, RiskLevel::ReviewRequired);
     }
 
     #[test]

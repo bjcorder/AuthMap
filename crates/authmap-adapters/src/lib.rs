@@ -459,6 +459,7 @@ impl FrameworkAdapter for FastApiAdapter {
                 module_index: &module_index,
                 index: &mut index,
                 static_strings: HashMap::new(),
+                dependency_lists: Vec::new(),
             };
             collector.collect(root);
         }
@@ -520,6 +521,22 @@ struct RouterCollection {
     file: String,
     name: String,
     routers: Vec<RouterReference>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DependencyListUpdateKind {
+    Assignment,
+    Mutation,
+}
+
+#[derive(Clone, Debug)]
+struct DependencyListUpdate {
+    name: String,
+    symbols: Vec<SymbolRef>,
+    dynamic: bool,
+    span: Span,
+    start_byte: usize,
+    kind: DependencyListUpdateKind,
 }
 
 #[derive(Clone, Debug)]
@@ -816,6 +833,7 @@ struct FileCollector<'a> {
     module_index: &'a BTreeMap<String, String>,
     index: &'a mut FastApiIndex,
     static_strings: HashMap<String, String>,
+    dependency_lists: Vec<DependencyListUpdate>,
 }
 
 impl<'a> FileCollector<'a> {
@@ -826,6 +844,7 @@ impl<'a> FileCollector<'a> {
         );
         self.static_strings = collect_module_static_strings(self.parsed, root);
         self.walk_for_bindings(root);
+        self.walk_for_dependency_lists(root);
         self.walk_for_factories(root);
         self.walk_for_routes_and_includes(root);
     }
@@ -850,6 +869,21 @@ impl<'a> FileCollector<'a> {
             let mut cursor = node.walk();
             stack.extend(node.children(&mut cursor));
         }
+    }
+
+    fn walk_for_dependency_lists(&mut self, node: Node<'_>) {
+        let mut stack = vec![node];
+        while let Some(node) = stack.pop() {
+            match node.kind() {
+                "assignment" => self.collect_dependency_list_assignment(node),
+                "call" => self.collect_dependency_list_mutation(node),
+                _ => {}
+            }
+            let mut cursor = node.walk();
+            stack.extend(node.children(&mut cursor));
+        }
+        self.dependency_lists
+            .sort_by_key(|update| (update.start_byte, update.name.clone()));
     }
 
     fn walk_for_routes_and_includes(&mut self, node: Node<'_>) {
@@ -913,6 +947,59 @@ impl<'a> FileCollector<'a> {
             tags: keyword_string_list(self.parsed, call, "tags"),
             dependencies: fastapi_dependencies_from_keyword(self.parsed, call, "dependencies"),
             dynamic_prefix,
+        });
+    }
+
+    fn collect_dependency_list_assignment(&mut self, node: Node<'_>) {
+        let Some(left) = node.child_by_field_name("left") else {
+            return;
+        };
+        let Some(right) = node.child_by_field_name("right") else {
+            return;
+        };
+        let Some(name) = identifier_text(self.parsed, left) else {
+            return;
+        };
+        let symbols = fastapi_dependency_symbols(self.parsed, right);
+        let sequence = matches!(right.kind(), "list" | "tuple");
+        if symbols.is_empty() && !(sequence && name.to_ascii_lowercase().contains("dependenc")) {
+            return;
+        }
+        self.dependency_lists.push(DependencyListUpdate {
+            name,
+            symbols,
+            dynamic: !sequence,
+            span: self.parsed.span_for(right),
+            start_byte: node.start_byte(),
+            kind: DependencyListUpdateKind::Assignment,
+        });
+    }
+
+    fn collect_dependency_list_mutation(&mut self, node: Node<'_>) {
+        let Some(function) = node.child_by_field_name("function") else {
+            return;
+        };
+        let Some((name, method)) = attribute_target(self.parsed, function) else {
+            return;
+        };
+        if !matches!(method.as_str(), "append" | "extend") {
+            return;
+        }
+        let Some(argument) = first_argument_node(node) else {
+            return;
+        };
+        let symbols = fastapi_dependency_symbols(self.parsed, argument);
+        if symbols.is_empty() && !name.to_ascii_lowercase().contains("dependenc") {
+            return;
+        }
+        let dynamic = symbols.is_empty();
+        self.dependency_lists.push(DependencyListUpdate {
+            name,
+            symbols,
+            dynamic,
+            span: self.parsed.span_for(argument),
+            start_byte: node.start_byte(),
+            kind: DependencyListUpdateKind::Mutation,
         });
     }
 
@@ -1089,7 +1176,7 @@ impl<'a> FileCollector<'a> {
             imported,
             collection_name,
             prefix,
-            dependencies: fastapi_dependencies_from_keyword(self.parsed, node, "dependencies"),
+            dependencies: self.fastapi_include_dependencies(node),
             dynamic_prefix,
         });
 
@@ -1105,6 +1192,60 @@ impl<'a> FileCollector<'a> {
                 "include_router call is not on a statically detected FastAPI app",
             ));
         }
+    }
+
+    fn fastapi_include_dependencies(&self, call: Node<'_>) -> Vec<SymbolRef> {
+        let Some(value) = keyword_value(self.parsed, call, "dependencies") else {
+            return Vec::new();
+        };
+        let direct = fastapi_dependency_symbols(self.parsed, value);
+        if !direct.is_empty() || matches!(value.kind(), "list" | "tuple") {
+            return direct;
+        }
+        if let Some(name) = identifier_text(self.parsed, value) {
+            if let Some(mut resolved) = self.resolve_dependency_list(&name, call.start_byte()) {
+                if resolved.is_empty() {
+                    return Vec::new();
+                }
+                return resolved.drain(..).collect();
+            }
+        }
+        vec![dynamic_fastapi_dependency_symbol(self.parsed, value)]
+    }
+
+    fn resolve_dependency_list(&self, name: &str, before_byte: usize) -> Option<Vec<SymbolRef>> {
+        let updates = self
+            .dependency_lists
+            .iter()
+            .filter(|update| update.name == name && update.start_byte < before_byte)
+            .collect::<Vec<_>>();
+        if updates.is_empty() {
+            return None;
+        }
+        let start = updates
+            .iter()
+            .rposition(|update| update.kind == DependencyListUpdateKind::Assignment)
+            .unwrap_or(0);
+        let mut symbols = Vec::new();
+        let mut dynamic_span = None;
+        for update in updates.into_iter().skip(start) {
+            for symbol in &update.symbols {
+                push_unique_symbol_ref(&mut symbols, symbol.clone());
+            }
+            if update.dynamic {
+                dynamic_span = Some(update.span.clone());
+            }
+        }
+        if let Some(span) = dynamic_span {
+            push_unique_symbol_ref(
+                &mut symbols,
+                SymbolRef {
+                    name: "dynamic_policy_dependencies".to_string(),
+                    span: Some(span),
+                },
+            );
+        }
+        Some(symbols)
     }
 }
 
@@ -1833,6 +1974,20 @@ fn fastapi_dependency_symbols(parsed: &ParsedFile, node: Node<'_>) -> Vec<Symbol
         );
     }
     symbols
+}
+
+fn dynamic_fastapi_dependency_symbol(parsed: &ParsedFile, node: Node<'_>) -> SymbolRef {
+    SymbolRef {
+        name: "dynamic_policy_dependencies".to_string(),
+        span: Some(parsed.span_for(node)),
+    }
+}
+
+fn push_unique_symbol_ref(symbols: &mut Vec<SymbolRef>, candidate: SymbolRef) {
+    if symbols.iter().any(|symbol| symbol.name == candidate.name) {
+        return;
+    }
+    symbols.push(candidate);
 }
 
 fn first_python_symbol_argument(parsed: &ParsedFile, call: Node<'_>) -> Option<SymbolRef> {
@@ -3681,7 +3836,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        assert_eq!(output.routes.len(), 23);
+        assert_eq!(output.routes.len(), 26);
         assert!(summaries.contains(&(
             "POST",
             "/service/accounts",
@@ -3836,6 +3991,14 @@ mod tests {
         )));
         assert!(summaries.contains(&(
             "GET",
+            "/shared/variable/settings",
+            Some("variable_settings"),
+            None,
+            Vec::<String>::new(),
+            authmap_core::Confidence::High,
+        )));
+        assert!(summaries.contains(&(
+            "GET",
             "<dynamic>",
             Some("unresolved_runtime_path"),
             None,
@@ -3876,6 +4039,50 @@ mod tests {
                 .filter(|diagnostic| diagnostic.code == "fastapi_dynamic_route_path")
                 .count()
                 == 1
+        );
+
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/shared/variable/settings")),
+            vec![
+                "require_user",
+                "can_edit_account",
+                "provide_database_interface"
+            ]
+        );
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/shared/users/{user_id}")),
+            vec![
+                "require_user",
+                "can_edit_account",
+                "provide_database_interface"
+            ]
+        );
+    }
+
+    #[test]
+    fn marks_unresolved_fastapi_include_dependencies_as_dynamic_context() {
+        let parsed = parse_sources(&[(
+            "app.py".to_string(),
+            Language::Python,
+            r#"
+from fastapi import APIRouter, FastAPI
+
+app = FastAPI()
+router = APIRouter()
+
+@router.get("/items")
+def list_items():
+    return []
+
+app.include_router(router, dependencies=build_runtime_dependencies())
+"#
+            .to_string(),
+        )]);
+        let output = FastApiAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/items")),
+            vec!["dynamic_policy_dependencies"]
         );
     }
 

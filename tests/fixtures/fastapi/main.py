@@ -32,6 +32,10 @@ def dynamic_policy_check(policy_name: str):
     return policy_name == "account.update"
 
 
+def provide_database_interface():
+    return object()
+
+
 @app.get("/health", name="healthcheck", tags=["system"])
 def health():
     return {"ok": True}
@@ -68,6 +72,14 @@ def service_account(service: AccountService = Depends()):
 @local_router.delete("/{item_id}", name="delete_local")
 def delete_local(item_id: str):
     return {"deleted": item_id}
+
+
+variable_router = APIRouter(prefix="/variable")
+
+
+@variable_router.get("/settings")
+def variable_settings():
+    return {}
 
 
 @dynamic_router.get("/reports")
@@ -119,4 +131,10 @@ app.include_router(make_factory_router())
 ROUTERS = (make_collection_router(),)
 for router in ROUTERS:
     app.include_router(router)
+shared_dependencies = [Depends(require_user)]
+shared_dependencies.append(Depends(can_edit_account))
+shared_dependencies.append(Depends(provide_database_interface))
+SHARED_ROUTERS = (variable_router, users_router)
+for router in SHARED_ROUTERS:
+    app.include_router(router, prefix="/shared", dependencies=shared_dependencies)
 app.include_router(dynamic_router, prefix=dynamic_prefix)
