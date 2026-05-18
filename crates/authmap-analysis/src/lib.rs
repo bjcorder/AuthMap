@@ -3385,11 +3385,16 @@ fn extract_graphql_route_evidence(route: &authmap_core::Route) -> Vec<Evidence> 
     if permissions.trim().is_empty() {
         return Vec::new();
     }
+    let (evidence_type, mechanism) = if graphql_permissions_explicitly_public(permissions) {
+        (EvidenceType::ExplicitPublic, "graphql_public_permissions")
+    } else {
+        (EvidenceType::PermissionCheck, "graphql_permissions")
+    };
     vec![Evidence {
         id: String::new(),
         route_id: Some(route.id.clone()),
-        evidence_type: EvidenceType::PermissionCheck,
-        mechanism: "graphql_permissions".to_string(),
+        evidence_type,
+        mechanism: mechanism.to_string(),
         symbol: Some(SymbolRef {
             name: permissions.to_string(),
             span: route.span.clone(),
@@ -3399,6 +3404,17 @@ fn extract_graphql_route_evidence(route: &authmap_core::Route) -> Vec<Evidence> 
         notes: Vec::new(),
         extensions: authmap_core::ExtensionMap::new(),
     }]
+}
+
+fn graphql_permissions_explicitly_public(permissions: &str) -> bool {
+    let normalized = permissions
+        .chars()
+        .filter(|ch| !ch.is_whitespace() && *ch != ',')
+        .collect::<String>()
+        .to_ascii_lowercase();
+    normalized.contains("permissions=()")
+        || normalized.contains("permissions=[]")
+        || normalized.contains("permissions={}")
 }
 
 fn route_supports_service_evidence(route: &authmap_core::Route) -> bool {
@@ -6463,6 +6479,25 @@ sensitivity:
                 && graphql_document.routes.iter().any(|route| {
                     route.id == coverage.route_id && route.path == "/graphql/productCreate"
                 })
+        }));
+        assert!(graphql_document.coverage.iter().any(|coverage| {
+            coverage.class == CoverageClass::PublicDeclared
+                && graphql_document.routes.iter().any(|route| {
+                    route.id == coverage.route_id && route.path == "/graphql/createToken"
+                })
+        }));
+        assert!(graphql_document.coverage.iter().any(|coverage| {
+            coverage.class == CoverageClass::Unauthenticated
+                && graphql_document.routes.iter().any(|route| {
+                    route.id == coverage.route_id && route.path == "/graphql/checkoutCreate"
+                })
+        }));
+        assert!(!graphql_document.routes.iter().any(|route| {
+            route.path == "/graphql/accountQueries"
+                || route.path == "/graphql/accountMutations"
+                || route.path == "/graphql/choiceValue"
+                || route.path == "/graphql/baseMutation"
+                || route.path == "/graphql/modelDeleteMutation"
         }));
     }
 

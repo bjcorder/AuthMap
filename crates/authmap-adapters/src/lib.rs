@@ -167,46 +167,26 @@ impl FrameworkAdapter for GraphqlAdapter {
         parsed_files: &[ParsedFile],
         _context: &AdapterContext,
     ) -> AdapterOutput {
-        let mut routes = Vec::new();
+        let mut candidates = Vec::new();
         for parsed in parsed_files
             .iter()
             .filter(|file| file.language == authmap_core::Language::Python)
         {
-            if !parsed.text.contains("graphene") && !parsed.text.contains("permissions") {
+            if !parsed.text.contains("graphene")
+                && !parsed.text.contains("BaseMutation")
+                && !parsed.text.contains("permissions")
+            {
                 continue;
             }
-            let mut current_class: Option<(String, usize)> = None;
-            let mut class_has_graphql_base = false;
-            let mut permissions: Option<String> = None;
-            for (line_index, line) in parsed.text.lines().enumerate() {
-                let trimmed = line.trim();
-                if let Some(name) = python_class_name(trimmed) {
-                    if name == "Meta" || name == "Arguments" {
-                        continue;
-                    }
-                    if let Some(route) = graphql_route_from_class(
-                        parsed,
-                        current_class.take(),
-                        class_has_graphql_base,
-                        permissions.take(),
-                    ) {
-                        routes.push(route);
-                    }
-                    class_has_graphql_base = python_graphql_operation_class(trimmed);
-                    current_class = Some((name, line_index + 1));
-                } else if trimmed.starts_with("permissions =") {
-                    permissions = Some(trimmed.to_string());
+            for class in python_top_level_classes(parsed) {
+                if graphql_schema_container_class(&class) {
+                    candidates.extend(graphql_routes_from_container(parsed, &class));
+                } else if let Some(route) = graphql_route_from_class(parsed, &class) {
+                    candidates.push(route);
                 }
             }
-            if let Some(route) = graphql_route_from_class(
-                parsed,
-                current_class.take(),
-                class_has_graphql_base,
-                permissions.take(),
-            ) {
-                routes.push(route);
-            }
         }
+        let mut routes = dedup_graphql_routes(candidates);
         routes.sort_by_key(route_sort_key);
         for (index, route) in routes.iter_mut().enumerate() {
             route.id = format!("route_{:04}", index + 1);
@@ -270,52 +250,253 @@ fn python_class_name(line: &str) -> Option<String> {
     (!name.is_empty()).then(|| name.to_string())
 }
 
-fn python_graphql_operation_class(line: &str) -> bool {
-    let Some((_, rest)) = line.split_once('(') else {
-        return false;
+#[derive(Clone, Debug)]
+struct PythonTopLevelClass {
+    name: String,
+    line: usize,
+    declaration: String,
+    body: Vec<(usize, String)>,
+}
+
+fn python_top_level_classes(parsed: &ParsedFile) -> Vec<PythonTopLevelClass> {
+    let mut classes = Vec::new();
+    let mut current: Option<PythonTopLevelClass> = None;
+    for (line_index, line) in parsed.text.lines().enumerate() {
+        let line_number = line_index + 1;
+        let trimmed = line.trim();
+        if line == line.trim_start()
+            && let Some(name) = python_class_name(trimmed)
+        {
+            if let Some(class) = current.take() {
+                classes.push(class);
+            }
+            current = Some(PythonTopLevelClass {
+                name,
+                line: line_number,
+                declaration: trimmed.to_string(),
+                body: Vec::new(),
+            });
+        } else if let Some(class) = current.as_mut() {
+            class.body.push((line_number, line.to_string()));
+        }
+    }
+    if let Some(class) = current {
+        classes.push(class);
+    }
+    classes
+}
+
+fn graphql_class_bases(class: &PythonTopLevelClass) -> Vec<String> {
+    let Some((_, rest)) = class.declaration.split_once('(') else {
+        return Vec::new();
     };
     let Some((bases, _)) = rest.rsplit_once(')') else {
-        return false;
+        return Vec::new();
     };
-    bases.split(',').any(|base| {
-        let base = base.trim();
+    bases
+        .split(',')
+        .map(|base| base.trim().to_string())
+        .filter(|base| !base.is_empty())
+        .collect()
+}
+
+fn graphql_schema_container_class(class: &PythonTopLevelClass) -> bool {
+    (class.name.ends_with("Queries") || class.name.ends_with("Mutations"))
+        && graphql_class_bases(class)
+            .iter()
+            .any(|base| graphql_terminal_base(base) == "ObjectType")
+}
+
+fn graphql_concrete_operation_class(class: &PythonTopLevelClass) -> bool {
+    if graphql_abstract_mutation_class_name(&class.name) || graphql_schema_container_class(class) {
+        return false;
+    }
+    graphql_class_bases(class).iter().any(|base| {
+        let terminal = graphql_terminal_base(base);
         matches!(
-            base,
-            "BaseMutation"
-                | "ModelMutation"
-                | "ModelDeleteMutation"
-                | "DeprecatedModelMutation"
-                | "graphene.Mutation"
-                | "graphene.ObjectType"
-        ) || base.ends_with(".Mutation")
-            || base.ends_with(".ObjectType")
-            || base.ends_with("Mutation")
-                && !matches!(base, "BaseInputObjectType" | "InputObjectType")
+            terminal.as_str(),
+            "BaseMutation" | "ModelMutation" | "ModelDeleteMutation" | "DeprecatedModelMutation"
+        ) || terminal == "Mutation"
+            || terminal.ends_with("Mutation") && !matches!(terminal.as_str(), "InputObjectType")
     })
 }
 
-fn graphql_route_from_class(
-    parsed: &ParsedFile,
-    class: Option<(String, usize)>,
-    class_has_graphql_base: bool,
-    permissions: Option<String>,
-) -> Option<Route> {
-    let (class_name, line) = class?;
-    if !class_has_graphql_base {
+fn graphql_abstract_mutation_class_name(name: &str) -> bool {
+    matches!(
+        name,
+        "BaseMutation" | "ModelMutation" | "ModelDeleteMutation" | "DeprecatedModelMutation"
+    )
+}
+
+fn graphql_terminal_base(base: &str) -> String {
+    base.rsplit('.').next().unwrap_or(base).trim().to_string()
+}
+
+fn graphql_route_from_class(parsed: &ParsedFile, class: &PythonTopLevelClass) -> Option<Route> {
+    if !graphql_concrete_operation_class(class) {
         return None;
     }
+    let permissions = graphql_class_permissions(class);
+    Some(graphql_route(
+        parsed,
+        class.line,
+        "mutation",
+        lower_camel(&class.name),
+        Some(class.name.clone()),
+        None,
+        permissions,
+        &class.name,
+        "graphql_operation_class",
+    ))
+}
+
+fn graphql_routes_from_container(parsed: &ParsedFile, class: &PythonTopLevelClass) -> Vec<Route> {
+    let operation_kind = if class.name.ends_with("Queries") {
+        "query"
+    } else {
+        "mutation"
+    };
+    let mut routes = Vec::new();
+    for block in graphql_container_field_blocks(class) {
+        let Some((field_name, target_name)) = graphql_field_operation(&block) else {
+            continue;
+        };
+        let operation_name = lower_camel(target_name.as_deref().unwrap_or(&field_name));
+        let permissions = graphql_permissions_from_lines(block.iter().map(|(_, line)| line));
+        let line = block.first().map_or(class.line, |(line, _)| *line);
+        let handler_name = target_name.clone().unwrap_or_else(|| field_name.clone());
+        routes.push(graphql_route(
+            parsed,
+            line,
+            operation_kind,
+            operation_name,
+            target_name,
+            Some(field_name),
+            permissions,
+            &handler_name,
+            "graphql_root_field",
+        ));
+    }
+    routes
+}
+
+fn graphql_container_field_blocks(class: &PythonTopLevelClass) -> Vec<Vec<(usize, String)>> {
+    let mut blocks = Vec::new();
+    let mut current: Option<Vec<(usize, String)>> = None;
+    for (line, text) in &class.body {
+        if graphql_direct_class_assignment(text) {
+            if let Some(block) = current.take() {
+                blocks.push(block);
+            }
+            current = Some(vec![(*line, text.clone())]);
+        } else if let Some(block) = current.as_mut()
+            && (text.trim().is_empty() || leading_spaces(text) > 4)
+        {
+            block.push((*line, text.clone()));
+        } else if let Some(block) = current.take() {
+            blocks.push(block);
+        }
+    }
+    if let Some(block) = current {
+        blocks.push(block);
+    }
+    blocks
+}
+
+fn graphql_direct_class_assignment(line: &str) -> bool {
+    leading_spaces(line) == 4
+        && !line.trim_start().starts_with('@')
+        && !line.trim_start().starts_with("def ")
+        && !line.trim_start().starts_with("class ")
+        && line.trim().contains(" = ")
+}
+
+fn leading_spaces(line: &str) -> usize {
+    line.chars().take_while(|ch| *ch == ' ').count()
+}
+
+fn graphql_field_operation(block: &[(usize, String)]) -> Option<(String, Option<String>)> {
+    let first = block.first()?.1.trim();
+    let (field, right) = first.split_once('=')?;
+    let field_name = field.trim().to_string();
+    if field_name.is_empty() || field_name.starts_with('_') {
+        return None;
+    }
+    if let Some((target, _)) = right.split_once(".Field(") {
+        let target = graphql_terminal_base(target.trim());
+        if !target.is_empty() {
+            return Some((field_name, Some(target)));
+        }
+    }
+    let joined = block
+        .iter()
+        .map(|(_, line)| line.trim())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if joined.contains("Field(")
+        || joined.contains("graphene.List(")
+        || joined.contains("graphene.Field(")
+    {
+        Some((field_name, None))
+    } else {
+        None
+    }
+}
+
+fn graphql_class_permissions(class: &PythonTopLevelClass) -> Option<String> {
+    graphql_permissions_from_lines(class.body.iter().map(|(_, line)| line))
+}
+
+fn graphql_permissions_from_lines<'a>(lines: impl Iterator<Item = &'a String>) -> Option<String> {
+    let lines = lines.collect::<Vec<_>>();
+    for (index, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        let permission_offset = trimmed
+            .find("permissions =")
+            .or_else(|| trimmed.find("permissions="));
+        if let Some(offset) = permission_offset {
+            let mut value = trimmed[offset..].trim_end_matches(',').to_string();
+            if !graphql_permissions_balanced(&value) {
+                for next in lines.iter().skip(index + 1) {
+                    let next_trimmed = next.trim();
+                    value.push(' ');
+                    value.push_str(next_trimmed.trim_end_matches(','));
+                    if graphql_permissions_balanced(&value) {
+                        break;
+                    }
+                }
+            }
+            return Some(value);
+        }
+    }
+    None
+}
+
+fn graphql_permissions_balanced(value: &str) -> bool {
+    let open_parens = value.matches('(').count();
+    let close_parens = value.matches(')').count();
+    let open_brackets = value.matches('[').count();
+    let close_brackets = value.matches(']').count();
+    open_parens <= close_parens && open_brackets <= close_brackets
+}
+
+fn graphql_route(
+    parsed: &ParsedFile,
+    line: usize,
+    operation_kind: &str,
+    operation_name: String,
+    class_name: Option<String>,
+    field_name: Option<String>,
+    permissions: Option<String>,
+    handler_name: &str,
+    source_mechanism: &str,
+) -> Route {
     let span = Span {
         file: parsed.source.path.clone(),
         line: line as u32,
         column: 0,
         byte_range: None,
     };
-    let operation_kind = if class_name.to_ascii_lowercase().contains("query") {
-        "query"
-    } else {
-        "mutation"
-    };
-    let operation_name = lower_camel(&class_name);
     let mut extensions = authmap_core::ExtensionMap::new();
     extensions.insert(
         "authmap.graphql".to_string(),
@@ -323,10 +504,11 @@ fn graphql_route_from_class(
             "operation": operation_name,
             "operation_kind": operation_kind,
             "class_name": class_name,
+            "field_name": field_name,
             "permissions": permissions,
         }),
     );
-    Some(Route {
+    Route {
         id: String::new(),
         framework: Framework::Graphql,
         method: if operation_kind == "mutation" {
@@ -340,20 +522,52 @@ fn graphql_route_from_class(
         tags: Vec::new(),
         middleware: Vec::new(),
         handler: Some(SymbolRef {
-            name: class_name.clone(),
+            name: handler_name.to_string(),
             span: Some(span.clone()),
         }),
         span: Some(span.clone()),
         source_evidence: vec![authmap_source_evidence(
-            "graphql_operation_class",
-            &class_name,
+            source_mechanism,
+            handler_name,
             span.clone(),
             Confidence::Medium,
         )],
         confidence: Confidence::Medium,
         notes: Vec::new(),
         extensions,
-    })
+    }
+}
+
+fn dedup_graphql_routes(routes: Vec<Route>) -> Vec<Route> {
+    let mut deduped: BTreeMap<(String, String), Route> = BTreeMap::new();
+    for route in routes {
+        let key = (route.method.clone(), route.path.clone());
+        match deduped.get(&key) {
+            Some(existing) if graphql_route_rank(existing) >= graphql_route_rank(&route) => {}
+            _ => {
+                deduped.insert(key, route);
+            }
+        }
+    }
+    deduped.into_values().collect()
+}
+
+fn graphql_route_rank(route: &Route) -> u8 {
+    let has_permissions = route
+        .extensions
+        .get("authmap.graphql")
+        .and_then(|value| value.get("permissions"))
+        .is_some_and(|value| !value.is_null());
+    let is_class_route = route
+        .source_evidence
+        .iter()
+        .any(|item| item.mechanism == "graphql_operation_class");
+    match (has_permissions, is_class_route) {
+        (true, true) => 3,
+        (true, false) => 2,
+        (false, true) => 1,
+        (false, false) => 0,
+    }
 }
 
 fn lower_camel(value: &str) -> String {
@@ -3798,6 +4012,7 @@ fn normalize_js_module_path(current_dir: &str, module: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
     use std::fs;
 
     use authmap_core::{Confidence, Framework, Language, SourceFile};
@@ -4757,6 +4972,11 @@ app.include_router(router, dependencies=build_runtime_dependencies())
         let parsed = parse_fixtures(&["graphql/mutations.py"]);
         let output = GraphqlAdapter.discover_routes(&parsed, &AdapterContext::default());
 
+        let paths = output
+            .routes
+            .iter()
+            .map(|route| route.path.as_str())
+            .collect::<BTreeSet<_>>();
         assert!(output.routes.iter().any(|route| {
             route.framework == Framework::Graphql
                 && route.method == "MUTATION"
@@ -4765,14 +4985,22 @@ app.include_router(router, dependencies=build_runtime_dependencies())
         assert!(output.routes.iter().any(|route| {
             route.framework == Framework::Graphql
                 && route.method == "QUERY"
-                && route.path == "/graphql/publicCatalogQuery"
+                && route.path == "/graphql/customers"
         }));
-        assert!(
-            !output
-                .routes
-                .iter()
-                .any(|route| route.path == "/graphql/generatedSchemaField")
-        );
+        assert!(paths.contains("/graphql/createToken"));
+        assert!(paths.contains("/graphql/requestPasswordReset"));
+        assert!(paths.contains("/graphql/checkoutCreate"));
+        assert!(paths.contains("/graphql/products"));
+        for excluded in [
+            "/graphql/accountQueries",
+            "/graphql/accountMutations",
+            "/graphql/choiceValue",
+            "/graphql/baseMutation",
+            "/graphql/modelDeleteMutation",
+            "/graphql/generatedSchemaField",
+        ] {
+            assert!(!paths.contains(excluded), "unexpected route {excluded}");
+        }
     }
 
     fn route<'a>(
