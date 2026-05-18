@@ -73,6 +73,136 @@ fn render_markdown(document: &AuthMapDocument) -> String {
     output
 }
 
+pub fn render_routes_json(document: &AuthMapDocument) -> Result<String, ReportError> {
+    let index = ReportIndex::new(document);
+    let routes = sorted_routes(document)
+        .into_iter()
+        .map(|route| {
+            let coverage = index.coverage_by_route.get(route.id.as_str());
+            json!({
+                "id": route.id,
+                "framework": framework_label(route.framework),
+                "method": route.method,
+                "path": route.path,
+                "name": route.name,
+                "handler": route.handler,
+                "location": route.span,
+                "middleware": route.middleware,
+                "params": route.params,
+                "protection": route.declared_protection,
+                "confidence": confidence_label(route.confidence),
+                "coverage": coverage.map(|item| coverage_class_label(item.class)),
+                "risk": coverage.map(|item| risk_label(item.risk)),
+                "uncertainty": route.notes,
+            })
+        })
+        .collect::<Vec<_>>();
+    let mut value = json!({
+        "report_type": "authmap.routes",
+        "schema_version": SCHEMA_VERSION,
+        "metadata": document.metadata,
+        "summary": {
+            "routes": document.routes.len(),
+            "review_required": document.coverage.iter().filter(|coverage| {
+                matches!(coverage.risk, RiskLevel::High | RiskLevel::ReviewRequired)
+            }).count(),
+            "diagnostics": document.diagnostics.len(),
+        },
+        "routes": routes,
+        "diagnostics": document.diagnostics,
+    });
+    redact_json_value(&mut value);
+    serde_json::to_string_pretty(&value).map_err(ReportError::Json)
+}
+
+pub fn render_routes_markdown(document: &AuthMapDocument) -> String {
+    let index = ReportIndex::new(document);
+    let mut output = String::new();
+    let _ = writeln!(output, "# AuthMap Route Inventory");
+    let _ = writeln!(output);
+    let _ = writeln!(output, "- Schema version: {}", SCHEMA_VERSION);
+    let _ = writeln!(output, "- Routes: {}", document.routes.len());
+    let _ = writeln!(output, "- Diagnostics: {}", document.diagnostics.len());
+    let _ = writeln!(output);
+
+    if document.routes.is_empty() {
+        let _ = writeln!(output, "No routes were discovered.");
+        return output;
+    }
+
+    let rows = sorted_routes(document)
+        .into_iter()
+        .map(|route| {
+            let coverage = index.coverage_by_route.get(route.id.as_str());
+            vec![
+                escape_table(&route.id),
+                framework_label(route.framework).to_string(),
+                escape_table(&route.method),
+                escape_table(&route.path),
+                escape_table(&format_optional_symbol_table(route.handler.as_ref())),
+                escape_table(&route_params_table(route)),
+                escape_table(&route_protection_table(route)),
+                confidence_label(route.confidence).to_string(),
+                coverage.map_or_else(
+                    || "not classified".to_string(),
+                    |coverage| coverage_class_label(coverage.class).to_string(),
+                ),
+                coverage.map_or_else(
+                    || "not scored".to_string(),
+                    |coverage| risk_label(coverage.risk).to_string(),
+                ),
+            ]
+        })
+        .collect::<Vec<_>>();
+
+    render_table(
+        &mut output,
+        &[
+            "ID",
+            "Framework",
+            "Method",
+            "Path",
+            "Handler",
+            "Params",
+            "Protection",
+            "Confidence",
+            "Coverage",
+            "Risk",
+        ],
+        &rows,
+    );
+    output
+}
+
+fn route_params_table(route: &authmap_core::Route) -> String {
+    if route.params.is_empty() {
+        return "none".to_string();
+    }
+    route
+        .params
+        .iter()
+        .map(|param| format!("{} ({})", param.name, confidence_label(param.confidence)))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn route_protection_table(route: &authmap_core::Route) -> String {
+    if route.declared_protection.is_empty() {
+        return "none".to_string();
+    }
+    route
+        .declared_protection
+        .iter()
+        .map(|protection| {
+            protection.symbol.as_ref().map_or_else(
+                || protection.mechanism.clone(),
+                |symbol| symbol.name.clone(),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 struct ReportIndex<'a> {
     coverage_by_route: BTreeMap<&'a str, &'a Coverage>,
     evidence_by_id: BTreeMap<&'a str, &'a Evidence>,
@@ -430,6 +560,16 @@ fn render_route_details(output: &mut String, document: &AuthMapDocument, index: 
             "- Middleware: {}",
             format_symbols(&route.middleware)
         );
+        if !route.params.is_empty() {
+            let _ = writeln!(output, "- Params: {}", route_params_table(route));
+        }
+        if !route.declared_protection.is_empty() {
+            let _ = writeln!(
+                output,
+                "- Declared protection: {}",
+                route_protection_table(route)
+            );
+        }
         let _ = writeln!(
             output,
             "- Confidence: {}",
@@ -3242,6 +3382,8 @@ mod tests {
             name: None,
             tags: Vec::new(),
             middleware: Vec::new(),
+            params: Vec::new(),
+            declared_protection: Vec::new(),
             handler: Some(SymbolRef {
                 name: "deleteAccount".to_string(),
                 span: Some(Span {
@@ -3447,6 +3589,8 @@ mod tests {
             name: None,
             tags: Vec::new(),
             middleware: Vec::new(),
+            params: Vec::new(),
+            declared_protection: Vec::new(),
             handler,
             span,
             source_evidence: Vec::new(),
@@ -3550,6 +3694,8 @@ mod tests {
                     name: "requires_admin".to_string(),
                     span: Some(span.clone()),
                 }],
+                params: Vec::new(),
+                declared_protection: Vec::new(),
                 handler: Some(SymbolRef {
                     name: "disable_user".to_string(),
                     span: Some(span.clone()),

@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## Unreleased
 
+### Added
+
+- Added `authmap routes` for focused route inventory review with JSON and
+  Markdown output.
+- Added route metadata for normalized path parameters and declared protection
+  context in the existing AuthMap schema version.
+
 ### Changed
 
 - Ported the release process to cargo-release-managed versioning, per-artifact

@@ -376,6 +376,68 @@ fn scan_help_works() {
 }
 
 #[test]
+fn routes_help_works() {
+    let output = authmap(&["routes", "--help"]);
+
+    assert_exit(&output, 0);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--format"));
+    assert!(stdout.contains("--output"));
+    assert!(stdout.contains("--config"));
+    assert!(stdout.contains("--max-files"));
+    assert!(stdout.contains("--max-file-size-bytes"));
+    assert!(stdout.contains("--max-total-bytes"));
+    assert!(stdout.contains("--max-runtime-ms"));
+}
+
+#[test]
+fn routes_json_reports_route_metadata_and_classification() {
+    let temp = TestDir::new("routes-json");
+    write_file(
+        &temp.path().join("app.js"),
+        r#"
+const express = require("express");
+const app = express();
+
+function requireUser(req, res, next) {
+  next();
+}
+
+function getAccount(req, res) {
+  res.json({ id: req.params.id });
+}
+
+app.get("/accounts/:id", requireUser, getAccount);
+"#,
+    );
+
+    let output = authmap(&[
+        "routes",
+        temp.path().to_str().expect("path should be UTF-8"),
+        "--format",
+        "json",
+    ]);
+
+    assert_exit(&output, 0);
+    let report: Value =
+        serde_json::from_slice(&output.stdout).expect("routes output should be JSON");
+    assert_eq!(report["report_type"], "authmap.routes");
+    assert_eq!(report["schema_version"], "0.1.0");
+    let route = report["routes"]
+        .as_array()
+        .and_then(|routes| routes.first())
+        .expect("route should be reported");
+    assert_eq!(route["method"], "GET");
+    assert_eq!(route["path"], "/accounts/:id");
+    assert_eq!(route["params"][0]["name"], "id");
+    assert_eq!(route["params"][0]["syntax"], ":id");
+    assert_eq!(route["protection"][0]["kind"], "route_guard");
+    assert_eq!(route["protection"][0]["mechanism"], "express_middleware");
+    assert_eq!(route["coverage"], "authn_only");
+    assert_eq!(route["risk"], "review_required");
+}
+
+#[test]
 fn rules_suggest_help_shows_limit_overrides() {
     let output = authmap(&["rules", "suggest", "--help"]);
 
