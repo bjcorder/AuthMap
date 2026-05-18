@@ -10,8 +10,8 @@ use authmap_config::{
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticCategory,
     DiagnosticSeverity, Evidence, EvidenceType, Framework, Mutation, MutationOperation,
-    ReachabilityLink, Recoverability, RiskLevel, RouteParam, RouteProtection, RouteProtectionKind,
-    ScanMetadata, Span, SymbolRef,
+    PolicyBranch, PolicyCase, PolicyCaseKind, PolicyOutcome, ReachabilityLink, Recoverability,
+    RiskLevel, RouteParam, RouteProtection, RouteProtectionKind, ScanMetadata, Span, SymbolRef,
 };
 use authmap_discovery::discover_sources;
 use authmap_parsers::{
@@ -284,6 +284,586 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
     run_scan_with_started_at(plan, Instant::now())
 }
 
+fn derive_policy_cases(
+    routes: &[authmap_core::Route],
+    evidence: &[Evidence],
+    mutations: &[Mutation],
+    links: &[ReachabilityLink],
+    parsed_files: &[ParsedFile],
+) -> (Vec<PolicyCase>, Vec<Diagnostic>) {
+    let mut cases = Vec::new();
+    let mut diagnostics = Vec::new();
+    let mut evidence_by_route = BTreeMap::<&str, Vec<&Evidence>>::new();
+    let evidence_by_id = evidence
+        .iter()
+        .map(|item| (item.id.as_str(), item))
+        .collect::<BTreeMap<_, _>>();
+    for item in evidence {
+        if let Some(route_id) = &item.route_id {
+            evidence_by_route
+                .entry(route_id.as_str())
+                .or_default()
+                .push(item);
+        }
+    }
+    for link in links {
+        if let Some(evidence_id) = &link.evidence_id
+            && let Some(item) = evidence_by_id.get(evidence_id.as_str())
+        {
+            evidence_by_route
+                .entry(link.route_id.as_str())
+                .or_default()
+                .push(item);
+        }
+    }
+    for route_evidence in evidence_by_route.values_mut() {
+        route_evidence.sort_by(|left, right| left.id.cmp(&right.id));
+        route_evidence.dedup_by(|left, right| left.id == right.id);
+    }
+    let mutation_by_id = mutations
+        .iter()
+        .map(|mutation| (mutation.id.as_str(), mutation))
+        .collect::<BTreeMap<_, _>>();
+    let mut links_by_route = BTreeMap::<&str, Vec<&ReachabilityLink>>::new();
+    for link in links {
+        links_by_route
+            .entry(link.route_id.as_str())
+            .or_default()
+            .push(link);
+    }
+    for route_links in links_by_route.values_mut() {
+        route_links.sort_by(|left, right| left.id.cmp(&right.id));
+    }
+
+    for route in routes {
+        let route_evidence = evidence_by_route
+            .get(route.id.as_str())
+            .cloned()
+            .unwrap_or_default();
+        let route_links = links_by_route
+            .get(route.id.as_str())
+            .cloned()
+            .unwrap_or_default();
+
+        if let Some(case) = effective_policy_case(route, &route_evidence, &route_links) {
+            cases.push(case);
+        }
+        if let Some(case) = linked_mutation_policy_case(route, &route_links, &mutation_by_id) {
+            cases.push(case);
+        }
+        if let Some((case, diagnostic)) = conflicting_policy_case(route, &route_evidence) {
+            cases.push(case);
+            diagnostics.push(diagnostic);
+        }
+        for (case, diagnostic) in duplicate_policy_cases(route, &route_evidence) {
+            cases.push(case);
+            diagnostics.push(diagnostic);
+        }
+        for case in dynamic_policy_cases(route, &route_evidence) {
+            diagnostics.push(policy_diagnostic(
+                authmap_core::diagnostic_codes::POLICY_DYNAMIC_BEHAVIOR,
+                case.span.clone(),
+                "Dynamic policy evidence requires review.".to_string(),
+            ));
+            cases.push(case);
+        }
+        for (case, diagnostic) in unreachable_policy_cases(route, &route_evidence, parsed_files) {
+            cases.push(case);
+            diagnostics.push(diagnostic);
+        }
+    }
+
+    cases.sort_by_key(policy_case_sort_key);
+    for (index, case) in cases.iter_mut().enumerate() {
+        case.id = format!("policy_case_{:04}", index + 1);
+    }
+    sort_diagnostics(&mut diagnostics);
+    diagnostics.dedup_by(|left, right| {
+        left.code == right.code && left.span == right.span && left.message == right.message
+    });
+    (cases, diagnostics)
+}
+
+fn effective_policy_case(
+    route: &authmap_core::Route,
+    evidence: &[&Evidence],
+    links: &[&ReachabilityLink],
+) -> Option<PolicyCase> {
+    let strong = evidence
+        .iter()
+        .copied()
+        .filter(|item| item.confidence != Confidence::Low)
+        .filter(|item| item.evidence_type != EvidenceType::UnknownDynamicCheck)
+        .filter(|item| item.evidence_type != EvidenceType::AuditLog)
+        .collect::<Vec<_>>();
+    if strong.is_empty() {
+        return None;
+    }
+    let evidence_ids = sorted_ids(strong.iter().map(|item| item.id.as_str()));
+    let mut mutation_ids = links
+        .iter()
+        .filter_map(|link| link.mutation_id.as_deref())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    mutation_ids.sort();
+    mutation_ids.dedup();
+    let strongest = strong
+        .iter()
+        .map(|item| item.confidence)
+        .min()
+        .unwrap_or(Confidence::Low);
+    let labels = strong
+        .iter()
+        .map(|item| evidence_type_label(item.evidence_type).to_string())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let mut extensions = authmap_core::ExtensionMap::new();
+    if !mutation_ids.is_empty() {
+        extensions.insert(
+            "authmap.policy".to_string(),
+            serde_json::json!({ "mutation_ids": mutation_ids }),
+        );
+    }
+    Some(PolicyCase {
+        id: String::new(),
+        route_id: route.id.clone(),
+        kind: PolicyCaseKind::EffectiveProtection,
+        summary: format!(
+            "{} evidence support(s) route protection: {}.",
+            strong.len(),
+            labels.join(", ")
+        ),
+        evidence_ids: evidence_ids.clone(),
+        input_names: policy_input_names(&strong),
+        branches: vec![PolicyBranch {
+            condition: "static authorization evidence present".to_string(),
+            outcome: PolicyOutcome::Allow,
+            reachable: true,
+            evidence_ids,
+            span: first_span(&strong).cloned().or_else(|| route.span.clone()),
+            confidence: strongest,
+            notes: Vec::new(),
+        }],
+        span: first_span(&strong).cloned().or_else(|| route.span.clone()),
+        confidence: strongest,
+        reviewer_questions: Vec::new(),
+        uncertainty_reasons: Vec::new(),
+        extensions,
+    })
+}
+
+fn linked_mutation_policy_case(
+    route: &authmap_core::Route,
+    links: &[&ReachabilityLink],
+    mutation_by_id: &BTreeMap<&str, &Mutation>,
+) -> Option<PolicyCase> {
+    let mutation_ids = sorted_ids(links.iter().filter_map(|link| link.mutation_id.as_deref()));
+    if mutation_ids.is_empty() {
+        return None;
+    }
+    let link_ids = sorted_ids(links.iter().map(|link| link.id.as_str()));
+    let evidence_ids = sorted_ids(links.iter().filter_map(|link| link.evidence_id.as_deref()));
+    let resources = mutation_ids
+        .iter()
+        .filter_map(|id| mutation_by_id.get(id.as_str()))
+        .filter_map(|mutation| mutation.resource.as_deref())
+        .map(str::to_string)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let mut extensions = authmap_core::ExtensionMap::new();
+    extensions.insert(
+        "authmap.policy".to_string(),
+        serde_json::json!({ "mutation_ids": mutation_ids, "link_ids": link_ids }),
+    );
+    Some(PolicyCase {
+        id: String::new(),
+        route_id: route.id.clone(),
+        kind: PolicyCaseKind::LinkedMutationProtection,
+        summary: format!(
+            "Route reaches linked mutation(s): {}.",
+            if resources.is_empty() {
+                mutation_ids.join(", ")
+            } else {
+                format!("{} ({})", mutation_ids.join(", "), resources.join(", "))
+            }
+        ),
+        evidence_ids: evidence_ids.clone(),
+        input_names: resources,
+        branches: vec![PolicyBranch {
+            condition: "route-to-mutation reachability".to_string(),
+            outcome: PolicyOutcome::ReviewRequired,
+            reachable: true,
+            evidence_ids,
+            span: route.span.clone(),
+            confidence: links
+                .iter()
+                .map(|link| link.confidence)
+                .min()
+                .unwrap_or(Confidence::Low),
+            notes: Vec::new(),
+        }],
+        span: route.span.clone(),
+        confidence: links
+            .iter()
+            .map(|link| link.confidence)
+            .min()
+            .unwrap_or(Confidence::Low),
+        reviewer_questions: vec![
+            "Should linked data mutations have resource-specific authorization evidence?"
+                .to_string(),
+        ],
+        uncertainty_reasons: Vec::new(),
+        extensions,
+    })
+}
+
+fn conflicting_policy_case(
+    route: &authmap_core::Route,
+    evidence: &[&Evidence],
+) -> Option<(PolicyCase, Diagnostic)> {
+    let public = evidence
+        .iter()
+        .copied()
+        .filter(|item| item.evidence_type == EvidenceType::ExplicitPublic)
+        .collect::<Vec<_>>();
+    let protected = evidence
+        .iter()
+        .copied()
+        .filter(|item| {
+            matches!(
+                item.evidence_type,
+                EvidenceType::Authn
+                    | EvidenceType::RoleCheck
+                    | EvidenceType::PermissionCheck
+                    | EvidenceType::OwnershipCheck
+                    | EvidenceType::TenantCheck
+                    | EvidenceType::AdminCheck
+            )
+        })
+        .collect::<Vec<_>>();
+    if public.is_empty() || protected.is_empty() {
+        return None;
+    }
+    let combined = public
+        .iter()
+        .chain(protected.iter())
+        .copied()
+        .collect::<Vec<_>>();
+    let evidence_ids = sorted_ids(combined.iter().map(|item| item.id.as_str()));
+    let span = first_span(&combined)
+        .cloned()
+        .or_else(|| route.span.clone());
+    let message = "Route has explicit public evidence and authorization-required evidence; review intended behavior.".to_string();
+    Some((
+        PolicyCase {
+            id: String::new(),
+            route_id: route.id.clone(),
+            kind: PolicyCaseKind::Conflict,
+            summary: message.clone(),
+            evidence_ids: evidence_ids.clone(),
+            input_names: policy_input_names(&combined),
+            branches: vec![PolicyBranch {
+                condition: "explicit public marker conflicts with guard evidence".to_string(),
+                outcome: PolicyOutcome::ReviewRequired,
+                reachable: true,
+                evidence_ids,
+                span: span.clone(),
+                confidence: Confidence::Medium,
+                notes: Vec::new(),
+            }],
+            span: span.clone(),
+            confidence: Confidence::Medium,
+            reviewer_questions: vec!["Is this route intentionally public and guarded?".to_string()],
+            uncertainty_reasons: vec![
+                "Conflicting policy evidence requires reviewer confirmation.".to_string(),
+            ],
+            extensions: authmap_core::ExtensionMap::new(),
+        },
+        policy_diagnostic(
+            authmap_core::diagnostic_codes::POLICY_CONFLICTING_EVIDENCE,
+            span,
+            message,
+        ),
+    ))
+}
+
+fn duplicate_policy_cases(
+    route: &authmap_core::Route,
+    evidence: &[&Evidence],
+) -> Vec<(PolicyCase, Diagnostic)> {
+    let mut groups = BTreeMap::<(EvidenceType, String, Option<String>), Vec<&Evidence>>::new();
+    for item in evidence {
+        groups
+            .entry((
+                item.evidence_type,
+                item.mechanism.clone(),
+                item.symbol.as_ref().map(|symbol| symbol.name.clone()),
+            ))
+            .or_default()
+            .push(item);
+    }
+    let mut cases = Vec::new();
+    for ((evidence_type, mechanism, symbol), mut items) in groups {
+        if items.len() < 2 || evidence_type == EvidenceType::AuditLog {
+            continue;
+        }
+        items.sort_by(|left, right| left.id.cmp(&right.id));
+        let evidence_ids = sorted_ids(items.iter().map(|item| item.id.as_str()));
+        let span = first_span(&items).cloned().or_else(|| route.span.clone());
+        let label = symbol.unwrap_or(mechanism);
+        let message = format!("Duplicate policy evidence `{label}` appears on the same route.");
+        cases.push((
+            PolicyCase {
+                id: String::new(),
+                route_id: route.id.clone(),
+                kind: PolicyCaseKind::Duplicate,
+                summary: message.clone(),
+                evidence_ids: evidence_ids.clone(),
+                input_names: policy_input_names(&items),
+                branches: vec![PolicyBranch {
+                    condition: format!("duplicate {label} evidence"),
+                    outcome: PolicyOutcome::ReviewRequired,
+                    reachable: true,
+                    evidence_ids,
+                    span: span.clone(),
+                    confidence: Confidence::Medium,
+                    notes: Vec::new(),
+                }],
+                span: span.clone(),
+                confidence: Confidence::Medium,
+                reviewer_questions: vec![
+                    "Is duplicated guard evidence intentional or redundant?".to_string(),
+                ],
+                uncertainty_reasons: vec![
+                    "Duplicated policy evidence may be safe but should be reviewed.".to_string(),
+                ],
+                extensions: authmap_core::ExtensionMap::new(),
+            },
+            policy_diagnostic(
+                authmap_core::diagnostic_codes::POLICY_DUPLICATE_EVIDENCE,
+                span,
+                message,
+            ),
+        ));
+    }
+    cases
+}
+
+fn dynamic_policy_cases(route: &authmap_core::Route, evidence: &[&Evidence]) -> Vec<PolicyCase> {
+    evidence
+        .iter()
+        .copied()
+        .filter(|item| item.evidence_type == EvidenceType::UnknownDynamicCheck)
+        .map(|item| PolicyCase {
+            id: String::new(),
+            route_id: route.id.clone(),
+            kind: PolicyCaseKind::Dynamic,
+            summary: "Dynamic policy behavior requires review.".to_string(),
+            evidence_ids: vec![item.id.clone()],
+            input_names: item
+                .symbol
+                .as_ref()
+                .map(|symbol| vec![symbol.name.clone()])
+                .unwrap_or_default(),
+            branches: vec![PolicyBranch {
+                condition: "dynamic policy dispatch".to_string(),
+                outcome: PolicyOutcome::ReviewRequired,
+                reachable: true,
+                evidence_ids: vec![item.id.clone()],
+                span: item.span.clone(),
+                confidence: item.confidence,
+                notes: item.notes.clone(),
+            }],
+            span: item.span.clone(),
+            confidence: item.confidence,
+            reviewer_questions: vec![
+                "Can the dynamic authorization path be confirmed?".to_string(),
+            ],
+            uncertainty_reasons: vec![
+                "Dynamic authorization evidence requires review.".to_string(),
+            ],
+            extensions: authmap_core::ExtensionMap::new(),
+        })
+        .collect()
+}
+
+fn unreachable_policy_cases(
+    route: &authmap_core::Route,
+    evidence: &[&Evidence],
+    parsed_files: &[ParsedFile],
+) -> Vec<(PolicyCase, Diagnostic)> {
+    evidence
+        .iter()
+        .copied()
+        .filter(|item| {
+            item.span
+                .as_ref()
+                .is_some_and(|span| span_has_unreachable_false_guard(span, parsed_files))
+        })
+        .map(|item| {
+            let evidence_ids = vec![item.id.clone()];
+            let span = item.span.clone().or_else(|| route.span.clone());
+            let message =
+                "Policy evidence appears inside a statically unreachable branch.".to_string();
+            (
+                PolicyCase {
+                    id: String::new(),
+                    route_id: route.id.clone(),
+                    kind: PolicyCaseKind::Unreachable,
+                    summary: message.clone(),
+                    evidence_ids: evidence_ids.clone(),
+                    input_names: policy_input_names(&[item]),
+                    branches: vec![PolicyBranch {
+                        condition: "literal false branch".to_string(),
+                        outcome: PolicyOutcome::ReviewRequired,
+                        reachable: false,
+                        evidence_ids,
+                        span: span.clone(),
+                        confidence: Confidence::High,
+                        notes: Vec::new(),
+                    }],
+                    span: span.clone(),
+                    confidence: Confidence::High,
+                    reviewer_questions: vec![
+                        "Is this policy branch reachable in the deployed code?".to_string(),
+                    ],
+                    uncertainty_reasons: Vec::new(),
+                    extensions: authmap_core::ExtensionMap::new(),
+                },
+                policy_diagnostic(
+                    authmap_core::diagnostic_codes::POLICY_UNREACHABLE_BRANCH,
+                    span,
+                    message,
+                ),
+            )
+        })
+        .collect()
+}
+
+fn span_has_unreachable_false_guard(span: &Span, parsed_files: &[ParsedFile]) -> bool {
+    let Some(parsed) = parsed_files
+        .iter()
+        .find(|parsed| parsed.source.path == span.file)
+    else {
+        return false;
+    };
+    let lines = parsed.text.lines().collect::<Vec<_>>();
+    let line_index = span.line.saturating_sub(1) as usize;
+    let start = line_index.saturating_sub(3);
+    lines
+        .get(start..=line_index.min(lines.len().saturating_sub(1)))
+        .unwrap_or(&[])
+        .iter()
+        .any(|line| {
+            let normalized = line
+                .chars()
+                .filter(|ch| !ch.is_whitespace())
+                .collect::<String>()
+                .to_ascii_lowercase();
+            normalized.contains("if(false)")
+                || normalized.contains("iffalse:")
+                || normalized.contains("if0:")
+                || normalized.contains("if(0)")
+        })
+}
+
+fn enrich_coverage_with_policy_cases(coverage: &mut [Coverage], policy_cases: &[PolicyCase]) {
+    let mut cases_by_route = BTreeMap::<&str, Vec<&PolicyCase>>::new();
+    for case in policy_cases {
+        cases_by_route
+            .entry(case.route_id.as_str())
+            .or_default()
+            .push(case);
+    }
+    for item in coverage {
+        let Some(cases) = cases_by_route.get(item.route_id.as_str()) else {
+            continue;
+        };
+        let policy_case_ids = sorted_ids(cases.iter().map(|case| case.id.as_str()));
+        let support = item
+            .extensions
+            .entry("authmap.coverage".to_string())
+            .or_insert_with(|| serde_json::json!({}));
+        if let Some(object) = support.as_object_mut() {
+            object.insert(
+                "policy_case_ids".to_string(),
+                serde_json::json!(policy_case_ids),
+            );
+        }
+        for case in cases {
+            item.reviewer_questions
+                .extend(case.reviewer_questions.iter().cloned());
+            item.uncertainty_reasons
+                .extend(case.uncertainty_reasons.iter().cloned());
+        }
+        item.reviewer_questions.sort();
+        item.reviewer_questions.dedup();
+        item.uncertainty_reasons.sort();
+        item.uncertainty_reasons.dedup();
+    }
+}
+
+fn policy_input_names(evidence: &[&Evidence]) -> Vec<String> {
+    let mut inputs = evidence
+        .iter()
+        .filter_map(|item| match item.evidence_type {
+            EvidenceType::Authn => Some("identity".to_string()),
+            EvidenceType::RoleCheck => Some("role".to_string()),
+            EvidenceType::PermissionCheck => Some("permission".to_string()),
+            EvidenceType::OwnershipCheck => Some("ownership".to_string()),
+            EvidenceType::TenantCheck => Some("tenant".to_string()),
+            EvidenceType::AdminCheck => Some("admin".to_string()),
+            EvidenceType::ExplicitPublic => Some("public_marker".to_string()),
+            EvidenceType::UnknownDynamicCheck => {
+                item.symbol.as_ref().map(|symbol| symbol.name.clone())
+            }
+            EvidenceType::AuditLog => None,
+        })
+        .collect::<Vec<_>>();
+    inputs.sort();
+    inputs.dedup();
+    inputs
+}
+
+fn first_span<'a>(evidence: &'a [&Evidence]) -> Option<&'a Span> {
+    evidence.iter().find_map(|item| item.span.as_ref())
+}
+
+fn policy_diagnostic(code: &str, span: Option<Span>, message: String) -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Policy,
+        code: code.to_string(),
+        severity: DiagnosticSeverity::Warning,
+        recoverability: Recoverability::Recoverable,
+        span,
+        message,
+    }
+}
+
+fn policy_case_sort_key(case: &PolicyCase) -> (String, u8, String, u32) {
+    (
+        case.route_id.clone(),
+        policy_case_kind_rank(case.kind),
+        case.span
+            .as_ref()
+            .map_or_else(String::new, |span| span.file.clone()),
+        case.span.as_ref().map_or(0, |span| span.line),
+    )
+}
+
+fn policy_case_kind_rank(kind: PolicyCaseKind) -> u8 {
+    match kind {
+        PolicyCaseKind::EffectiveProtection => 0,
+        PolicyCaseKind::LinkedMutationProtection => 1,
+        PolicyCaseKind::Conflict => 2,
+        PolicyCaseKind::Duplicate => 3,
+        PolicyCaseKind::Dynamic => 4,
+        PolicyCaseKind::Unreachable => 5,
+    }
+}
+
 fn source_needs_syntax_tree(
     language: authmap_core::Language,
     text: &str,
@@ -554,6 +1134,21 @@ fn run_scan_with_started_at(
         return Ok(document);
     }
 
+    let (policy_cases, policy_diagnostics) = derive_policy_cases(
+        &document.routes,
+        &document.evidence,
+        &document.mutations,
+        &document.links,
+        &parse_output.parsed_files,
+    );
+    document.policy_cases = policy_cases;
+    document.diagnostics.extend(policy_diagnostics);
+    if budget.is_exceeded() {
+        push_runtime_limit_diagnostic(&mut document, plan);
+        finalize_diagnostics(&mut document);
+        return Ok(document);
+    }
+
     document.coverage = classify_coverage(
         &document.routes,
         &document.evidence,
@@ -561,6 +1156,7 @@ fn run_scan_with_started_at(
         &document.links,
         &plan.config,
     );
+    enrich_coverage_with_policy_cases(&mut document.coverage, &document.policy_cases);
     if budget.is_exceeded() {
         push_runtime_limit_diagnostic(&mut document, plan);
     }
@@ -5602,7 +6198,8 @@ mod tests {
     use authmap_config::{ScanConfig, ScanPlan};
     use authmap_core::{
         Confidence, CoverageClass, Evidence, EvidenceType, Framework, Mutation, MutationOperation,
-        ReachabilityLink, RiskLevel, Route, ScanMode, SourceFile, SymbolRef, diagnostic_codes,
+        PolicyCaseKind, ReachabilityLink, RiskLevel, Route, ScanMode, SourceFile, Span, SymbolRef,
+        diagnostic_codes,
     };
     use authmap_parsers::{ParseStatus, ParsedFile};
     use authmap_testkit::fixture_path;
@@ -5963,6 +6560,167 @@ class ProductCreate(BaseMutation):
             CoverageClass::PublicDeclared,
             RiskLevel::ReviewRequired,
         );
+    }
+
+    #[test]
+    fn policy_cases_flag_conflict_duplicate_dynamic_unreachable_and_linked_context() {
+        let routes = vec![
+            route("route_conflict", "POST", "/public/accounts/:id"),
+            route("route_duplicate", "GET", "/profile"),
+            route("route_dynamic", "GET", "/policy"),
+            route("route_unreachable", "GET", "/admin/disabled"),
+        ];
+        let mut public = evidence(
+            "evidence_public",
+            "route_conflict",
+            EvidenceType::ExplicitPublic,
+            Confidence::High,
+        );
+        public.mechanism = "public_marker".to_string();
+        let mut authn = evidence(
+            "evidence_authn",
+            "route_conflict",
+            EvidenceType::Authn,
+            Confidence::High,
+        );
+        authn.mechanism = "authn_guard".to_string();
+
+        let mut duplicate_one = evidence(
+            "evidence_duplicate_1",
+            "route_duplicate",
+            EvidenceType::Authn,
+            Confidence::High,
+        );
+        duplicate_one.mechanism = "authn_guard".to_string();
+        duplicate_one.symbol = Some(SymbolRef {
+            name: "requireAuth".to_string(),
+            span: Some(Span {
+                file: "src/routes.ts".to_string(),
+                line: 7,
+                column: 3,
+                byte_range: None,
+            }),
+        });
+        let mut duplicate_two = evidence(
+            "evidence_duplicate_2",
+            "route_duplicate",
+            EvidenceType::Authn,
+            Confidence::High,
+        );
+        duplicate_two.mechanism = "authn_guard".to_string();
+        duplicate_two.symbol = Some(SymbolRef {
+            name: "requireAuth".to_string(),
+            span: Some(Span {
+                file: "src/routes.ts".to_string(),
+                line: 8,
+                column: 3,
+                byte_range: None,
+            }),
+        });
+
+        let dynamic = evidence(
+            "evidence_dynamic",
+            "route_dynamic",
+            EvidenceType::UnknownDynamicCheck,
+            Confidence::Low,
+        );
+        let mut unreachable = evidence(
+            "evidence_unreachable",
+            "route_unreachable",
+            EvidenceType::AdminCheck,
+            Confidence::High,
+        );
+        unreachable.span = Some(Span {
+            file: "src/routes.ts".to_string(),
+            line: 3,
+            column: 5,
+            byte_range: None,
+        });
+
+        let mutations = vec![Mutation {
+            id: "mutation_account".to_string(),
+            operation: MutationOperation::Update,
+            library: Some("prisma".to_string()),
+            resource: Some("Account".to_string()),
+            span: None,
+            confidence: Confidence::High,
+            notes: Vec::new(),
+            extensions: authmap_core::ExtensionMap::new(),
+        }];
+        let links = vec![ReachabilityLink {
+            id: "link_account".to_string(),
+            route_id: "route_conflict".to_string(),
+            mutation_id: Some("mutation_account".to_string()),
+            evidence_id: Some("evidence_authn".to_string()),
+            confidence: Confidence::Medium,
+            notes: Vec::new(),
+            extensions: authmap_core::ExtensionMap::new(),
+        }];
+        let parsed_files = vec![ParsedFile {
+            source: SourceFile {
+                path: "src/routes.ts".to_string(),
+                language: authmap_core::Language::TypeScript,
+                size_bytes: 128,
+                sha256: None,
+                project_hints: Vec::new(),
+                skipped: None,
+            },
+            language: authmap_core::Language::TypeScript,
+            text: "router.get('/admin/disabled', (req, res) => {\n  if (false) {\n    requireAdmin(req)\n  }\n})\n".to_string(),
+            tree: None,
+            status: ParseStatus::TextOnly,
+            diagnostics: Vec::new(),
+        }];
+        let evidence = vec![
+            public,
+            authn,
+            duplicate_one,
+            duplicate_two,
+            dynamic,
+            unreachable,
+        ];
+
+        let (cases, diagnostics) =
+            super::derive_policy_cases(&routes, &evidence, &mutations, &links, &parsed_files);
+
+        assert!(cases.iter().any(|case| {
+            case.route_id == "route_conflict"
+                && case.kind == PolicyCaseKind::Conflict
+                && case.evidence_ids == vec!["evidence_authn", "evidence_public"]
+        }));
+        assert!(cases.iter().any(|case| {
+            case.route_id == "route_duplicate"
+                && case.kind == PolicyCaseKind::Duplicate
+                && case.evidence_ids == vec!["evidence_duplicate_1", "evidence_duplicate_2"]
+        }));
+        assert!(cases.iter().any(|case| {
+            case.route_id == "route_dynamic" && case.kind == PolicyCaseKind::Dynamic
+        }));
+        assert!(cases.iter().any(|case| {
+            case.route_id == "route_unreachable" && case.kind == PolicyCaseKind::Unreachable
+        }));
+        assert!(cases.iter().any(|case| {
+            case.route_id == "route_conflict"
+                && case.kind == PolicyCaseKind::LinkedMutationProtection
+                && case.summary.contains("mutation_account")
+        }));
+        assert_eq!(
+            cases
+                .iter()
+                .map(|case| case.id.as_str())
+                .collect::<Vec<_>>(),
+            (1..=cases.len())
+                .map(|index| format!("policy_case_{index:04}"))
+                .collect::<Vec<_>>()
+        );
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "policy.conflicting_evidence"
+                && diagnostic.message.contains("explicit public")
+        }));
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "policy.duplicate_evidence"
+                && diagnostic.message.contains("requireAuth")
+        }));
     }
 
     #[test]

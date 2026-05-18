@@ -2586,6 +2586,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0001"
+          ],
           "sensitivity_reasons": [
             "account_path",
             "path_param"
@@ -2603,9 +2606,12 @@
         "Sensitive route modifier(s): account_path, path_param."
       ],
       "reviewer_questions": [
+        "Is duplicated guard evidence intentional or redundant?",
         "Should this route require ownership or permission checks?"
       ],
-      "uncertainty_reasons": [],
+      "uncertainty_reasons": [
+        "Duplicated policy evidence may be safe but should be reviewed."
+      ],
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
@@ -2614,6 +2620,10 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0002",
+            "policy_case_0003"
+          ],
           "sensitivity_reasons": [
             "account_path",
             "path_param"
@@ -2649,6 +2659,10 @@
           "mutation_ids": [
             "mutation_0001"
           ],
+          "policy_case_ids": [
+            "policy_case_0004",
+            "policy_case_0005"
+          ],
           "sensitivity_reasons": [
             "linked_mutation",
             "unsafe_method"
@@ -2667,10 +2681,13 @@
         "Linked data mutation(s) increase review sensitivity."
       ],
       "reviewer_questions": [
+        "Is duplicated guard evidence intentional or redundant?",
         "Should linked data mutations have resource-specific authorization evidence?",
         "Should this state-changing route require more than authentication?"
       ],
-      "uncertainty_reasons": [],
+      "uncertainty_reasons": [
+        "Duplicated policy evidence may be safe but should be reviewed."
+      ],
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
@@ -2682,6 +2699,11 @@
           ],
           "mutation_ids": [
             "mutation_0001"
+          ],
+          "policy_case_ids": [
+            "policy_case_0006",
+            "policy_case_0007",
+            "policy_case_0008"
           ],
           "sensitivity_reasons": [
             "linked_mutation",
@@ -2701,6 +2723,7 @@
         "Linked data mutation(s) increase review sensitivity."
       ],
       "reviewer_questions": [
+        "Can the dynamic authorization path be confirmed?",
         "Should linked data mutations have resource-specific authorization evidence?",
         "Should this route require ownership or permission checks?",
         "Should this state-changing route require more than authentication?"
@@ -2721,6 +2744,11 @@
           ],
           "mutation_ids": [
             "mutation_0003"
+          ],
+          "policy_case_ids": [
+            "policy_case_0009",
+            "policy_case_0010",
+            "policy_case_0011"
           ],
           "sensitivity_reasons": [
             "account_path",
@@ -2744,6 +2772,7 @@
         "Linked data mutation(s) increase review sensitivity."
       ],
       "reviewer_questions": [
+        "Can the dynamic authorization path be confirmed?",
         "Should linked data mutations have resource-specific authorization evidence?",
         "Should this route require ownership or permission checks?",
         "Should this state-changing route require more than authentication?"
@@ -2764,6 +2793,11 @@
           ],
           "mutation_ids": [
             "mutation_0003"
+          ],
+          "policy_case_ids": [
+            "policy_case_0012",
+            "policy_case_0013",
+            "policy_case_0014"
           ],
           "sensitivity_reasons": [
             "account_path",
@@ -2805,6 +2839,10 @@
           "mutation_ids": [
             "mutation_0004"
           ],
+          "policy_case_ids": [
+            "policy_case_0015",
+            "policy_case_0016"
+          ],
           "sensitivity_reasons": [
             "account_path",
             "linked_mutation",
@@ -2842,6 +2880,10 @@
           "mutation_ids": [
             "mutation_0004"
           ],
+          "policy_case_ids": [
+            "policy_case_0017",
+            "policy_case_0018"
+          ],
           "sensitivity_reasons": [
             "account_path",
             "linked_mutation",
@@ -2862,10 +2904,13 @@
         "Linked data mutation(s) increase review sensitivity."
       ],
       "reviewer_questions": [
+        "Is duplicated guard evidence intentional or redundant?",
         "Should linked data mutations have resource-specific authorization evidence?",
         "Should this state-changing route require more than authentication?"
       ],
-      "uncertainty_reasons": [],
+      "uncertainty_reasons": [
+        "Duplicated policy evidence may be safe but should be reviewed."
+      ],
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
@@ -2877,6 +2922,11 @@
           ],
           "mutation_ids": [
             "mutation_0002"
+          ],
+          "policy_case_ids": [
+            "policy_case_0019",
+            "policy_case_0020",
+            "policy_case_0021"
           ],
           "sensitivity_reasons": [
             "linked_mutation",
@@ -2913,6 +2963,10 @@
           "mutation_ids": [
             "mutation_0002"
           ],
+          "policy_case_ids": [
+            "policy_case_0022",
+            "policy_case_0023"
+          ],
           "sensitivity_reasons": [
             "linked_mutation",
             "unsafe_method"
@@ -2930,9 +2984,12 @@
         "Sensitive route modifier(s): unsafe_method."
       ],
       "reviewer_questions": [
+        "Is duplicated guard evidence intentional or redundant?",
         "Should this state-changing route require more than authentication?"
       ],
-      "uncertainty_reasons": [],
+      "uncertainty_reasons": [
+        "Duplicated policy evidence may be safe but should be reviewed."
+      ],
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
@@ -2943,6 +3000,10 @@
             "link_0009"
           ],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0024",
+            "policy_case_0025"
+          ],
           "sensitivity_reasons": [
             "unsafe_method"
           ],
@@ -2973,6 +3034,9 @@
             "link_0010"
           ],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0026"
+          ],
           "sensitivity_reasons": [
             "unsafe_method"
           ],
@@ -3001,6 +3065,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0027"
+          ],
           "sensitivity_reasons": [
             "path_param",
             "tenant_path"
@@ -3031,6 +3098,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0028"
+          ],
           "sensitivity_reasons": [
             "path_param",
             "tenant_path"
@@ -3038,6 +3108,1441 @@
           "weak_evidence_ids": []
         }
       }
+    }
+  ],
+  "policy_cases": [
+    {
+      "id": "policy_case_0001",
+      "route_id": "route_0002",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0001"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0001"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 13,
+            "column": 27,
+            "byte_range": {
+              "start": 435,
+              "end": 446
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 13,
+        "column": 27,
+        "byte_range": {
+          "start": 435,
+          "end": 446
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0002",
+      "route_id": "route_0003",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0002",
+        "evidence_0003"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0002",
+            "evidence_0003"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/app.ts",
+            "line": 42,
+            "column": 17,
+            "byte_range": {
+              "start": 1157,
+              "end": 1168
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 42,
+        "column": 17,
+        "byte_range": {
+          "start": 1157,
+          "end": 1168
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0003",
+      "route_id": "route_0003",
+      "kind": "duplicate",
+      "summary": "Duplicate policy evidence `requireAuth` appears on the same route.",
+      "evidence_ids": [
+        "evidence_0002",
+        "evidence_0003"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "duplicate requireAuth evidence",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0002",
+            "evidence_0003"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/app.ts",
+            "line": 42,
+            "column": 17,
+            "byte_range": {
+              "start": 1157,
+              "end": 1168
+            }
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 42,
+        "column": 17,
+        "byte_range": {
+          "start": 1157,
+          "end": 1168
+        }
+      },
+      "confidence": "medium",
+      "reviewer_questions": [
+        "Is duplicated guard evidence intentional or redundant?"
+      ],
+      "uncertainty_reasons": [
+        "Duplicated policy evidence may be safe but should be reviewed."
+      ]
+    },
+    {
+      "id": "policy_case_0004",
+      "route_id": "route_0004",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0004"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0004"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 17,
+            "column": 18,
+            "byte_range": {
+              "start": 563,
+              "end": 574
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 17,
+        "column": 18,
+        "byte_range": {
+          "start": 563,
+          "end": 574
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "mutation_ids": [
+            "mutation_0001"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0005",
+      "route_id": "route_0004",
+      "kind": "linked_mutation_protection",
+      "summary": "Route reaches linked mutation(s): mutation_0001 (account).",
+      "evidence_ids": [],
+      "input_names": [
+        "account"
+      ],
+      "branches": [
+        {
+          "condition": "route-to-mutation reachability",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 17,
+            "column": 1,
+            "byte_range": {
+              "start": 546,
+              "end": 768
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 17,
+        "column": 1,
+        "byte_range": {
+          "start": 546,
+          "end": 768
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "link_ids": [
+            "link_0001"
+          ],
+          "mutation_ids": [
+            "mutation_0001"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0006",
+      "route_id": "route_0005",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0005",
+        "evidence_0006"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0005",
+            "evidence_0006"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/app.ts",
+            "line": 42,
+            "column": 17,
+            "byte_range": {
+              "start": 1157,
+              "end": 1168
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 42,
+        "column": 17,
+        "byte_range": {
+          "start": 1157,
+          "end": 1168
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "mutation_ids": [
+            "mutation_0001"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0007",
+      "route_id": "route_0005",
+      "kind": "linked_mutation_protection",
+      "summary": "Route reaches linked mutation(s): mutation_0001 (account).",
+      "evidence_ids": [],
+      "input_names": [
+        "account"
+      ],
+      "branches": [
+        {
+          "condition": "route-to-mutation reachability",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 17,
+            "column": 1,
+            "byte_range": {
+              "start": 546,
+              "end": 768
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 17,
+        "column": 1,
+        "byte_range": {
+          "start": 546,
+          "end": 768
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "link_ids": [
+            "link_0002"
+          ],
+          "mutation_ids": [
+            "mutation_0001"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0008",
+      "route_id": "route_0005",
+      "kind": "duplicate",
+      "summary": "Duplicate policy evidence `requireAuth` appears on the same route.",
+      "evidence_ids": [
+        "evidence_0005",
+        "evidence_0006"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "duplicate requireAuth evidence",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0005",
+            "evidence_0006"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/app.ts",
+            "line": 42,
+            "column": 17,
+            "byte_range": {
+              "start": 1157,
+              "end": 1168
+            }
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 42,
+        "column": 17,
+        "byte_range": {
+          "start": 1157,
+          "end": 1168
+        }
+      },
+      "confidence": "medium",
+      "reviewer_questions": [
+        "Is duplicated guard evidence intentional or redundant?"
+      ],
+      "uncertainty_reasons": [
+        "Duplicated policy evidence may be safe but should be reviewed."
+      ]
+    },
+    {
+      "id": "policy_case_0009",
+      "route_id": "route_0006",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: permission_check.",
+      "evidence_ids": [
+        "evidence_0007"
+      ],
+      "input_names": [
+        "permission"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0007"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 26,
+            "column": 3,
+            "byte_range": {
+              "start": 804,
+              "end": 839
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 26,
+        "column": 3,
+        "byte_range": {
+          "start": 804,
+          "end": 839
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "mutation_ids": [
+            "mutation_0003"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0010",
+      "route_id": "route_0006",
+      "kind": "linked_mutation_protection",
+      "summary": "Route reaches linked mutation(s): mutation_0003 (account).",
+      "evidence_ids": [],
+      "input_names": [
+        "account"
+      ],
+      "branches": [
+        {
+          "condition": "route-to-mutation reachability",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 24,
+            "column": 1,
+            "byte_range": {
+              "start": 771,
+              "end": 1086
+            }
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 24,
+        "column": 1,
+        "byte_range": {
+          "start": 771,
+          "end": 1086
+        }
+      },
+      "confidence": "medium",
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "link_ids": [
+            "link_0003"
+          ],
+          "mutation_ids": [
+            "mutation_0003"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0011",
+      "route_id": "route_0006",
+      "kind": "dynamic",
+      "summary": "Dynamic policy behavior requires review.",
+      "evidence_ids": [
+        "evidence_0008"
+      ],
+      "input_names": [
+        "dynamicPolicyCheck"
+      ],
+      "branches": [
+        {
+          "condition": "dynamic policy dispatch",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0008"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 28,
+            "column": 10,
+            "byte_range": {
+              "start": 909,
+              "end": 946
+            }
+          },
+          "confidence": "low",
+          "notes": [
+            "Dynamic or indirect policy call requires review"
+          ]
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 28,
+        "column": 10,
+        "byte_range": {
+          "start": 909,
+          "end": 946
+        }
+      },
+      "confidence": "low",
+      "reviewer_questions": [
+        "Can the dynamic authorization path be confirmed?"
+      ],
+      "uncertainty_reasons": [
+        "Dynamic authorization evidence requires review."
+      ]
+    },
+    {
+      "id": "policy_case_0012",
+      "route_id": "route_0007",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn, permission_check.",
+      "evidence_ids": [
+        "evidence_0009",
+        "evidence_0010"
+      ],
+      "input_names": [
+        "identity",
+        "permission"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0009",
+            "evidence_0010"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/app.ts",
+            "line": 42,
+            "column": 17,
+            "byte_range": {
+              "start": 1157,
+              "end": 1168
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 42,
+        "column": 17,
+        "byte_range": {
+          "start": 1157,
+          "end": 1168
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "mutation_ids": [
+            "mutation_0003"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0013",
+      "route_id": "route_0007",
+      "kind": "linked_mutation_protection",
+      "summary": "Route reaches linked mutation(s): mutation_0003 (account).",
+      "evidence_ids": [],
+      "input_names": [
+        "account"
+      ],
+      "branches": [
+        {
+          "condition": "route-to-mutation reachability",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 24,
+            "column": 1,
+            "byte_range": {
+              "start": 771,
+              "end": 1086
+            }
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 24,
+        "column": 1,
+        "byte_range": {
+          "start": 771,
+          "end": 1086
+        }
+      },
+      "confidence": "medium",
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "link_ids": [
+            "link_0004"
+          ],
+          "mutation_ids": [
+            "mutation_0003"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0014",
+      "route_id": "route_0007",
+      "kind": "dynamic",
+      "summary": "Dynamic policy behavior requires review.",
+      "evidence_ids": [
+        "evidence_0011"
+      ],
+      "input_names": [
+        "dynamicPolicyCheck"
+      ],
+      "branches": [
+        {
+          "condition": "dynamic policy dispatch",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0011"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 28,
+            "column": 10,
+            "byte_range": {
+              "start": 909,
+              "end": 946
+            }
+          },
+          "confidence": "low",
+          "notes": [
+            "Dynamic or indirect policy call requires review"
+          ]
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 28,
+        "column": 10,
+        "byte_range": {
+          "start": 909,
+          "end": 946
+        }
+      },
+      "confidence": "low",
+      "reviewer_questions": [
+        "Can the dynamic authorization path be confirmed?"
+      ],
+      "uncertainty_reasons": [
+        "Dynamic authorization evidence requires review."
+      ]
+    },
+    {
+      "id": "policy_case_0015",
+      "route_id": "route_0008",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: admin_check.",
+      "evidence_ids": [
+        "evidence_0012"
+      ],
+      "input_names": [
+        "admin"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0012"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 36,
+            "column": 30,
+            "byte_range": {
+              "start": 1118,
+              "end": 1130
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 36,
+        "column": 30,
+        "byte_range": {
+          "start": 1118,
+          "end": 1130
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "mutation_ids": [
+            "mutation_0004"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0016",
+      "route_id": "route_0008",
+      "kind": "linked_mutation_protection",
+      "summary": "Route reaches linked mutation(s): mutation_0004 (account).",
+      "evidence_ids": [],
+      "input_names": [
+        "account"
+      ],
+      "branches": [
+        {
+          "condition": "route-to-mutation reachability",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 36,
+            "column": 1,
+            "byte_range": {
+              "start": 1089,
+              "end": 1259
+            }
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 36,
+        "column": 1,
+        "byte_range": {
+          "start": 1089,
+          "end": 1259
+        }
+      },
+      "confidence": "medium",
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "link_ids": [
+            "link_0005"
+          ],
+          "mutation_ids": [
+            "mutation_0004"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0017",
+      "route_id": "route_0009",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: admin_check, authn.",
+      "evidence_ids": [
+        "evidence_0013",
+        "evidence_0014"
+      ],
+      "input_names": [
+        "admin",
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0013",
+            "evidence_0014"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/app.ts",
+            "line": 42,
+            "column": 17,
+            "byte_range": {
+              "start": 1157,
+              "end": 1168
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 42,
+        "column": 17,
+        "byte_range": {
+          "start": 1157,
+          "end": 1168
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "mutation_ids": [
+            "mutation_0004"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0018",
+      "route_id": "route_0009",
+      "kind": "linked_mutation_protection",
+      "summary": "Route reaches linked mutation(s): mutation_0004 (account).",
+      "evidence_ids": [],
+      "input_names": [
+        "account"
+      ],
+      "branches": [
+        {
+          "condition": "route-to-mutation reachability",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 36,
+            "column": 1,
+            "byte_range": {
+              "start": 1089,
+              "end": 1259
+            }
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 36,
+        "column": 1,
+        "byte_range": {
+          "start": 1089,
+          "end": 1259
+        }
+      },
+      "confidence": "medium",
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "link_ids": [
+            "link_0006"
+          ],
+          "mutation_ids": [
+            "mutation_0004"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0019",
+      "route_id": "route_0010",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0015",
+        "evidence_0016"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0015",
+            "evidence_0016"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/app.ts",
+            "line": 42,
+            "column": 17,
+            "byte_range": {
+              "start": 1157,
+              "end": 1168
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 42,
+        "column": 17,
+        "byte_range": {
+          "start": 1157,
+          "end": 1168
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "mutation_ids": [
+            "mutation_0002"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0020",
+      "route_id": "route_0010",
+      "kind": "linked_mutation_protection",
+      "summary": "Route reaches linked mutation(s): mutation_0002 (account).",
+      "evidence_ids": [],
+      "input_names": [
+        "account"
+      ],
+      "branches": [
+        {
+          "condition": "route-to-mutation reachability",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 41,
+            "column": 1,
+            "byte_range": {
+              "start": 1262,
+              "end": 1440
+            }
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 41,
+        "column": 1,
+        "byte_range": {
+          "start": 1262,
+          "end": 1440
+        }
+      },
+      "confidence": "medium",
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "link_ids": [
+            "link_0007"
+          ],
+          "mutation_ids": [
+            "mutation_0002"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0021",
+      "route_id": "route_0010",
+      "kind": "duplicate",
+      "summary": "Duplicate policy evidence `requireAuth` appears on the same route.",
+      "evidence_ids": [
+        "evidence_0015",
+        "evidence_0016"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "duplicate requireAuth evidence",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0015",
+            "evidence_0016"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/app.ts",
+            "line": 42,
+            "column": 17,
+            "byte_range": {
+              "start": 1157,
+              "end": 1168
+            }
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 42,
+        "column": 17,
+        "byte_range": {
+          "start": 1157,
+          "end": 1168
+        }
+      },
+      "confidence": "medium",
+      "reviewer_questions": [
+        "Is duplicated guard evidence intentional or redundant?"
+      ],
+      "uncertainty_reasons": [
+        "Duplicated policy evidence may be safe but should be reviewed."
+      ]
+    },
+    {
+      "id": "policy_case_0022",
+      "route_id": "route_0011",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0017"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0017"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 41,
+            "column": 25,
+            "byte_range": {
+              "start": 1286,
+              "end": 1297
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 41,
+        "column": 25,
+        "byte_range": {
+          "start": 1286,
+          "end": 1297
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "mutation_ids": [
+            "mutation_0002"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0023",
+      "route_id": "route_0011",
+      "kind": "linked_mutation_protection",
+      "summary": "Route reaches linked mutation(s): mutation_0002 (account).",
+      "evidence_ids": [],
+      "input_names": [
+        "account"
+      ],
+      "branches": [
+        {
+          "condition": "route-to-mutation reachability",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 41,
+            "column": 1,
+            "byte_range": {
+              "start": 1262,
+              "end": 1440
+            }
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 41,
+        "column": 1,
+        "byte_range": {
+          "start": 1262,
+          "end": 1440
+        }
+      },
+      "confidence": "medium",
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "link_ids": [
+            "link_0008"
+          ],
+          "mutation_ids": [
+            "mutation_0002"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0024",
+      "route_id": "route_0012",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0018",
+        "evidence_0019"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0018",
+            "evidence_0019"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/app.ts",
+            "line": 42,
+            "column": 17,
+            "byte_range": {
+              "start": 1157,
+              "end": 1168
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 42,
+        "column": 17,
+        "byte_range": {
+          "start": 1157,
+          "end": 1168
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0025",
+      "route_id": "route_0012",
+      "kind": "duplicate",
+      "summary": "Duplicate policy evidence `requireAuth` appears on the same route.",
+      "evidence_ids": [
+        "evidence_0018",
+        "evidence_0019"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "duplicate requireAuth evidence",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0018",
+            "evidence_0019"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/app.ts",
+            "line": 42,
+            "column": 17,
+            "byte_range": {
+              "start": 1157,
+              "end": 1168
+            }
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 42,
+        "column": 17,
+        "byte_range": {
+          "start": 1157,
+          "end": 1168
+        }
+      },
+      "confidence": "medium",
+      "reviewer_questions": [
+        "Is duplicated guard evidence intentional or redundant?"
+      ],
+      "uncertainty_reasons": [
+        "Duplicated policy evidence may be safe but should be reviewed."
+      ]
+    },
+    {
+      "id": "policy_case_0026",
+      "route_id": "route_0013",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0020"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0020"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 46,
+            "column": 33,
+            "byte_range": {
+              "start": 1475,
+              "end": 1486
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 46,
+        "column": 33,
+        "byte_range": {
+          "start": 1475,
+          "end": 1486
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0027",
+      "route_id": "route_0014",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn, tenant_check.",
+      "evidence_ids": [
+        "evidence_0021",
+        "evidence_0022"
+      ],
+      "input_names": [
+        "identity",
+        "tenant"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0021",
+            "evidence_0022"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/app.ts",
+            "line": 42,
+            "column": 17,
+            "byte_range": {
+              "start": 1157,
+              "end": 1168
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 42,
+        "column": 17,
+        "byte_range": {
+          "start": 1157,
+          "end": 1168
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0028",
+      "route_id": "route_0015",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: tenant_check.",
+      "evidence_ids": [
+        "evidence_0023"
+      ],
+      "input_names": [
+        "tenant"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0023"
+          ],
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 50,
+            "column": 33,
+            "byte_range": {
+              "start": 1642,
+              "end": 1655
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 50,
+        "column": 33,
+        "byte_range": {
+          "start": 1642,
+          "end": 1655
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
     }
   ],
   "diagnostics": [
@@ -3072,6 +4577,38 @@
         }
       },
       "message": "Express mounted router could not be resolved statically"
+    },
+    {
+      "category": "policy",
+      "code": "policy.duplicate_evidence",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 42,
+        "column": 17,
+        "byte_range": {
+          "start": 1157,
+          "end": 1168
+        }
+      },
+      "message": "Duplicate policy evidence `requireAuth` appears on the same route."
+    },
+    {
+      "category": "policy",
+      "code": "policy.dynamic_behavior",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 28,
+        "column": 10,
+        "byte_range": {
+          "start": 909,
+          "end": 946
+        }
+      },
+      "message": "Dynamic policy evidence requires review."
     }
   ]
 }

@@ -2102,6 +2102,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0001"
+          ],
           "sensitivity_reasons": [
             "path_param",
             "user_path"
@@ -2184,6 +2187,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0002"
+          ],
           "sensitivity_reasons": [
             "path_param",
             "unsafe_method",
@@ -2281,6 +2287,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0003"
+          ],
           "sensitivity_reasons": [],
           "weak_evidence_ids": []
         }
@@ -2307,6 +2316,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0004"
+          ],
           "sensitivity_reasons": [
             "account_path",
             "admin_path",
@@ -2326,6 +2338,7 @@
         "Sensitive route modifier(s): account_path, path_param, unsafe_method."
       ],
       "reviewer_questions": [
+        "Can the dynamic authorization path be confirmed?",
         "Should this route require ownership or permission checks?",
         "Should this state-changing route require more than authentication?"
       ],
@@ -2341,6 +2354,10 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0005",
+            "policy_case_0006"
+          ],
           "sensitivity_reasons": [
             "account_path",
             "path_param",
@@ -2378,6 +2395,9 @@
             "link_0001"
           ],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0007"
+          ],
           "sensitivity_reasons": [
             "account_path",
             "unsafe_method"
@@ -2408,6 +2428,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0008"
+          ],
           "sensitivity_reasons": [
             "path_param",
             "unsafe_method"
@@ -2433,6 +2456,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0009"
+          ],
           "sensitivity_reasons": [],
           "weak_evidence_ids": []
         }
@@ -2629,6 +2655,434 @@
       }
     }
   ],
+  "policy_cases": [
+    {
+      "id": "policy_case_0001",
+      "route_id": "route_0005",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn, permission_check.",
+      "evidence_ids": [
+        "evidence_0001",
+        "evidence_0002"
+      ],
+      "input_names": [
+        "identity",
+        "permission"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0001",
+            "evidence_0002"
+          ],
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 134,
+            "column": 32,
+            "byte_range": {
+              "start": 3033,
+              "end": 3045
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 134,
+        "column": 32,
+        "byte_range": {
+          "start": 3033,
+          "end": 3045
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0002",
+      "route_id": "route_0008",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn, permission_check.",
+      "evidence_ids": [
+        "evidence_0003",
+        "evidence_0004"
+      ],
+      "input_names": [
+        "identity",
+        "permission"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0003",
+            "evidence_0004"
+          ],
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 134,
+            "column": 32,
+            "byte_range": {
+              "start": 3033,
+              "end": 3045
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 134,
+        "column": 32,
+        "byte_range": {
+          "start": 3033,
+          "end": 3045
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0003",
+      "route_id": "route_0012",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0005"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0005"
+          ],
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 50,
+            "column": 18,
+            "byte_range": {
+              "start": 1189,
+              "end": 1210
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 50,
+        "column": 18,
+        "byte_range": {
+          "start": 1189,
+          "end": 1210
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0004",
+      "route_id": "route_0013",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: admin_check.",
+      "evidence_ids": [
+        "evidence_0006"
+      ],
+      "input_names": [
+        "admin"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0006"
+          ],
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 54,
+            "column": 59,
+            "byte_range": {
+              "start": 1289,
+              "end": 1311
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 54,
+        "column": 59,
+        "byte_range": {
+          "start": 1289,
+          "end": 1311
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0005",
+      "route_id": "route_0014",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: permission_check.",
+      "evidence_ids": [
+        "evidence_0007"
+      ],
+      "input_names": [
+        "permission"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0007"
+          ],
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 59,
+            "column": 64,
+            "byte_range": {
+              "start": 1451,
+              "end": 1476
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 59,
+        "column": 64,
+        "byte_range": {
+          "start": 1451,
+          "end": 1476
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0006",
+      "route_id": "route_0014",
+      "kind": "dynamic",
+      "summary": "Dynamic policy behavior requires review.",
+      "evidence_ids": [
+        "evidence_0008"
+      ],
+      "input_names": [
+        "dynamic_policy_check"
+      ],
+      "branches": [
+        {
+          "condition": "dynamic policy dispatch",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0008"
+          ],
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 61,
+            "column": 12,
+            "byte_range": {
+              "start": 1529,
+              "end": 1567
+            }
+          },
+          "confidence": "low",
+          "notes": [
+            "Dynamic or indirect policy call requires review"
+          ]
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 61,
+        "column": 12,
+        "byte_range": {
+          "start": 1529,
+          "end": 1567
+        }
+      },
+      "confidence": "low",
+      "reviewer_questions": [
+        "Can the dynamic authorization path be confirmed?"
+      ],
+      "uncertainty_reasons": [
+        "Dynamic authorization evidence requires review."
+      ]
+    },
+    {
+      "id": "policy_case_0007",
+      "route_id": "route_0015",
+      "kind": "dynamic",
+      "summary": "Dynamic policy behavior requires review.",
+      "evidence_ids": [
+        "evidence_0009"
+      ],
+      "input_names": [
+        "authorize"
+      ],
+      "branches": [
+        {
+          "condition": "dynamic policy dispatch",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0009"
+          ],
+          "span": {
+            "file": "tests/fixtures/fastapi/app/services/account.py",
+            "line": 7,
+            "column": 9,
+            "byte_range": {
+              "start": 88,
+              "end": 99
+            }
+          },
+          "confidence": "low",
+          "notes": [
+            "One-hop service call `service.execute` reaches `execute`"
+          ]
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/fastapi/app/services/account.py",
+        "line": 7,
+        "column": 9,
+        "byte_range": {
+          "start": 88,
+          "end": 99
+        }
+      },
+      "confidence": "low",
+      "reviewer_questions": [
+        "Can the dynamic authorization path be confirmed?"
+      ],
+      "uncertainty_reasons": [
+        "Dynamic authorization evidence requires review."
+      ]
+    },
+    {
+      "id": "policy_case_0008",
+      "route_id": "route_0016",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0010"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0010"
+          ],
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 128,
+            "column": 71,
+            "byte_range": {
+              "start": 2805,
+              "end": 2817
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 128,
+        "column": 71,
+        "byte_range": {
+          "start": 2805,
+          "end": 2817
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0009",
+      "route_id": "route_0017",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn, permission_check.",
+      "evidence_ids": [
+        "evidence_0011",
+        "evidence_0012"
+      ],
+      "input_names": [
+        "identity",
+        "permission"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0011",
+            "evidence_0012"
+          ],
+          "span": {
+            "file": "tests/fixtures/fastapi/main.py",
+            "line": 134,
+            "column": 32,
+            "byte_range": {
+              "start": 3033,
+              "end": 3045
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 134,
+        "column": 32,
+        "byte_range": {
+          "start": 3033,
+          "end": 3045
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    }
+  ],
   "diagnostics": [
     {
       "category": "adapter",
@@ -2693,6 +3147,38 @@
         }
       },
       "message": "FastAPI router prefix is dynamic and could not be resolved"
+    },
+    {
+      "category": "policy",
+      "code": "policy.dynamic_behavior",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/fastapi/main.py",
+        "line": 61,
+        "column": 12,
+        "byte_range": {
+          "start": 1529,
+          "end": 1567
+        }
+      },
+      "message": "Dynamic policy evidence requires review."
+    },
+    {
+      "category": "policy",
+      "code": "policy.dynamic_behavior",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/fastapi/app/services/account.py",
+        "line": 7,
+        "column": 9,
+        "byte_range": {
+          "start": 88,
+          "end": 99
+        }
+      },
+      "message": "Dynamic policy evidence requires review."
     }
   ]
 }

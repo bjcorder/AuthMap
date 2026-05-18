@@ -144,6 +144,11 @@ from a JSON report:
 authmap explain route_0001 --input authmap.fastapi.json
 ```
 
+Route explanations include PolicyLens cases when policy decision summaries are
+present. These cases cite AuthMap IDs for evidence, mutations, links, and
+coverage support. Dynamic or incomplete behavior is reported as review-required
+uncertainty, not as a confirmed vulnerability.
+
 ## Express Example
 
 Run AuthMap against the repository's realistic Express fixture:
@@ -189,8 +194,8 @@ Markdown is intended for reviewers. It includes:
 - review-required table
 - route inventory
 - data mutation inventory
-- route details with evidence, mutations, links, reviewer questions, and
-  uncertainty notes
+- route details with evidence, mutations, links, PolicyLens policy cases,
+  reviewer questions, and uncertainty notes
 - diagnostics and skipped files
 
 JSON is the canonical machine-readable AuthMap document. Its schema is

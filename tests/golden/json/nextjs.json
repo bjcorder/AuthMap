@@ -2097,6 +2097,9 @@
           "mutation_ids": [
             "mutation_0001"
           ],
+          "policy_case_ids": [
+            "policy_case_0001"
+          ],
           "sensitivity_reasons": [
             "linked_mutation",
             "unsafe_method"
@@ -2124,6 +2127,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0002"
+          ],
           "sensitivity_reasons": [],
           "weak_evidence_ids": []
         }
@@ -2155,6 +2161,10 @@
           ],
           "mutation_ids": [
             "mutation_0002"
+          ],
+          "policy_case_ids": [
+            "policy_case_0003",
+            "policy_case_0004"
           ],
           "sensitivity_reasons": [
             "linked_mutation",
@@ -2218,6 +2228,10 @@
           "mutation_ids": [
             "mutation_0004"
           ],
+          "policy_case_ids": [
+            "policy_case_0005",
+            "policy_case_0006"
+          ],
           "sensitivity_reasons": [
             "linked_mutation",
             "unsafe_method"
@@ -2250,6 +2264,10 @@
           ],
           "mutation_ids": [
             "mutation_0003"
+          ],
+          "policy_case_ids": [
+            "policy_case_0007",
+            "policy_case_0008"
           ],
           "sensitivity_reasons": [
             "linked_mutation",
@@ -2366,6 +2384,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0009"
+          ],
           "sensitivity_reasons": [],
           "weak_evidence_ids": []
         }
@@ -2394,6 +2415,9 @@
           ],
           "mutation_ids": [
             "mutation_0005"
+          ],
+          "policy_case_ids": [
+            "policy_case_0010"
           ],
           "sensitivity_reasons": [
             "linked_mutation",
@@ -2471,6 +2495,9 @@
           "mutation_ids": [
             "mutation_0007"
           ],
+          "policy_case_ids": [
+            "policy_case_0011"
+          ],
           "sensitivity_reasons": [
             "linked_mutation",
             "unsafe_method",
@@ -2507,11 +2534,689 @@
           "mutation_ids": [
             "mutation_0008"
           ],
+          "policy_case_ids": [
+            "policy_case_0012",
+            "policy_case_0013"
+          ],
           "sensitivity_reasons": [
             "linked_mutation",
             "unsafe_method"
           ],
           "weak_evidence_ids": []
+        }
+      }
+    }
+  ],
+  "policy_cases": [
+    {
+      "id": "policy_case_0001",
+      "route_id": "route_0002",
+      "kind": "linked_mutation_protection",
+      "summary": "Route reaches linked mutation(s): mutation_0001 (report).",
+      "evidence_ids": [],
+      "input_names": [
+        "report"
+      ],
+      "branches": [
+        {
+          "condition": "route-to-mutation reachability",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [],
+          "span": {
+            "file": "tests/fixtures/nextjs/app/(admin)/reports/route.ts",
+            "line": 5,
+            "column": 1,
+            "byte_range": {
+              "start": 91,
+              "end": 125
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/nextjs/app/(admin)/reports/route.ts",
+        "line": 5,
+        "column": 1,
+        "byte_range": {
+          "start": 91,
+          "end": 125
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "link_ids": [
+            "link_0001"
+          ],
+          "mutation_ids": [
+            "mutation_0001"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0002",
+      "route_id": "route_0003",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn, permission_check.",
+      "evidence_ids": [
+        "evidence_0001",
+        "evidence_0002"
+      ],
+      "input_names": [
+        "identity",
+        "permission"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0001",
+            "evidence_0002"
+          ],
+          "span": {
+            "file": "tests/fixtures/nextjs/app/blog/[...slug]/route.ts",
+            "line": 9,
+            "column": 14,
+            "byte_range": {
+              "start": 122,
+              "end": 204
+            }
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/nextjs/app/blog/[...slug]/route.ts",
+        "line": 9,
+        "column": 14,
+        "byte_range": {
+          "start": 122,
+          "end": 204
+        }
+      },
+      "confidence": "medium",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0003",
+      "route_id": "route_0004",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0003"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0003"
+          ],
+          "span": {
+            "file": "tests/fixtures/nextjs/app/docs/[[...slug]]/route.ts",
+            "line": 9,
+            "column": 14,
+            "byte_range": {
+              "start": 166,
+              "end": 194
+            }
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/nextjs/app/docs/[[...slug]]/route.ts",
+        "line": 9,
+        "column": 14,
+        "byte_range": {
+          "start": 166,
+          "end": 194
+        }
+      },
+      "confidence": "medium",
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "mutation_ids": [
+            "mutation_0002"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0004",
+      "route_id": "route_0004",
+      "kind": "linked_mutation_protection",
+      "summary": "Route reaches linked mutation(s): mutation_0002 (doc).",
+      "evidence_ids": [],
+      "input_names": [
+        "doc"
+      ],
+      "branches": [
+        {
+          "condition": "route-to-mutation reachability",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [],
+          "span": {
+            "file": "tests/fixtures/nextjs/app/docs/[[...slug]]/route.ts",
+            "line": 9,
+            "column": 14,
+            "byte_range": {
+              "start": 166,
+              "end": 194
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/nextjs/app/docs/[[...slug]]/route.ts",
+        "line": 9,
+        "column": 14,
+        "byte_range": {
+          "start": 166,
+          "end": 194
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "link_ids": [
+            "link_0002"
+          ],
+          "mutation_ids": [
+            "mutation_0002"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0005",
+      "route_id": "route_0006",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0004"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0004"
+          ],
+          "span": {
+            "file": "tests/fixtures/nextjs/app/external/route.ts",
+            "line": 1,
+            "column": 1,
+            "byte_range": {
+              "start": 0,
+              "end": 57
+            }
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/nextjs/app/external/route.ts",
+        "line": 1,
+        "column": 1,
+        "byte_range": {
+          "start": 0,
+          "end": 57
+        }
+      },
+      "confidence": "medium",
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "mutation_ids": [
+            "mutation_0004"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0006",
+      "route_id": "route_0006",
+      "kind": "linked_mutation_protection",
+      "summary": "Route reaches linked mutation(s): mutation_0004 (external).",
+      "evidence_ids": [],
+      "input_names": [
+        "external"
+      ],
+      "branches": [
+        {
+          "condition": "route-to-mutation reachability",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [],
+          "span": {
+            "file": "tests/fixtures/nextjs/app/external/route.ts",
+            "line": 1,
+            "column": 1,
+            "byte_range": {
+              "start": 0,
+              "end": 57
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/nextjs/app/external/route.ts",
+        "line": 1,
+        "column": 1,
+        "byte_range": {
+          "start": 0,
+          "end": 57
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "link_ids": [
+            "link_0003"
+          ],
+          "mutation_ids": [
+            "mutation_0004"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0007",
+      "route_id": "route_0007",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0005"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0005"
+          ],
+          "span": {
+            "file": "tests/fixtures/nextjs/app/external/handler.ts",
+            "line": 2,
+            "column": 3,
+            "byte_range": {
+              "start": 33,
+              "end": 46
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/nextjs/app/external/handler.ts",
+        "line": 2,
+        "column": 3,
+        "byte_range": {
+          "start": 33,
+          "end": 46
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "mutation_ids": [
+            "mutation_0003"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0008",
+      "route_id": "route_0007",
+      "kind": "linked_mutation_protection",
+      "summary": "Route reaches linked mutation(s): mutation_0003 (external).",
+      "evidence_ids": [],
+      "input_names": [
+        "external"
+      ],
+      "branches": [
+        {
+          "condition": "route-to-mutation reachability",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [],
+          "span": {
+            "file": "tests/fixtures/nextjs/app/external/route.ts",
+            "line": 1,
+            "column": 1,
+            "byte_range": {
+              "start": 0,
+              "end": 57
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/nextjs/app/external/route.ts",
+        "line": 1,
+        "column": 1,
+        "byte_range": {
+          "start": 0,
+          "end": 57
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "link_ids": [
+            "link_0004"
+          ],
+          "mutation_ids": [
+            "mutation_0003"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0009",
+      "route_id": "route_0012",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0006"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0006"
+          ],
+          "span": {
+            "file": "tests/fixtures/nextjs/app/route.ts",
+            "line": 6,
+            "column": 3,
+            "byte_range": {
+              "start": 75,
+              "end": 88
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/nextjs/app/route.ts",
+        "line": 6,
+        "column": 3,
+        "byte_range": {
+          "start": 75,
+          "end": 88
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0010",
+      "route_id": "route_0013",
+      "kind": "linked_mutation_protection",
+      "summary": "Route reaches linked mutation(s): mutation_0005 (session).",
+      "evidence_ids": [],
+      "input_names": [
+        "session"
+      ],
+      "branches": [
+        {
+          "condition": "route-to-mutation reachability",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [],
+          "span": {
+            "file": "tests/fixtures/nextjs/app/route.ts",
+            "line": 10,
+            "column": 14,
+            "byte_range": {
+              "start": 144,
+              "end": 226
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/nextjs/app/route.ts",
+        "line": 10,
+        "column": 14,
+        "byte_range": {
+          "start": 144,
+          "end": 226
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "link_ids": [
+            "link_0005"
+          ],
+          "mutation_ids": [
+            "mutation_0005"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0011",
+      "route_id": "route_0016",
+      "kind": "linked_mutation_protection",
+      "summary": "Route reaches linked mutation(s): mutation_0007 (user).",
+      "evidence_ids": [],
+      "input_names": [
+        "user"
+      ],
+      "branches": [
+        {
+          "condition": "route-to-mutation reachability",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [],
+          "span": {
+            "file": "tests/fixtures/nextjs/app/users/[id]/route.ts",
+            "line": 5,
+            "column": 14,
+            "byte_range": {
+              "start": 84,
+              "end": 191
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/nextjs/app/users/[id]/route.ts",
+        "line": 5,
+        "column": 14,
+        "byte_range": {
+          "start": 84,
+          "end": 191
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "link_ids": [
+            "link_0006"
+          ],
+          "mutation_ids": [
+            "mutation_0007"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0012",
+      "route_id": "route_0017",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0007"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0007"
+          ],
+          "span": {
+            "file": "tests/fixtures/nextjs/app/wrapped-named/route.ts",
+            "line": 9,
+            "column": 14,
+            "byte_range": {
+              "start": 177,
+              "end": 211
+            }
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/nextjs/app/wrapped-named/route.ts",
+        "line": 9,
+        "column": 14,
+        "byte_range": {
+          "start": 177,
+          "end": 211
+        }
+      },
+      "confidence": "medium",
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "mutation_ids": [
+            "mutation_0008"
+          ]
+        }
+      }
+    },
+    {
+      "id": "policy_case_0013",
+      "route_id": "route_0017",
+      "kind": "linked_mutation_protection",
+      "summary": "Route reaches linked mutation(s): mutation_0008 (profile).",
+      "evidence_ids": [],
+      "input_names": [
+        "profile"
+      ],
+      "branches": [
+        {
+          "condition": "route-to-mutation reachability",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [],
+          "span": {
+            "file": "tests/fixtures/nextjs/app/wrapped-named/route.ts",
+            "line": 9,
+            "column": 14,
+            "byte_range": {
+              "start": 177,
+              "end": 211
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/nextjs/app/wrapped-named/route.ts",
+        "line": 9,
+        "column": 14,
+        "byte_range": {
+          "start": 177,
+          "end": 211
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "link_ids": [
+            "link_0007"
+          ],
+          "mutation_ids": [
+            "mutation_0008"
+          ]
         }
       }
     }

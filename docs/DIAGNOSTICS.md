@@ -64,6 +64,10 @@ emitting them.
 | `nextjs_unusual_route_segment` | Next.js route segment uses an unusual routing convention |
 | `report.render_failed` | Report rendering failed |
 | `report.write_failed` | Report writing failed |
+| `policy.conflicting_evidence` | Explicit public and authorization-required evidence both appear on a route |
+| `policy.duplicate_evidence` | Duplicate guard or policy evidence appears on a route |
+| `policy.unreachable_branch` | Policy evidence appears inside a statically unreachable branch |
+| `policy.dynamic_behavior` | Dynamic policy evidence requires review |
 | `internal.scan_failed` | Unexpected internal scan failure |
 | `internal.runtime_limit_reached` | Scan exceeded cooperative runtime budget |
 

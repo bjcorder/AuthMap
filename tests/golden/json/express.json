@@ -4237,6 +4237,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0001"
+          ],
           "sensitivity_reasons": [],
           "weak_evidence_ids": []
         }
@@ -4262,6 +4265,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0002"
+          ],
           "sensitivity_reasons": [
             "account_path",
             "unsafe_method"
@@ -4292,6 +4298,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0003"
+          ],
           "sensitivity_reasons": [
             "admin_path",
             "unsafe_method"
@@ -4320,6 +4329,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0004"
+          ],
           "sensitivity_reasons": [
             "path_param",
             "tenant_path"
@@ -4337,6 +4349,7 @@
         "Sensitive route modifier(s): account_path, path_param, unsafe_method."
       ],
       "reviewer_questions": [
+        "Can the dynamic authorization path be confirmed?",
         "Should this route require ownership or permission checks?",
         "Should this state-changing route require more than authentication?"
       ],
@@ -4352,6 +4365,10 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0005",
+            "policy_case_0006"
+          ],
           "sensitivity_reasons": [
             "account_path",
             "path_param",
@@ -4384,6 +4401,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0007"
+          ],
           "sensitivity_reasons": [
             "unsafe_method"
           ],
@@ -4411,6 +4431,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0008"
+          ],
           "sensitivity_reasons": [
             "path_param",
             "unsafe_method"
@@ -4435,6 +4458,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0009"
+          ],
           "sensitivity_reasons": [],
           "weak_evidence_ids": []
         }
@@ -4477,6 +4503,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0010"
+          ],
           "sensitivity_reasons": [],
           "weak_evidence_ids": []
         }
@@ -4498,6 +4527,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0011"
+          ],
           "sensitivity_reasons": [],
           "weak_evidence_ids": []
         }
@@ -4520,6 +4552,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0012"
+          ],
           "sensitivity_reasons": [],
           "weak_evidence_ids": []
         }
@@ -4542,6 +4577,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0013"
+          ],
           "sensitivity_reasons": [],
           "weak_evidence_ids": []
         }
@@ -4570,6 +4608,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0014"
+          ],
           "sensitivity_reasons": [
             "admin_path"
           ],
@@ -4598,6 +4639,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0015"
+          ],
           "sensitivity_reasons": [
             "admin_path"
           ],
@@ -4625,6 +4669,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0016"
+          ],
           "sensitivity_reasons": [
             "unsafe_method"
           ],
@@ -4649,6 +4696,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0017"
+          ],
           "sensitivity_reasons": [],
           "weak_evidence_ids": []
         }
@@ -4671,6 +4721,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0018"
+          ],
           "sensitivity_reasons": [],
           "weak_evidence_ids": []
         }
@@ -4697,6 +4750,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0019"
+          ],
           "sensitivity_reasons": [
             "admin_path"
           ],
@@ -4749,6 +4805,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0020"
+          ],
           "sensitivity_reasons": [
             "path_param",
             "user_path"
@@ -4776,6 +4835,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0021"
+          ],
           "sensitivity_reasons": [
             "path_param",
             "user_path"
@@ -4805,6 +4867,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0022"
+          ],
           "sensitivity_reasons": [
             "path_param",
             "unsafe_method",
@@ -4834,6 +4899,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0023"
+          ],
           "sensitivity_reasons": [
             "path_param",
             "unsafe_method",
@@ -4864,6 +4932,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0024"
+          ],
           "sensitivity_reasons": [
             "path_param",
             "tenant_path"
@@ -4892,6 +4963,9 @@
           ],
           "link_ids": [],
           "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0025"
+          ],
           "sensitivity_reasons": [
             "path_param",
             "tenant_path"
@@ -4899,6 +4973,1185 @@
           "weak_evidence_ids": []
         }
       }
+    }
+  ],
+  "policy_cases": [
+    {
+      "id": "policy_case_0001",
+      "route_id": "route_0001",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0001"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0001"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 14,
+            "column": 10,
+            "byte_range": {
+              "start": 441,
+              "end": 452
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 14,
+        "column": 10,
+        "byte_range": {
+          "start": 441,
+          "end": 452
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0002",
+      "route_id": "route_0002",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0002"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0002"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 14,
+            "column": 10,
+            "byte_range": {
+              "start": 441,
+              "end": 452
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 14,
+        "column": 10,
+        "byte_range": {
+          "start": 441,
+          "end": 452
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0003",
+      "route_id": "route_0003",
+      "kind": "effective_protection",
+      "summary": "3 evidence support(s) route protection: authn, permission_check, role_check.",
+      "evidence_ids": [
+        "evidence_0003",
+        "evidence_0004",
+        "evidence_0005"
+      ],
+      "input_names": [
+        "identity",
+        "permission",
+        "role"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0003",
+            "evidence_0004",
+            "evidence_0005"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 18,
+            "column": 10,
+            "byte_range": {
+              "start": 493,
+              "end": 504
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 18,
+        "column": 10,
+        "byte_range": {
+          "start": 493,
+          "end": 504
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0004",
+      "route_id": "route_0004",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0006"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0006"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 14,
+            "column": 10,
+            "byte_range": {
+              "start": 441,
+              "end": 452
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 14,
+        "column": 10,
+        "byte_range": {
+          "start": 441,
+          "end": 452
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0005",
+      "route_id": "route_0005",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: permission_check.",
+      "evidence_ids": [
+        "evidence_0007"
+      ],
+      "input_names": [
+        "permission"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0007"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 27,
+            "column": 10,
+            "byte_range": {
+              "start": 663,
+              "end": 680
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 27,
+        "column": 10,
+        "byte_range": {
+          "start": 663,
+          "end": 680
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0006",
+      "route_id": "route_0005",
+      "kind": "dynamic",
+      "summary": "Dynamic policy behavior requires review.",
+      "evidence_ids": [
+        "evidence_0008"
+      ],
+      "input_names": [
+        "dynamicPolicyCheck"
+      ],
+      "branches": [
+        {
+          "condition": "dynamic policy dispatch",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0008"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 61,
+            "column": 8,
+            "byte_range": {
+              "start": 1593,
+              "end": 1630
+            }
+          },
+          "confidence": "low",
+          "notes": [
+            "Dynamic or indirect policy call requires review"
+          ]
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 61,
+        "column": 8,
+        "byte_range": {
+          "start": 1593,
+          "end": 1630
+        }
+      },
+      "confidence": "low",
+      "reviewer_questions": [
+        "Can the dynamic authorization path be confirmed?"
+      ],
+      "uncertainty_reasons": [
+        "Dynamic authorization evidence requires review."
+      ]
+    },
+    {
+      "id": "policy_case_0007",
+      "route_id": "route_0006",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0009"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0009"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 14,
+            "column": 10,
+            "byte_range": {
+              "start": 441,
+              "end": 452
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 14,
+        "column": 10,
+        "byte_range": {
+          "start": 441,
+          "end": 452
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0008",
+      "route_id": "route_0007",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0010"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0010"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 14,
+            "column": 10,
+            "byte_range": {
+              "start": 441,
+              "end": 452
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 14,
+        "column": 10,
+        "byte_range": {
+          "start": 441,
+          "end": 452
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0009",
+      "route_id": "route_0008",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0011"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0011"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 70,
+            "column": 28,
+            "byte_range": {
+              "start": 1877,
+              "end": 1888
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 70,
+        "column": 28,
+        "byte_range": {
+          "start": 1877,
+          "end": 1888
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0010",
+      "route_id": "route_0010",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0012"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0012"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 14,
+            "column": 10,
+            "byte_range": {
+              "start": 441,
+              "end": 452
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 14,
+        "column": 10,
+        "byte_range": {
+          "start": 441,
+          "end": 452
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0011",
+      "route_id": "route_0011",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0013"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0013"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 14,
+            "column": 10,
+            "byte_range": {
+              "start": 441,
+              "end": 452
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 14,
+        "column": 10,
+        "byte_range": {
+          "start": 441,
+          "end": 452
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0012",
+      "route_id": "route_0012",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0014",
+        "evidence_0015"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0014",
+            "evidence_0015"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 6,
+            "column": 1,
+            "byte_range": {
+              "start": 99,
+              "end": 165
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/helpers/app.js",
+        "line": 6,
+        "column": 1,
+        "byte_range": {
+          "start": 99,
+          "end": 165
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0013",
+      "route_id": "route_0013",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0016",
+        "evidence_0017"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0016",
+            "evidence_0017"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 6,
+            "column": 1,
+            "byte_range": {
+              "start": 99,
+              "end": 165
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/helpers/app.js",
+        "line": 6,
+        "column": 1,
+        "byte_range": {
+          "start": 99,
+          "end": 165
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0014",
+      "route_id": "route_0014",
+      "kind": "effective_protection",
+      "summary": "5 evidence support(s) route protection: admin_check, authn, permission_check.",
+      "evidence_ids": [
+        "evidence_0018",
+        "evidence_0019",
+        "evidence_0020",
+        "evidence_0021",
+        "evidence_0022"
+      ],
+      "input_names": [
+        "admin",
+        "identity",
+        "permission"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0018",
+            "evidence_0019",
+            "evidence_0020",
+            "evidence_0021",
+            "evidence_0022"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 51,
+            "column": 19,
+            "byte_range": {
+              "start": 1174,
+              "end": 1185
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 51,
+        "column": 19,
+        "byte_range": {
+          "start": 1174,
+          "end": 1185
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0015",
+      "route_id": "route_0015",
+      "kind": "effective_protection",
+      "summary": "3 evidence support(s) route protection: admin_check, authn, permission_check.",
+      "evidence_ids": [
+        "evidence_0023",
+        "evidence_0024",
+        "evidence_0025"
+      ],
+      "input_names": [
+        "admin",
+        "identity",
+        "permission"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0023",
+            "evidence_0024",
+            "evidence_0025"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 7,
+            "column": 1,
+            "byte_range": {
+              "start": 167,
+              "end": 235
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/helpers/app.js",
+        "line": 7,
+        "column": 1,
+        "byte_range": {
+          "start": 167,
+          "end": 235
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0016",
+      "route_id": "route_0016",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn, permission_check.",
+      "evidence_ids": [
+        "evidence_0026",
+        "evidence_0027"
+      ],
+      "input_names": [
+        "identity",
+        "permission"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0026",
+            "evidence_0027"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 8,
+            "column": 1,
+            "byte_range": {
+              "start": 237,
+              "end": 316
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/helpers/app.js",
+        "line": 8,
+        "column": 1,
+        "byte_range": {
+          "start": 237,
+          "end": 316
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0017",
+      "route_id": "route_0017",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0028",
+        "evidence_0029"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0028",
+            "evidence_0029"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 9,
+            "column": 1,
+            "byte_range": {
+              "start": 318,
+              "end": 375
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/helpers/app.js",
+        "line": 9,
+        "column": 1,
+        "byte_range": {
+          "start": 318,
+          "end": 375
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0018",
+      "route_id": "route_0018",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0030",
+        "evidence_0031"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0030",
+            "evidence_0031"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/helpers/app.js",
+            "line": 9,
+            "column": 1,
+            "byte_range": {
+              "start": 318,
+              "end": 375
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/helpers/app.js",
+        "line": 9,
+        "column": 1,
+        "byte_range": {
+          "start": 318,
+          "end": 375
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0019",
+      "route_id": "route_0019",
+      "kind": "effective_protection",
+      "summary": "3 evidence support(s) route protection: admin_check, authn, permission_check.",
+      "evidence_ids": [
+        "evidence_0032",
+        "evidence_0033",
+        "evidence_0034"
+      ],
+      "input_names": [
+        "admin",
+        "identity",
+        "permission"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0032",
+            "evidence_0033",
+            "evidence_0034"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 51,
+            "column": 19,
+            "byte_range": {
+              "start": 1174,
+              "end": 1185
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 51,
+        "column": 19,
+        "byte_range": {
+          "start": 1174,
+          "end": 1185
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0020",
+      "route_id": "route_0021",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0035",
+        "evidence_0036"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0035",
+            "evidence_0036"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 85,
+            "column": 20,
+            "byte_range": {
+              "start": 2371,
+              "end": 2382
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 85,
+        "column": 20,
+        "byte_range": {
+          "start": 2371,
+          "end": 2382
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0021",
+      "route_id": "route_0022",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0037"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0037"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/routes/users.ts",
+            "line": 5,
+            "column": 10,
+            "byte_range": {
+              "start": 75,
+              "end": 86
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/routes/users.ts",
+        "line": 5,
+        "column": 10,
+        "byte_range": {
+          "start": 75,
+          "end": 86
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0022",
+      "route_id": "route_0023",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0038",
+        "evidence_0039"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0038",
+            "evidence_0039"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 85,
+            "column": 20,
+            "byte_range": {
+              "start": 2371,
+              "end": 2382
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 85,
+        "column": 20,
+        "byte_range": {
+          "start": 2371,
+          "end": 2382
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0023",
+      "route_id": "route_0024",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0040"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0040"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/routes/users.ts",
+            "line": 5,
+            "column": 10,
+            "byte_range": {
+              "start": 75,
+              "end": 86
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/routes/users.ts",
+        "line": 5,
+        "column": 10,
+        "byte_range": {
+          "start": 75,
+          "end": 86
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0024",
+      "route_id": "route_0025",
+      "kind": "effective_protection",
+      "summary": "2 evidence support(s) route protection: authn, tenant_check.",
+      "evidence_ids": [
+        "evidence_0041",
+        "evidence_0042"
+      ],
+      "input_names": [
+        "identity",
+        "tenant"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0041",
+            "evidence_0042"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/app.js",
+            "line": 85,
+            "column": 20,
+            "byte_range": {
+              "start": 2371,
+              "end": 2382
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 85,
+        "column": 20,
+        "byte_range": {
+          "start": 2371,
+          "end": 2382
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0025",
+      "route_id": "route_0026",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: tenant_check.",
+      "evidence_ids": [
+        "evidence_0043"
+      ],
+      "input_names": [
+        "tenant"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0043"
+          ],
+          "span": {
+            "file": "tests/fixtures/express/routes/users.ts",
+            "line": 9,
+            "column": 10,
+            "byte_range": {
+              "start": 184,
+              "end": 197
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/express/routes/users.ts",
+        "line": 9,
+        "column": 10,
+        "byte_range": {
+          "start": 184,
+          "end": 197
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
     }
   ],
   "diagnostics": [
@@ -4965,6 +6218,22 @@
         }
       },
       "message": "Express mounted router could not be resolved statically"
+    },
+    {
+      "category": "policy",
+      "code": "policy.dynamic_behavior",
+      "severity": "warning",
+      "recoverability": "recoverable",
+      "span": {
+        "file": "tests/fixtures/express/app.js",
+        "line": 61,
+        "column": 8,
+        "byte_range": {
+          "start": 1593,
+          "end": 1630
+        }
+      },
+      "message": "Dynamic policy evidence requires review."
     }
   ]
 }

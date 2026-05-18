@@ -11,7 +11,8 @@
 - Routes: 15
 - Evidence entries: 23
 - Mutations: 4
-- Diagnostics: 2
+- Policy cases: 28
+- Diagnostics: 4
 - Frameworks: express: 15
 
 ## Review Required
@@ -31,6 +32,8 @@
 | [route_0012](#route-route_0012) | POST /api/dynamic-service | risk is review_required |
 | [route_0013](#route-route_0013) | POST /dynamic-service | confidence is medium; Express mount prefix is dynamic and was not included in the route path; risk is review_required |
 | [route_0015](#route-route_0015) | GET /tenant/:tenantId | confidence is medium; Express mount prefix is dynamic and was not included in the route path |
+| diagnostic | policy.dynamic_behavior | Dynamic policy evidence requires review. at tests/fixtures/realistic/express/routes/accounts.ts:28:10 |
+| diagnostic | policy.duplicate_evidence | Duplicate policy evidence \`requireAuth\` appears on the same route. at tests/fixtures/realistic/express/app.ts:42:17 |
 | diagnostic | express_dynamic_mount_prefix | Express mount prefix is dynamic and could not be resolved at tests/fixtures/realistic/express/app.ts:43:9 |
 | diagnostic | express_unresolved_mount_router | Express mounted router could not be resolved statically at tests/fixtures/realistic/express/app.ts:44:1 |
 
@@ -90,11 +93,18 @@
 - Confidence: medium
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): account_path, path_param.
-- Coverage support: evidence: evidence_0001; sensitivity: account_path, path_param
+- Coverage support: evidence: evidence_0001; policy cases: policy_case_0001; sensitivity: account_path, path_param
 - Reviewer questions:
   - Should this route require ownership or permission checks?
 - Coverage uncertainty:
   - Route inventory confidence is not high.
+- PolicyLens:
+  - policy_case_0001: effective_protection at tests/fixtures/realistic/express/routes/accounts.ts:13:27 (high)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0002
+    - Cites evidence: evidence_0001
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
 - Uncertainty notes:
   - Express mount prefix is dynamic and was not included in the route path
 - Auth evidence:
@@ -114,9 +124,27 @@
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): account_path, path_param.
-- Coverage support: evidence: evidence_0002, evidence_0003; sensitivity: account_path, path_param
+- Coverage support: evidence: evidence_0002, evidence_0003; policy cases: policy_case_0002, policy_case_0003; sensitivity: account_path, path_param
 - Reviewer questions:
+  - Is duplicated guard evidence intentional or redundant?
   - Should this route require ownership or permission checks?
+- Coverage uncertainty:
+  - Duplicated policy evidence may be safe but should be reviewed.
+- PolicyLens:
+  - policy_case_0002: effective_protection at tests/fixtures/realistic/express/app.ts:42:17 (high)
+    - Summary: 2 evidence support(s) route protection: authn.
+    - Cites coverage: route_0003
+    - Cites evidence: evidence_0002, evidence_0003
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0003: duplicate at tests/fixtures/realistic/express/app.ts:42:17 (medium)
+    - Summary: Duplicate policy evidence \`requireAuth\` appears on the same route.
+    - Cites coverage: route_0003
+    - Cites evidence: evidence_0002, evidence_0003
+    - Inputs: identity
+    - Branch: duplicate requireAuth evidence -> review_required (reachable)
+    - Question: Is duplicated guard evidence intentional or redundant?
+    - Uncertainty: Duplicated policy evidence may be safe but should be reviewed.
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/realistic/express/app.ts:42:17 (high)
     - Symbol: `requireAuth` (tests/fixtures/realistic/express/app.ts:42:17)
@@ -135,12 +163,28 @@
 - Confidence: medium
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0004; mutations: mutation_0001; links: link_0001; sensitivity: linked_mutation, unsafe_method
+- Coverage support: evidence: evidence_0004; mutations: mutation_0001; links: link_0001; policy cases: policy_case_0004, policy_case_0005; sensitivity: linked_mutation, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Route inventory confidence is not high.
+- PolicyLens:
+  - policy_case_0004: effective_protection at tests/fixtures/realistic/express/routes/accounts.ts:17:18 (high)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0004
+    - Cites evidence: evidence_0004
+    - Cites mutations: mutation_0001
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0005: linked_mutation_protection at tests/fixtures/realistic/express/routes/accounts.ts:17:1 (high)
+    - Summary: Route reaches linked mutation(s): mutation_0001 (account).
+    - Cites coverage: route_0004
+    - Cites mutations: mutation_0001
+    - Cites links: link_0001
+    - Inputs: account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Uncertainty notes:
   - Express mount prefix is dynamic and was not included in the route path
 - Auth evidence:
@@ -160,10 +204,37 @@
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0005, evidence_0006; mutations: mutation_0001; links: link_0002; sensitivity: linked_mutation, unsafe_method
+- Coverage support: evidence: evidence_0005, evidence_0006; mutations: mutation_0001; links: link_0002; policy cases: policy_case_0006, policy_case_0007, policy_case_0008; sensitivity: linked_mutation, unsafe_method
 - Reviewer questions:
+  - Is duplicated guard evidence intentional or redundant?
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this state-changing route require more than authentication?
+- Coverage uncertainty:
+  - Duplicated policy evidence may be safe but should be reviewed.
+- PolicyLens:
+  - policy_case_0006: effective_protection at tests/fixtures/realistic/express/app.ts:42:17 (high)
+    - Summary: 2 evidence support(s) route protection: authn.
+    - Cites coverage: route_0005
+    - Cites evidence: evidence_0005, evidence_0006
+    - Cites mutations: mutation_0001
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0007: linked_mutation_protection at tests/fixtures/realistic/express/routes/accounts.ts:17:1 (high)
+    - Summary: Route reaches linked mutation(s): mutation_0001 (account).
+    - Cites coverage: route_0005
+    - Cites mutations: mutation_0001
+    - Cites links: link_0002
+    - Inputs: account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
+  - policy_case_0008: duplicate at tests/fixtures/realistic/express/app.ts:42:17 (medium)
+    - Summary: Duplicate policy evidence \`requireAuth\` appears on the same route.
+    - Cites coverage: route_0005
+    - Cites evidence: evidence_0005, evidence_0006
+    - Inputs: identity
+    - Branch: duplicate requireAuth evidence -> review_required (reachable)
+    - Question: Is duplicated guard evidence intentional or redundant?
+    - Uncertainty: Duplicated policy evidence may be safe but should be reviewed.
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/realistic/express/app.ts:42:17 (high)
     - Symbol: `requireAuth` (tests/fixtures/realistic/express/app.ts:42:17)
@@ -184,8 +255,9 @@
 - Confidence: medium
 - Coverage: permission_guarded (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0007, evidence_0008; weak evidence: evidence_0008; mutations: mutation_0003; links: link_0003; sensitivity: account_path, linked_mutation, path_param, unsafe_method
+- Coverage support: evidence: evidence_0007, evidence_0008; weak evidence: evidence_0008; mutations: mutation_0003; links: link_0003; policy cases: policy_case_0009, policy_case_0010, policy_case_0011; sensitivity: account_path, linked_mutation, path_param, unsafe_method
 - Reviewer questions:
+  - Can the dynamic authorization path be confirmed?
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
@@ -193,6 +265,30 @@
   - Dynamic authorization evidence requires review.
   - Low-confidence authorization evidence was detected.
   - Route inventory confidence is not high.
+- PolicyLens:
+  - policy_case_0009: effective_protection at tests/fixtures/realistic/express/routes/accounts.ts:26:3 (high)
+    - Summary: 1 evidence support(s) route protection: permission_check.
+    - Cites coverage: route_0006
+    - Cites evidence: evidence_0007
+    - Cites mutations: mutation_0003
+    - Inputs: permission
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0010: linked_mutation_protection at tests/fixtures/realistic/express/routes/accounts.ts:24:1 (medium)
+    - Summary: Route reaches linked mutation(s): mutation_0003 (account).
+    - Cites coverage: route_0006
+    - Cites mutations: mutation_0003
+    - Cites links: link_0003
+    - Inputs: account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
+  - policy_case_0011: dynamic at tests/fixtures/realistic/express/routes/accounts.ts:28:10 (low)
+    - Summary: Dynamic policy behavior requires review.
+    - Cites coverage: route_0006
+    - Cites evidence: evidence_0008
+    - Inputs: dynamicPolicyCheck
+    - Branch: dynamic policy dispatch -> review_required (reachable)
+    - Question: Can the dynamic authorization path be confirmed?
+    - Uncertainty: Dynamic authorization evidence requires review.
 - Uncertainty notes:
   - Express mount prefix is dynamic and was not included in the route path
 - Auth evidence:
@@ -216,14 +312,39 @@
 - Confidence: high
 - Coverage: permission_guarded (review_required)
 - Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0009, evidence_0010, evidence_0011; weak evidence: evidence_0011; mutations: mutation_0003; links: link_0004; sensitivity: account_path, linked_mutation, path_param, unsafe_method
+- Coverage support: evidence: evidence_0009, evidence_0010, evidence_0011; weak evidence: evidence_0011; mutations: mutation_0003; links: link_0004; policy cases: policy_case_0012, policy_case_0013, policy_case_0014; sensitivity: account_path, linked_mutation, path_param, unsafe_method
 - Reviewer questions:
+  - Can the dynamic authorization path be confirmed?
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Dynamic authorization evidence requires review.
   - Low-confidence authorization evidence was detected.
+- PolicyLens:
+  - policy_case_0012: effective_protection at tests/fixtures/realistic/express/app.ts:42:17 (high)
+    - Summary: 2 evidence support(s) route protection: authn, permission_check.
+    - Cites coverage: route_0007
+    - Cites evidence: evidence_0009, evidence_0010
+    - Cites mutations: mutation_0003
+    - Inputs: identity, permission
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0013: linked_mutation_protection at tests/fixtures/realistic/express/routes/accounts.ts:24:1 (medium)
+    - Summary: Route reaches linked mutation(s): mutation_0003 (account).
+    - Cites coverage: route_0007
+    - Cites mutations: mutation_0003
+    - Cites links: link_0004
+    - Inputs: account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
+  - policy_case_0014: dynamic at tests/fixtures/realistic/express/routes/accounts.ts:28:10 (low)
+    - Summary: Dynamic policy behavior requires review.
+    - Cites coverage: route_0007
+    - Cites evidence: evidence_0011
+    - Inputs: dynamicPolicyCheck
+    - Branch: dynamic policy dispatch -> review_required (reachable)
+    - Question: Can the dynamic authorization path be confirmed?
+    - Uncertainty: Dynamic authorization evidence requires review.
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/realistic/express/app.ts:42:17 (high)
     - Symbol: `requireAuth` (tests/fixtures/realistic/express/app.ts:42:17)
@@ -247,13 +368,29 @@
 - Confidence: medium
 - Coverage: admin_guarded (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0012; mutations: mutation_0004; links: link_0005; sensitivity: account_path, linked_mutation, path_param, unsafe_method
+- Coverage support: evidence: evidence_0012; mutations: mutation_0004; links: link_0005; policy cases: policy_case_0015, policy_case_0016; sensitivity: account_path, linked_mutation, path_param, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Route inventory confidence is not high.
+- PolicyLens:
+  - policy_case_0015: effective_protection at tests/fixtures/realistic/express/routes/accounts.ts:36:30 (high)
+    - Summary: 1 evidence support(s) route protection: admin_check.
+    - Cites coverage: route_0008
+    - Cites evidence: evidence_0012
+    - Cites mutations: mutation_0004
+    - Inputs: admin
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0016: linked_mutation_protection at tests/fixtures/realistic/express/routes/accounts.ts:36:1 (medium)
+    - Summary: Route reaches linked mutation(s): mutation_0004 (account).
+    - Cites coverage: route_0008
+    - Cites mutations: mutation_0004
+    - Cites links: link_0005
+    - Inputs: account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Uncertainty notes:
   - Express mount prefix is dynamic and was not included in the route path
 - Auth evidence:
@@ -274,11 +411,27 @@
 - Confidence: high
 - Coverage: admin_guarded (review_required)
 - Coverage rationale: 2 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0013, evidence_0014; mutations: mutation_0004; links: link_0006; sensitivity: account_path, linked_mutation, path_param, unsafe_method
+- Coverage support: evidence: evidence_0013, evidence_0014; mutations: mutation_0004; links: link_0006; policy cases: policy_case_0017, policy_case_0018; sensitivity: account_path, linked_mutation, path_param, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0017: effective_protection at tests/fixtures/realistic/express/app.ts:42:17 (high)
+    - Summary: 2 evidence support(s) route protection: admin_check, authn.
+    - Cites coverage: route_0009
+    - Cites evidence: evidence_0013, evidence_0014
+    - Cites mutations: mutation_0004
+    - Inputs: admin, identity
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0018: linked_mutation_protection at tests/fixtures/realistic/express/routes/accounts.ts:36:1 (medium)
+    - Summary: Route reaches linked mutation(s): mutation_0004 (account).
+    - Cites coverage: route_0009
+    - Cites mutations: mutation_0004
+    - Cites links: link_0006
+    - Inputs: account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/realistic/express/app.ts:42:17 (high)
     - Symbol: `requireAuth` (tests/fixtures/realistic/express/app.ts:42:17)
@@ -298,10 +451,37 @@
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0015, evidence_0016; mutations: mutation_0002; links: link_0007; sensitivity: linked_mutation, unsafe_method
+- Coverage support: evidence: evidence_0015, evidence_0016; mutations: mutation_0002; links: link_0007; policy cases: policy_case_0019, policy_case_0020, policy_case_0021; sensitivity: linked_mutation, unsafe_method
 - Reviewer questions:
+  - Is duplicated guard evidence intentional or redundant?
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this state-changing route require more than authentication?
+- Coverage uncertainty:
+  - Duplicated policy evidence may be safe but should be reviewed.
+- PolicyLens:
+  - policy_case_0019: effective_protection at tests/fixtures/realistic/express/app.ts:42:17 (high)
+    - Summary: 2 evidence support(s) route protection: authn.
+    - Cites coverage: route_0010
+    - Cites evidence: evidence_0015, evidence_0016
+    - Cites mutations: mutation_0002
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0020: linked_mutation_protection at tests/fixtures/realistic/express/routes/accounts.ts:41:1 (medium)
+    - Summary: Route reaches linked mutation(s): mutation_0002 (account).
+    - Cites coverage: route_0010
+    - Cites mutations: mutation_0002
+    - Cites links: link_0007
+    - Inputs: account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
+  - policy_case_0021: duplicate at tests/fixtures/realistic/express/app.ts:42:17 (medium)
+    - Summary: Duplicate policy evidence \`requireAuth\` appears on the same route.
+    - Cites coverage: route_0010
+    - Cites evidence: evidence_0015, evidence_0016
+    - Inputs: identity
+    - Branch: duplicate requireAuth evidence -> review_required (reachable)
+    - Question: Is duplicated guard evidence intentional or redundant?
+    - Uncertainty: Duplicated policy evidence may be safe but should be reviewed.
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/realistic/express/app.ts:42:17 (high)
     - Symbol: `requireAuth` (tests/fixtures/realistic/express/app.ts:42:17)
@@ -321,12 +501,28 @@
 - Confidence: medium
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0017; mutations: mutation_0002; links: link_0008; sensitivity: linked_mutation, unsafe_method
+- Coverage support: evidence: evidence_0017; mutations: mutation_0002; links: link_0008; policy cases: policy_case_0022, policy_case_0023; sensitivity: linked_mutation, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Route inventory confidence is not high.
+- PolicyLens:
+  - policy_case_0022: effective_protection at tests/fixtures/realistic/express/routes/accounts.ts:41:25 (high)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0011
+    - Cites evidence: evidence_0017
+    - Cites mutations: mutation_0002
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0023: linked_mutation_protection at tests/fixtures/realistic/express/routes/accounts.ts:41:1 (medium)
+    - Summary: Route reaches linked mutation(s): mutation_0002 (account).
+    - Cites coverage: route_0011
+    - Cites mutations: mutation_0002
+    - Cites links: link_0008
+    - Inputs: account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Uncertainty notes:
   - Express mount prefix is dynamic and was not included in the route path
 - Auth evidence:
@@ -346,9 +542,27 @@
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): unsafe_method.
-- Coverage support: evidence: evidence_0018, evidence_0019; links: link_0009; sensitivity: unsafe_method
+- Coverage support: evidence: evidence_0018, evidence_0019; links: link_0009; policy cases: policy_case_0024, policy_case_0025; sensitivity: unsafe_method
 - Reviewer questions:
+  - Is duplicated guard evidence intentional or redundant?
   - Should this state-changing route require more than authentication?
+- Coverage uncertainty:
+  - Duplicated policy evidence may be safe but should be reviewed.
+- PolicyLens:
+  - policy_case_0024: effective_protection at tests/fixtures/realistic/express/app.ts:42:17 (high)
+    - Summary: 2 evidence support(s) route protection: authn.
+    - Cites coverage: route_0012
+    - Cites evidence: evidence_0018, evidence_0019
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0025: duplicate at tests/fixtures/realistic/express/app.ts:42:17 (medium)
+    - Summary: Duplicate policy evidence \`requireAuth\` appears on the same route.
+    - Cites coverage: route_0012
+    - Cites evidence: evidence_0018, evidence_0019
+    - Inputs: identity
+    - Branch: duplicate requireAuth evidence -> review_required (reachable)
+    - Question: Is duplicated guard evidence intentional or redundant?
+    - Uncertainty: Duplicated policy evidence may be safe but should be reviewed.
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/realistic/express/app.ts:42:17 (high)
     - Symbol: `requireAuth` (tests/fixtures/realistic/express/app.ts:42:17)
@@ -367,11 +581,18 @@
 - Confidence: medium
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): unsafe_method.
-- Coverage support: evidence: evidence_0020; links: link_0010; sensitivity: unsafe_method
+- Coverage support: evidence: evidence_0020; links: link_0010; policy cases: policy_case_0026; sensitivity: unsafe_method
 - Reviewer questions:
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Route inventory confidence is not high.
+- PolicyLens:
+  - policy_case_0026: effective_protection at tests/fixtures/realistic/express/routes/accounts.ts:46:33 (high)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0013
+    - Cites evidence: evidence_0020
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
 - Uncertainty notes:
   - Express mount prefix is dynamic and was not included in the route path
 - Auth evidence:
@@ -391,10 +612,17 @@
 - Confidence: high
 - Coverage: tenant_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support tenant_guarded coverage.; Sensitive route modifier(s): path_param, tenant_path.
-- Coverage support: evidence: evidence_0021, evidence_0022; sensitivity: path_param, tenant_path
+- Coverage support: evidence: evidence_0021, evidence_0022; policy cases: policy_case_0027; sensitivity: path_param, tenant_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this route require tenant isolation checks?
+- PolicyLens:
+  - policy_case_0027: effective_protection at tests/fixtures/realistic/express/app.ts:42:17 (high)
+    - Summary: 2 evidence support(s) route protection: authn, tenant_check.
+    - Cites coverage: route_0014
+    - Cites evidence: evidence_0021, evidence_0022
+    - Inputs: identity, tenant
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/realistic/express/app.ts:42:17 (high)
     - Symbol: `requireAuth` (tests/fixtures/realistic/express/app.ts:42:17)
@@ -414,12 +642,19 @@
 - Confidence: medium
 - Coverage: tenant_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support tenant_guarded coverage.; Sensitive route modifier(s): path_param, tenant_path.
-- Coverage support: evidence: evidence_0023; sensitivity: path_param, tenant_path
+- Coverage support: evidence: evidence_0023; policy cases: policy_case_0028; sensitivity: path_param, tenant_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this route require tenant isolation checks?
 - Coverage uncertainty:
   - Route inventory confidence is not high.
+- PolicyLens:
+  - policy_case_0028: effective_protection at tests/fixtures/realistic/express/routes/accounts.ts:50:33 (high)
+    - Summary: 1 evidence support(s) route protection: tenant_check.
+    - Cites coverage: route_0015
+    - Cites evidence: evidence_0023
+    - Inputs: tenant
+    - Branch: static authorization evidence present -> allow (reachable)
 - Uncertainty notes:
   - Express mount prefix is dynamic and was not included in the route path
 - Auth evidence:
@@ -431,6 +666,8 @@
 
 | Severity | Code | Location | Message |
 | --- | --- | --- | --- |
+| warning | policy.dynamic_behavior | tests/fixtures/realistic/express/routes/accounts.ts:28:10 | Dynamic policy evidence requires review. |
+| warning | policy.duplicate_evidence | tests/fixtures/realistic/express/app.ts:42:17 | Duplicate policy evidence \`requireAuth\` appears on the same route. |
 | warning | express_dynamic_mount_prefix | tests/fixtures/realistic/express/app.ts:43:9 | Express mount prefix is dynamic and could not be resolved |
 | warning | express_unresolved_mount_router | tests/fixtures/realistic/express/app.ts:44:1 | Express mounted router could not be resolved statically |
 

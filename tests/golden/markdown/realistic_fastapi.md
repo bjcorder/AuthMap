@@ -11,7 +11,8 @@
 - Routes: 9
 - Evidence entries: 9
 - Mutations: 4
-- Diagnostics: 2
+- Policy cases: 13
+- Diagnostics: 3
 - Frameworks: fast_api: 9
 
 ## Review Required
@@ -26,6 +27,7 @@
 | [route_0006](#route-route_0006) | POST /api/accounts/dynamic-service | risk is review_required |
 | [route_0009](#route-route_0009) | GET /reports | confidence is medium; router prefix is dynamic and was not included in the route path; include_router prefix is dynamic and was not included in the route path |
 | diagnostic | fastapi_dynamic_router_prefix | FastAPI router prefix is dynamic and could not be resolved at tests/fixtures/realistic/fastapi/main.py:7:18 |
+| diagnostic | policy.dynamic_behavior | Dynamic policy evidence requires review. at tests/fixtures/realistic/fastapi/app/routers/accounts.py:26:12 |
 | diagnostic | fastapi_dynamic_include_router_prefix | FastAPI include_router prefix is dynamic and could not be resolved at tests/fixtures/realistic/fastapi/main.py:44:1 |
 
 ## Route Inventory
@@ -65,9 +67,16 @@
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): account_path, path_param.
-- Coverage support: evidence: evidence_0001; sensitivity: account_path, path_param
+- Coverage support: evidence: evidence_0001; policy cases: policy_case_0001; sensitivity: account_path, path_param
 - Reviewer questions:
   - Should this route require ownership or permission checks?
+- PolicyLens:
+  - policy_case_0001: effective_protection at tests/fixtures/realistic/fastapi/app/routers/accounts.py:12:40 (high)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0001
+    - Cites evidence: evidence_0001
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/realistic/fastapi/app/routers/accounts.py:12:40 (high)
     - Symbol: `require_user` (tests/fixtures/realistic/fastapi/app/routers/accounts.py:12:48)
@@ -84,11 +93,27 @@
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): account_path, linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0002; mutations: mutation_0001; links: link_0001; sensitivity: account_path, linked_mutation, unsafe_method
+- Coverage support: evidence: evidence_0002; mutations: mutation_0001; links: link_0001; policy cases: policy_case_0002, policy_case_0003; sensitivity: account_path, linked_mutation, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0002: effective_protection at tests/fixtures/realistic/fastapi/app/routers/accounts.py:17:49 (high)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0002
+    - Cites evidence: evidence_0002
+    - Cites mutations: mutation_0001
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0003: linked_mutation_protection at tests/fixtures/realistic/fastapi/app/routers/accounts.py:16:2 (high)
+    - Summary: Route reaches linked mutation(s): mutation_0001 (Account).
+    - Cites coverage: route_0002
+    - Cites mutations: mutation_0001
+    - Cites links: link_0001
+    - Inputs: Account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/realistic/fastapi/app/routers/accounts.py:17:49 (high)
     - Symbol: `require_user` (tests/fixtures/realistic/fastapi/app/routers/accounts.py:17:57)
@@ -107,14 +132,39 @@
 - Confidence: high
 - Coverage: permission_guarded (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0003, evidence_0004; weak evidence: evidence_0004; mutations: mutation_0003; links: link_0002; sensitivity: account_path, linked_mutation, path_param, unsafe_method
+- Coverage support: evidence: evidence_0003, evidence_0004; weak evidence: evidence_0004; mutations: mutation_0003; links: link_0002; policy cases: policy_case_0004, policy_case_0005, policy_case_0006; sensitivity: account_path, linked_mutation, path_param, unsafe_method
 - Reviewer questions:
+  - Can the dynamic authorization path be confirmed?
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Dynamic authorization evidence requires review.
   - Low-confidence authorization evidence was detected.
+- PolicyLens:
+  - policy_case_0004: effective_protection at tests/fixtures/realistic/fastapi/app/routers/accounts.py:25:48 (high)
+    - Summary: 1 evidence support(s) route protection: permission_check.
+    - Cites coverage: route_0003
+    - Cites evidence: evidence_0003
+    - Cites mutations: mutation_0003
+    - Inputs: permission
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0005: linked_mutation_protection at tests/fixtures/realistic/fastapi/app/routers/accounts.py:24:2 (medium)
+    - Summary: Route reaches linked mutation(s): mutation_0003 (Account).
+    - Cites coverage: route_0003
+    - Cites mutations: mutation_0003
+    - Cites links: link_0002
+    - Inputs: Account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
+  - policy_case_0006: dynamic at tests/fixtures/realistic/fastapi/app/routers/accounts.py:26:12 (low)
+    - Summary: Dynamic policy behavior requires review.
+    - Cites coverage: route_0003
+    - Cites evidence: evidence_0004
+    - Inputs: dynamic_policy_check
+    - Branch: dynamic policy dispatch -> review_required (reachable)
+    - Question: Can the dynamic authorization path be confirmed?
+    - Uncertainty: Dynamic authorization evidence requires review.
 - Auth evidence:
   - permission_check `permission_guard` at tests/fixtures/realistic/fastapi/app/routers/accounts.py:25:48 (high)
     - Symbol: `can_edit_account` (tests/fixtures/realistic/fastapi/app/routers/accounts.py:25:56)
@@ -136,11 +186,27 @@
 - Confidence: high
 - Coverage: admin_guarded (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0005; mutations: mutation_0004; links: link_0003; sensitivity: account_path, linked_mutation, path_param, unsafe_method
+- Coverage support: evidence: evidence_0005; mutations: mutation_0004; links: link_0003; policy cases: policy_case_0007, policy_case_0008; sensitivity: account_path, linked_mutation, path_param, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0007: effective_protection at tests/fixtures/realistic/fastapi/app/routers/accounts.py:32:48 (high)
+    - Summary: 1 evidence support(s) route protection: admin_check.
+    - Cites coverage: route_0004
+    - Cites evidence: evidence_0005
+    - Cites mutations: mutation_0004
+    - Inputs: admin
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0008: linked_mutation_protection at tests/fixtures/realistic/fastapi/app/routers/accounts.py:31:2 (medium)
+    - Summary: Route reaches linked mutation(s): mutation_0004 (Account).
+    - Cites coverage: route_0004
+    - Cites mutations: mutation_0004
+    - Cites links: link_0003
+    - Inputs: Account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Auth evidence:
   - admin_check `admin_guard` at tests/fixtures/realistic/fastapi/app/routers/accounts.py:32:48 (high)
     - Symbol: `require_admin` (tests/fixtures/realistic/fastapi/app/routers/accounts.py:32:56)
@@ -158,11 +224,27 @@
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): account_path, linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0006; mutations: mutation_0002; links: link_0004; sensitivity: account_path, linked_mutation, unsafe_method
+- Coverage support: evidence: evidence_0006; mutations: mutation_0002; links: link_0004; policy cases: policy_case_0009, policy_case_0010; sensitivity: account_path, linked_mutation, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0009: effective_protection at tests/fixtures/realistic/fastapi/app/routers/accounts.py:37:33 (high)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0005
+    - Cites evidence: evidence_0006
+    - Cites mutations: mutation_0002
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0010: linked_mutation_protection at tests/fixtures/realistic/fastapi/app/routers/accounts.py:36:2 (medium)
+    - Summary: Route reaches linked mutation(s): mutation_0002 (Account).
+    - Cites coverage: route_0005
+    - Cites mutations: mutation_0002
+    - Cites links: link_0004
+    - Inputs: Account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/realistic/fastapi/app/routers/accounts.py:37:33 (high)
     - Symbol: `require_user` (tests/fixtures/realistic/fastapi/app/routers/accounts.py:37:41)
@@ -180,10 +262,17 @@
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): account_path, unsafe_method.
-- Coverage support: evidence: evidence_0007; links: link_0005; sensitivity: account_path, unsafe_method
+- Coverage support: evidence: evidence_0007; links: link_0005; policy cases: policy_case_0011; sensitivity: account_path, unsafe_method
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0011: effective_protection at tests/fixtures/realistic/fastapi/app/routers/accounts.py:42:33 (high)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0006
+    - Cites evidence: evidence_0007
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/realistic/fastapi/app/routers/accounts.py:42:33 (high)
     - Symbol: `require_user` (tests/fixtures/realistic/fastapi/app/routers/accounts.py:42:41)
@@ -213,9 +302,16 @@
 - Confidence: high
 - Coverage: admin_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): admin_path.
-- Coverage support: evidence: evidence_0008; sensitivity: admin_path
+- Coverage support: evidence: evidence_0008; policy cases: policy_case_0012; sensitivity: admin_path
 - Reviewer questions:
   - Should this route require an admin or role guard?
+- PolicyLens:
+  - policy_case_0012: effective_protection at tests/fixtures/realistic/fastapi/main.py:34:20 (high)
+    - Summary: 1 evidence support(s) route protection: admin_check.
+    - Cites coverage: route_0008
+    - Cites evidence: evidence_0008
+    - Inputs: admin
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - admin_check `admin_guard` at tests/fixtures/realistic/fastapi/main.py:34:20 (high)
     - Symbol: `require_admin` (tests/fixtures/realistic/fastapi/main.py:34:28)
@@ -232,9 +328,16 @@
 - Confidence: medium
 - Coverage: authn_only (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
-- Coverage support: evidence: evidence_0009
+- Coverage support: evidence: evidence_0009; policy cases: policy_case_0013
 - Coverage uncertainty:
   - Route inventory confidence is not high.
+- PolicyLens:
+  - policy_case_0013: effective_protection at tests/fixtures/realistic/fastapi/main.py:39:26 (high)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0009
+    - Cites evidence: evidence_0009
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
 - Uncertainty notes:
   - router prefix is dynamic and was not included in the route path
   - include_router prefix is dynamic and was not included in the route path
@@ -248,6 +351,7 @@
 | Severity | Code | Location | Message |
 | --- | --- | --- | --- |
 | warning | fastapi_dynamic_router_prefix | tests/fixtures/realistic/fastapi/main.py:7:18 | FastAPI router prefix is dynamic and could not be resolved |
+| warning | policy.dynamic_behavior | tests/fixtures/realistic/fastapi/app/routers/accounts.py:26:12 | Dynamic policy evidence requires review. |
 | warning | fastapi_dynamic_include_router_prefix | tests/fixtures/realistic/fastapi/main.py:44:1 | FastAPI include_router prefix is dynamic and could not be resolved |
 
 ## Skipped Files
