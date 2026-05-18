@@ -179,34 +179,6 @@
           "kind": "route_guard",
           "mechanism": "express_middleware",
           "symbol": {
-            "name": "audit",
-            "span": {
-              "file": "tests/fixtures/express/app.js",
-              "line": 36,
-              "column": 10,
-              "byte_range": {
-                "start": 872,
-                "end": 877
-              }
-            }
-          },
-          "span": {
-            "file": "tests/fixtures/express/app.js",
-            "line": 36,
-            "column": 10,
-            "byte_range": {
-              "start": 872,
-              "end": 877
-            }
-          },
-          "inherited": false,
-          "confidence": "high",
-          "notes": []
-        },
-        {
-          "kind": "route_guard",
-          "mechanism": "express_middleware",
-          "symbol": {
             "name": "requireAuth",
             "span": {
               "file": "tests/fixtures/express/app.js",
@@ -841,34 +813,6 @@
           "kind": "route_guard",
           "mechanism": "express_middleware",
           "symbol": {
-            "name": "audit",
-            "span": {
-              "file": "tests/fixtures/express/app.js",
-              "line": 36,
-              "column": 10,
-              "byte_range": {
-                "start": 872,
-                "end": 877
-              }
-            }
-          },
-          "span": {
-            "file": "tests/fixtures/express/app.js",
-            "line": 36,
-            "column": 10,
-            "byte_range": {
-              "start": 872,
-              "end": 877
-            }
-          },
-          "inherited": false,
-          "confidence": "high",
-          "notes": []
-        },
-        {
-          "kind": "route_guard",
-          "mechanism": "express_middleware",
-          "symbol": {
             "name": "requireAuth",
             "span": {
               "file": "tests/fixtures/express/app.js",
@@ -941,36 +885,6 @@
               "end": 877
             }
           }
-        }
-      ],
-      "declared_protection": [
-        {
-          "kind": "route_guard",
-          "mechanism": "express_middleware",
-          "symbol": {
-            "name": "audit",
-            "span": {
-              "file": "tests/fixtures/express/app.js",
-              "line": 36,
-              "column": 10,
-              "byte_range": {
-                "start": 872,
-                "end": 877
-              }
-            }
-          },
-          "span": {
-            "file": "tests/fixtures/express/app.js",
-            "line": 36,
-            "column": 10,
-            "byte_range": {
-              "start": 872,
-              "end": 877
-            }
-          },
-          "inherited": false,
-          "confidence": "medium",
-          "notes": []
         }
       ],
       "handler": {
@@ -2368,36 +2282,6 @@
               "end": 87
             }
           }
-        }
-      ],
-      "declared_protection": [
-        {
-          "kind": "route_guard",
-          "mechanism": "express_middleware",
-          "symbol": {
-            "name": "audit",
-            "span": {
-              "file": "tests/fixtures/express/routes/exported.ts",
-              "line": 5,
-              "column": 10,
-              "byte_range": {
-                "start": 82,
-                "end": 87
-              }
-            }
-          },
-          "span": {
-            "file": "tests/fixtures/express/routes/exported.ts",
-            "line": 5,
-            "column": 10,
-            "byte_range": {
-              "start": 82,
-              "end": 87
-            }
-          },
-          "inherited": false,
-          "confidence": "high",
-          "notes": []
         }
       ],
       "handler": {

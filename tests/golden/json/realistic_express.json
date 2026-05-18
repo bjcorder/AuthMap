@@ -339,34 +339,6 @@
           "kind": "route_guard",
           "mechanism": "express_middleware",
           "symbol": {
-            "name": "audit",
-            "span": {
-              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
-              "line": 17,
-              "column": 31,
-              "byte_range": {
-                "start": 576,
-                "end": 581
-              }
-            }
-          },
-          "span": {
-            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
-            "line": 17,
-            "column": 31,
-            "byte_range": {
-              "start": 576,
-              "end": 581
-            }
-          },
-          "inherited": false,
-          "confidence": "medium",
-          "notes": []
-        },
-        {
-          "kind": "route_guard",
-          "mechanism": "express_middleware",
-          "symbol": {
             "name": "requireAuth",
             "span": {
               "file": "tests/fixtures/realistic/express/routes/accounts.ts",
@@ -468,34 +440,6 @@
         }
       ],
       "declared_protection": [
-        {
-          "kind": "route_guard",
-          "mechanism": "express_middleware",
-          "symbol": {
-            "name": "audit",
-            "span": {
-              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
-              "line": 17,
-              "column": 31,
-              "byte_range": {
-                "start": 576,
-                "end": 581
-              }
-            }
-          },
-          "span": {
-            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
-            "line": 17,
-            "column": 31,
-            "byte_range": {
-              "start": 576,
-              "end": 581
-            }
-          },
-          "inherited": false,
-          "confidence": "high",
-          "notes": []
-        },
         {
           "kind": "route_guard",
           "mechanism": "express_middleware",

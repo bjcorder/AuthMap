@@ -143,7 +143,7 @@ No data mutations were detected.
 - Route location: tests/fixtures/fastapi/app/routes/users.py:6:2
 - Middleware: `require_user` (tests/fixtures/fastapi/main.py:134:32), `can_edit_account` (tests/fixtures/fastapi/main.py:135:36), `provide_database_interface` (tests/fixtures/fastapi/main.py:136:36)
 - Params: user_id (high)
-- Declared protection: can_edit_account, provide_database_interface, require_user
+- Declared protection: can_edit_account, require_user
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): path_param, user_path.
@@ -200,7 +200,7 @@ No data mutations were detected.
 - Route location: tests/fixtures/fastapi/app/routes/users.py:11:2
 - Middleware: `require_user` (tests/fixtures/fastapi/main.py:134:32), `can_edit_account` (tests/fixtures/fastapi/main.py:135:36), `provide_database_interface` (tests/fixtures/fastapi/main.py:136:36)
 - Params: user_id (high)
-- Declared protection: can_edit_account, provide_database_interface, require_user
+- Declared protection: can_edit_account, require_user
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): path_param, unsafe_method, user_path.
@@ -381,7 +381,7 @@ No data mutations were detected.
 - Handler: `variable_settings` (tests/fixtures/fastapi/main.py:81:5)
 - Route location: tests/fixtures/fastapi/main.py:80:2
 - Middleware: `require_user` (tests/fixtures/fastapi/main.py:134:32), `can_edit_account` (tests/fixtures/fastapi/main.py:135:36), `provide_database_interface` (tests/fixtures/fastapi/main.py:136:36)
-- Declared protection: can_edit_account, provide_database_interface, require_user
+- Declared protection: can_edit_account, require_user
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.

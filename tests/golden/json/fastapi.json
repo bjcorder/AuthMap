@@ -326,34 +326,6 @@
           "kind": "inherited_guard",
           "mechanism": "fastapi_dependency",
           "symbol": {
-            "name": "provide_database_interface",
-            "span": {
-              "file": "tests/fixtures/fastapi/main.py",
-              "line": 136,
-              "column": 36,
-              "byte_range": {
-                "start": 3137,
-                "end": 3163
-              }
-            }
-          },
-          "span": {
-            "file": "tests/fixtures/fastapi/main.py",
-            "line": 136,
-            "column": 36,
-            "byte_range": {
-              "start": 3137,
-              "end": 3163
-            }
-          },
-          "inherited": true,
-          "confidence": "high",
-          "notes": []
-        },
-        {
-          "kind": "inherited_guard",
-          "mechanism": "fastapi_dependency",
-          "symbol": {
             "name": "require_user",
             "span": {
               "file": "tests/fixtures/fastapi/main.py",
@@ -581,34 +553,6 @@
           "evidence_ids": [
             "evidence_0004"
           ],
-          "notes": []
-        },
-        {
-          "kind": "inherited_guard",
-          "mechanism": "fastapi_dependency",
-          "symbol": {
-            "name": "provide_database_interface",
-            "span": {
-              "file": "tests/fixtures/fastapi/main.py",
-              "line": 136,
-              "column": 36,
-              "byte_range": {
-                "start": 3137,
-                "end": 3163
-              }
-            }
-          },
-          "span": {
-            "file": "tests/fixtures/fastapi/main.py",
-            "line": 136,
-            "column": 36,
-            "byte_range": {
-              "start": 3137,
-              "end": 3163
-            }
-          },
-          "inherited": true,
-          "confidence": "high",
           "notes": []
         },
         {
@@ -1290,34 +1234,6 @@
           "evidence_ids": [
             "evidence_0012"
           ],
-          "notes": []
-        },
-        {
-          "kind": "route_guard",
-          "mechanism": "fastapi_dependency",
-          "symbol": {
-            "name": "provide_database_interface",
-            "span": {
-              "file": "tests/fixtures/fastapi/main.py",
-              "line": 136,
-              "column": 36,
-              "byte_range": {
-                "start": 3137,
-                "end": 3163
-              }
-            }
-          },
-          "span": {
-            "file": "tests/fixtures/fastapi/main.py",
-            "line": 136,
-            "column": 36,
-            "byte_range": {
-              "start": 3137,
-              "end": 3163
-            }
-          },
-          "inherited": false,
-          "confidence": "high",
           "notes": []
         },
         {

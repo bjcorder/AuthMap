@@ -384,10 +384,77 @@ fn routes_help_works() {
     assert!(stdout.contains("--format"));
     assert!(stdout.contains("--output"));
     assert!(stdout.contains("--config"));
+    assert!(stdout.contains("--mode"));
     assert!(stdout.contains("--max-files"));
     assert!(stdout.contains("--max-file-size-bytes"));
     assert!(stdout.contains("--max-total-bytes"));
     assert!(stdout.contains("--max-runtime-ms"));
+}
+
+#[test]
+fn routes_markdown_reports_empty_projects() {
+    let temp = TestDir::new("routes-empty");
+
+    let output = authmap(&[
+        "routes",
+        temp.path().to_str().expect("path should be UTF-8"),
+        "--format",
+        "markdown",
+    ]);
+
+    assert_exit(&output, 0);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("# AuthMap Route Inventory"));
+    assert!(stdout.contains("- Routes: 0"));
+    assert!(stdout.contains("No routes were discovered."));
+}
+
+#[test]
+fn routes_reports_fastapi_converter_params_and_markdown_location() {
+    let temp = TestDir::new("routes-fastapi-converter");
+    write_file(
+        &temp.path().join("main.py"),
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/files/{file_path:path}")
+def read_file(file_path: str):
+    return {"path": file_path}
+"#,
+    );
+
+    let json_output = authmap(&[
+        "routes",
+        temp.path().to_str().expect("path should be UTF-8"),
+        "--format",
+        "json",
+    ]);
+
+    assert_exit(&json_output, 0);
+    let report: Value =
+        serde_json::from_slice(&json_output.stdout).expect("routes output should be JSON");
+    let route = report["routes"]
+        .as_array()
+        .and_then(|routes| routes.first())
+        .expect("route should be reported");
+    assert_eq!(route["path"], "/files/{file_path:path}");
+    assert_eq!(route["params"][0]["name"], "file_path");
+    assert_eq!(route["params"][0]["syntax"], "{file_path:path}");
+
+    let markdown_output = authmap(&[
+        "routes",
+        temp.path().to_str().expect("path should be UTF-8"),
+        "--format",
+        "markdown",
+    ]);
+
+    assert_exit(&markdown_output, 0);
+    let markdown = String::from_utf8_lossy(&markdown_output.stdout);
+    assert!(markdown.contains("| ID | Framework | Method | Path | Handler | Location |"));
+    assert!(markdown.contains("main.py:"));
+    assert!(markdown.contains("file_path (high)"));
 }
 
 #[test]

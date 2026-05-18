@@ -140,6 +140,7 @@ pub fn render_routes_markdown(document: &AuthMapDocument) -> String {
                 escape_table(&route.method),
                 escape_table(&route.path),
                 escape_table(&format_optional_symbol_table(route.handler.as_ref())),
+                escape_table(&format_optional_span_table(route.span.as_ref())),
                 escape_table(&route_params_table(route)),
                 escape_table(&route_protection_table(route)),
                 confidence_label(route.confidence).to_string(),
@@ -163,6 +164,7 @@ pub fn render_routes_markdown(document: &AuthMapDocument) -> String {
             "Method",
             "Path",
             "Handler",
+            "Location",
             "Params",
             "Protection",
             "Confidence",
@@ -561,13 +563,17 @@ fn render_route_details(output: &mut String, document: &AuthMapDocument, index: 
             format_symbols(&route.middleware)
         );
         if !route.params.is_empty() {
-            let _ = writeln!(output, "- Params: {}", route_params_table(route));
+            let _ = writeln!(
+                output,
+                "- Params: {}",
+                escape_inline(&route_params_table(route))
+            );
         }
         if !route.declared_protection.is_empty() {
             let _ = writeln!(
                 output,
                 "- Declared protection: {}",
-                route_protection_table(route)
+                escape_inline(&route_protection_table(route))
             );
         }
         let _ = writeln!(
@@ -2701,7 +2707,8 @@ mod tests {
         AuthMapDocument, ByteRange, Confidence, Coverage, CoverageClass, Diagnostic,
         DiagnosticCategory, DiagnosticSeverity, Evidence, EvidenceType, ExtensionMap, Framework,
         Mutation, MutationOperation, ReachabilityLink, Recoverability, RiskLevel, Route,
-        ScanMetadata, SkipReason, SourceFile, Span, SymbolRef, diagnostic_codes,
+        RouteParam, RouteProtection, RouteProtectionKind, ScanMetadata, SkipReason, SourceFile,
+        Span, SymbolRef, diagnostic_codes,
     };
 
     #[test]
@@ -3312,6 +3319,28 @@ mod tests {
             .message = "<script>alert(1)</script>\n```".to_string();
         document.diagnostics[0].message = "[click](javascript:alert(1))\n# forged".to_string();
         document.coverage[0].rationale = vec!["**bold**\n## forged".to_string()];
+        document.routes[0].params.push(RouteParam {
+            name: "id`\n## forged param".to_string(),
+            syntax: ":id".to_string(),
+            span: None,
+            confidence: Confidence::High,
+            notes: Vec::new(),
+        });
+        document.routes[0]
+            .declared_protection
+            .push(RouteProtection {
+                kind: RouteProtectionKind::RouteGuard,
+                mechanism: "middleware".to_string(),
+                symbol: Some(SymbolRef {
+                    name: "[guard](javascript:alert(1))\n# forged guard".to_string(),
+                    span: None,
+                }),
+                span: None,
+                inherited: false,
+                confidence: Confidence::High,
+                evidence_ids: Vec::new(),
+                notes: Vec::new(),
+            });
 
         let markdown = MarkdownReporter
             .render(&document)
@@ -3322,8 +3351,22 @@ mod tests {
         assert!(!markdown.contains("```"));
         assert!(!markdown.contains("[click](javascript:alert(1))"));
         assert!(!markdown.contains("\n# forged"));
+        assert!(!markdown.contains("\n## forged param"));
+        assert!(!markdown.contains("[guard](javascript:alert(1))"));
+        assert!(!markdown.contains("\n# forged guard"));
         assert!(markdown.contains("&lt;script&gt;alert"));
         assert!(markdown.contains("\\[click\\]"));
+        assert!(markdown.contains("\\[guard\\]"));
+    }
+
+    #[test]
+    fn focused_route_markdown_includes_route_location() {
+        let document = document_with_review_data();
+
+        let markdown = render_routes_markdown(&document);
+
+        assert!(markdown.contains("| ID | Framework | Method | Path | Handler | Location |"));
+        assert!(markdown.contains("src/app.py:1:1"));
     }
 
     #[test]

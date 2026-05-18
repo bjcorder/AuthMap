@@ -94,7 +94,7 @@ No data mutations were detected.
 - Handler: `listAccounts` (tests/fixtures/express/app.js:44:10)
 - Route location: tests/fixtures/express/app.js:57:1
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:14:10), `audit` (tests/fixtures/express/app.js:36:10)
-- Declared protection: audit, requireAuth
+- Declared protection: requireAuth
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): account_path, unsafe_method.
@@ -230,7 +230,7 @@ No data mutations were detected.
 - Handler: `listAccounts` (tests/fixtures/express/app.js:44:10)
 - Route location: tests/fixtures/express/app.js:69:1
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:70:28), `audit` (tests/fixtures/express/app.js:36:10)
-- Declared protection: audit, requireAuth
+- Declared protection: requireAuth
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
@@ -247,7 +247,6 @@ No data mutations were detected.
 - Handler: `listAccounts` (tests/fixtures/express/app.js:44:10)
 - Route location: tests/fixtures/express/app.js:69:1
 - Middleware: `audit` (tests/fixtures/express/app.js:36:10)
-- Declared protection: audit
 - Confidence: medium
 - Coverage: unauthenticated (low)
 - Coverage rationale: No authorization evidence was detected.
@@ -469,7 +468,6 @@ No data mutations were detected.
 - Handler: `exportAudit` (tests/fixtures/express/routes/exported.ts:9:10)
 - Route location: tests/fixtures/express/routes/exported.ts:13:1
 - Middleware: `audit` (tests/fixtures/express/routes/exported.ts:5:10)
-- Declared protection: audit
 - Confidence: high
 - Coverage: unauthenticated (high)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): unsafe_method.; No strong authorization evidence was found for a high-sensitivity route.

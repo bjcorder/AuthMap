@@ -707,7 +707,8 @@ fn route_params(path: &str) -> Vec<RouteParam> {
             b'{' => {
                 if let Some(relative_end) = path[index + 1..].find('}') {
                     let end = index + 1 + relative_end;
-                    let name = &path[index + 1..end];
+                    let raw = &path[index + 1..end];
+                    let name = raw.split_once(':').map_or(raw, |(name, _)| name);
                     if !name.is_empty() {
                         params.push(route_param(name, &path[index..=end], Confidence::High));
                     }
@@ -783,7 +784,11 @@ fn route_protection(route: &authmap_core::Route, evidence: &[&Evidence]) -> Vec<
                     .as_ref()
                     .is_some_and(|symbol| symbol.name == middleware.name)
             })
+            .filter(|item| middleware_evidence_is_auth_guard(item.evidence_type))
             .collect::<Vec<_>>();
+        if matching_evidence.is_empty() {
+            continue;
+        }
         protections.push(RouteProtection {
             kind: if inherited {
                 RouteProtectionKind::InheritedGuard
@@ -834,6 +839,18 @@ fn route_protection(route: &authmap_core::Route, evidence: &[&Evidence]) -> Vec<
 
     protections.sort_by_key(route_protection_sort_key);
     protections
+}
+
+fn middleware_evidence_is_auth_guard(evidence_type: EvidenceType) -> bool {
+    matches!(
+        evidence_type,
+        EvidenceType::Authn
+            | EvidenceType::RoleCheck
+            | EvidenceType::PermissionCheck
+            | EvidenceType::OwnershipCheck
+            | EvidenceType::TenantCheck
+            | EvidenceType::AdminCheck
+    )
 }
 
 fn route_context_is_inherited(route: &authmap_core::Route) -> bool {
@@ -5585,7 +5602,7 @@ mod tests {
     use authmap_config::{ScanConfig, ScanPlan};
     use authmap_core::{
         Confidence, CoverageClass, Evidence, EvidenceType, Framework, Mutation, MutationOperation,
-        ReachabilityLink, RiskLevel, Route, ScanMode, SourceFile, diagnostic_codes,
+        ReachabilityLink, RiskLevel, Route, ScanMode, SourceFile, SymbolRef, diagnostic_codes,
     };
     use authmap_parsers::{ParseStatus, ParsedFile};
     use authmap_testkit::fixture_path;
@@ -5596,6 +5613,42 @@ mod tests {
         run_scan_with_started_at, source_needs_syntax_tree, suggest_rules,
         suggest_rules_with_started_at,
     };
+
+    #[test]
+    fn route_params_normalize_fastapi_converter_names() {
+        let params = super::route_params("/files/{file_path:path}");
+
+        assert_eq!(params.len(), 1);
+        assert_eq!(params[0].name, "file_path");
+        assert_eq!(params[0].syntax, "{file_path:path}");
+    }
+
+    #[test]
+    fn route_protection_ignores_middleware_without_auth_evidence() {
+        let mut route = route("route.audit", "GET", "/audit");
+        route.middleware.push(SymbolRef {
+            name: "audit".to_string(),
+            span: None,
+        });
+        let audit_evidence = Evidence {
+            id: "evidence.audit".to_string(),
+            route_id: Some("route.audit".to_string()),
+            evidence_type: EvidenceType::AuditLog,
+            mechanism: "audit_log".to_string(),
+            symbol: Some(SymbolRef {
+                name: "audit".to_string(),
+                span: None,
+            }),
+            span: None,
+            confidence: Confidence::High,
+            notes: Vec::new(),
+            extensions: authmap_core::ExtensionMap::new(),
+        };
+
+        let protections = super::route_protection(&route, &[&audit_evidence]);
+
+        assert!(protections.is_empty());
+    }
 
     #[test]
     fn python_syntax_tree_relevance_keeps_tree_backed_patterns_only() {

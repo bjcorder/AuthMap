@@ -520,7 +520,6 @@
       "type": "string",
       "enum": [
         "public_declared",
-        "framework_auth",
         "route_guard",
         "inherited_guard",
         "unknown_dynamic"

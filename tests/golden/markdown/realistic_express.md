@@ -131,7 +131,7 @@
 - Handler: `&lt;inline_handler&gt;` (tests/fixtures/realistic/express/routes/accounts.ts:17:38)
 - Route location: tests/fixtures/realistic/express/routes/accounts.ts:17:1
 - Middleware: `requireAuth` (tests/fixtures/realistic/express/routes/accounts.ts:17:18), `audit` (tests/fixtures/realistic/express/routes/accounts.ts:17:31)
-- Declared protection: audit, requireAuth
+- Declared protection: requireAuth
 - Confidence: medium
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
@@ -156,7 +156,7 @@
 - Handler: `&lt;inline_handler&gt;` (tests/fixtures/realistic/express/routes/accounts.ts:17:38)
 - Route location: tests/fixtures/realistic/express/routes/accounts.ts:17:1
 - Middleware: `requireAuth` (tests/fixtures/realistic/express/app.ts:42:17), `requireAuth` (tests/fixtures/realistic/express/routes/accounts.ts:17:18), `audit` (tests/fixtures/realistic/express/routes/accounts.ts:17:31)
-- Declared protection: audit, requireAuth, requireAuth
+- Declared protection: requireAuth, requireAuth
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.

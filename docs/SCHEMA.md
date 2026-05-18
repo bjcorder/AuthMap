@@ -40,8 +40,8 @@ the mutation object.
 Routes also include `source_evidence`, which records why an adapter believes a
 route exists, such as a decorator, router call, or framework handler export.
 When available, routes include normalized `params` entries for path parameters
-and `declared_protection` entries for declared public markers, framework auth
-requirements, route guards, inherited guard context, or dynamic protection
+and `declared_protection` entries for declared public markers, route guards,
+inherited guard context, or dynamic protection
 signals. These entries are evidence metadata for review; coverage classification
 still comes from `coverage[]`.
 

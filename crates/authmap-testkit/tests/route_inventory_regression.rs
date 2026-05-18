@@ -78,7 +78,7 @@ fn repeated_scans_are_stable() {
 }
 
 #[test]
-fn route_metadata_is_emitted_for_fastapi_and_express() {
+fn route_metadata_is_emitted_for_supported_frameworks() {
     let fastapi = scan_fixture("fastapi");
     let fastapi_route = fastapi
         .routes
@@ -115,6 +115,39 @@ fn route_metadata_is_emitted_for_fastapi_and_express() {
             .declared_protection
             .iter()
             .any(|protection| protection.mechanism == "express_middleware")
+    );
+
+    let django = scan_fixture("django");
+    let django_route = django
+        .routes
+        .iter()
+        .find(|route| route.path == "/exported-api/exported/{pk}" && route.method == "GET")
+        .expect("Django REST Framework route should exist");
+    assert!(django_route.params.iter().any(|param| param.name == "pk"));
+    assert!(
+        django_route
+            .declared_protection
+            .iter()
+            .any(|protection| protection.mechanism == "drf_permission_classes")
+    );
+
+    let nextjs = scan_fixture("nextjs");
+    let nextjs_route = nextjs
+        .routes
+        .iter()
+        .find(|route| route.path == "/blog/[...slug]" && route.method == "GET")
+        .expect("Next.js catch-all route should exist");
+    assert!(
+        nextjs_route
+            .params
+            .iter()
+            .any(|param| { param.name == "slug" && param.syntax == "[...slug]" })
+    );
+    assert!(
+        nextjs_route
+            .declared_protection
+            .iter()
+            .any(|protection| protection.mechanism == "nextjs_auth_wrapper")
     );
 }
 

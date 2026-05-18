@@ -433,7 +433,6 @@ pub struct RouteProtection {
 #[serde(rename_all = "snake_case")]
 pub enum RouteProtectionKind {
     PublicDeclared,
-    FrameworkAuth,
     RouteGuard,
     InheritedGuard,
     UnknownDynamic,
