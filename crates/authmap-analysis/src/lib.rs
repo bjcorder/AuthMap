@@ -394,9 +394,11 @@ fn effective_policy_case(
         .copied()
         .filter(|item| item.confidence != Confidence::Low)
         .filter(|item| item.evidence_type != EvidenceType::UnknownDynamicCheck)
-        .filter(|item| item.evidence_type != EvidenceType::AuditLog)
         .collect::<Vec<_>>();
-    if strong.is_empty() {
+    if strong
+        .iter()
+        .all(|item| item.evidence_type == EvidenceType::AuditLog)
+    {
         return None;
     }
     let evidence_ids = sorted_ids(strong.iter().map(|item| item.id.as_str()));
@@ -697,14 +699,22 @@ fn unreachable_policy_cases(
     evidence
         .iter()
         .copied()
-        .filter(|item| {
-            item.span
+        .filter_map(|item| {
+            let unreachable_span = item
+                .span
                 .as_ref()
                 .is_some_and(|span| span_has_unreachable_false_guard(span, parsed_files))
+                .then(|| item.span.clone())
+                .flatten()
+                .or_else(|| {
+                    route.span.as_ref().and_then(|span| {
+                        span_has_unreachable_false_guard(span, parsed_files).then(|| span.clone())
+                    })
+                });
+            unreachable_span.map(|span| (item, span))
         })
-        .map(|item| {
+        .map(|(item, span)| {
             let evidence_ids = vec![item.id.clone()];
-            let span = item.span.clone().or_else(|| route.span.clone());
             let message =
                 "Policy evidence appears inside a statically unreachable branch.".to_string();
             (
@@ -720,11 +730,11 @@ fn unreachable_policy_cases(
                         outcome: PolicyOutcome::ReviewRequired,
                         reachable: false,
                         evidence_ids,
-                        span: span.clone(),
+                        span: Some(span.clone()),
                         confidence: Confidence::High,
                         notes: Vec::new(),
                     }],
-                    span: span.clone(),
+                    span: Some(span.clone()),
                     confidence: Confidence::High,
                     reviewer_questions: vec![
                         "Is this policy branch reachable in the deployed code?".to_string(),
@@ -734,7 +744,7 @@ fn unreachable_policy_cases(
                 },
                 policy_diagnostic(
                     authmap_core::diagnostic_codes::POLICY_UNREACHABLE_BRANCH,
-                    span,
+                    Some(span),
                     message,
                 ),
             )
@@ -3891,7 +3901,7 @@ fn builtin_rules() -> Vec<EvidenceRuleSpec> {
             EvidenceType::ExplicitPublic,
             "public_marker",
             Confidence::High,
-            &["allow_anonymous", "public_route", "no_auth"],
+            &["allow_anonymous", "public_route", "publicRoute", "no_auth"],
             &["public"],
         ),
         rule(
@@ -3966,6 +3976,19 @@ fn builtin_rules() -> Vec<EvidenceRuleSpec> {
                 "auth",
             ],
             &["auth", "session", "authenticated", "logged"],
+        ),
+        rule(
+            EvidenceType::AuditLog,
+            "audit_log",
+            Confidence::High,
+            &[
+                "audit",
+                "auditLog",
+                "audit_log",
+                "securityLog",
+                "security_log",
+            ],
+            &["audit", "securitylog", "security_log"],
         ),
         rule(
             EvidenceType::UnknownDynamicCheck,
@@ -5756,13 +5779,18 @@ impl<'a> CoverageIndex<'a> {
 
 fn classify_route(route: &authmap_core::Route, facts: &CoverageRouteFacts<'_>) -> Coverage {
     let evidence = facts.evidence.as_slice();
-    let strong = evidence
+    let coverage_evidence = evidence
+        .iter()
+        .copied()
+        .filter(|item| item.evidence_type != EvidenceType::AuditLog)
+        .collect::<Vec<_>>();
+    let strong = coverage_evidence
         .iter()
         .copied()
         .filter(|item| item.confidence != Confidence::Low)
         .filter(|item| item.evidence_type != EvidenceType::UnknownDynamicCheck)
         .collect::<Vec<_>>();
-    let weak = evidence
+    let weak = coverage_evidence
         .iter()
         .copied()
         .filter(|item| {
@@ -5778,11 +5806,11 @@ fn classify_route(route: &authmap_core::Route, facts: &CoverageRouteFacts<'_>) -
     let sensitive = !sensitivity.is_empty();
     let has_linked_mutations = !facts.linked_mutations.is_empty();
 
-    let class = coverage_class(&strong, evidence);
+    let class = coverage_class(&strong, &coverage_evidence);
     let risk = coverage_risk(
         route,
         class,
-        evidence,
+        &coverage_evidence,
         &strong,
         &weak,
         sensitive,
@@ -6724,6 +6752,56 @@ class ProductCreate(BaseMutation):
     }
 
     #[test]
+    fn policy_cases_include_audit_support_without_treating_audit_only_as_protection() {
+        let routes = vec![
+            route("route_auth_audit", "GET", "/profile"),
+            route("route_audit_only", "GET", "/audit"),
+        ];
+        let evidence = vec![
+            evidence(
+                "evidence_authn",
+                "route_auth_audit",
+                EvidenceType::Authn,
+                Confidence::High,
+            ),
+            evidence(
+                "evidence_audit",
+                "route_auth_audit",
+                EvidenceType::AuditLog,
+                Confidence::High,
+            ),
+            evidence(
+                "evidence_audit_only",
+                "route_audit_only",
+                EvidenceType::AuditLog,
+                Confidence::High,
+            ),
+        ];
+
+        let (cases, diagnostics) = super::derive_policy_cases(&routes, &evidence, &[], &[], &[]);
+
+        let auth_audit_case = cases
+            .iter()
+            .find(|case| {
+                case.route_id == "route_auth_audit"
+                    && case.kind == PolicyCaseKind::EffectiveProtection
+            })
+            .expect("auth plus audit evidence should produce an effective policy case");
+        assert_eq!(
+            auth_audit_case.evidence_ids,
+            vec!["evidence_audit", "evidence_authn"]
+        );
+        assert!(auth_audit_case.summary.contains("audit_log"));
+        assert!(auth_audit_case.summary.contains("authn"));
+        assert_eq!(auth_audit_case.input_names, vec!["identity"]);
+
+        assert!(!cases.iter().any(|case| {
+            case.route_id == "route_audit_only" && case.kind == PolicyCaseKind::EffectiveProtection
+        }));
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
     fn classifier_consumes_existing_linked_mutations_and_support_metadata() {
         let routes = vec![
             route("route_mutation", "GET", "/status"),
@@ -7134,7 +7212,7 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 26);
+        assert_eq!(document.routes.len(), 29);
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::Express
                 && route.method == "POST"
@@ -7168,6 +7246,70 @@ sensitivity:
                     .collect::<Vec<_>>()
                     == vec!["requireAuth"]
         }));
+        assert!(document.policy_cases.iter().any(|case| {
+            case.route_id
+                == document
+                    .routes
+                    .iter()
+                    .find(|route| route.method == "POST" && route.path == "/accounts")
+                    .expect("/accounts route should exist")
+                    .id
+                && case.kind == PolicyCaseKind::EffectiveProtection
+                && case.summary.contains("audit_log")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Express
+                && route.method == "GET"
+                && route.path == "/public/status"
+                && route
+                    .middleware
+                    .iter()
+                    .map(|middleware| middleware.name.as_str())
+                    .collect::<Vec<_>>()
+                    == vec!["publicRoute"]
+        }));
+        assert!(document.policy_cases.iter().any(|case| {
+            case.kind == PolicyCaseKind::EffectiveProtection
+                && case.summary.contains("explicit_public")
+                && case.route_id
+                    == document
+                        .routes
+                        .iter()
+                        .find(|route| route.method == "GET" && route.path == "/public/status")
+                        .expect("/public/status route should exist")
+                        .id
+        }));
+        assert!(document.policy_cases.iter().any(|case| {
+            case.kind == PolicyCaseKind::Conflict
+                && case.route_id
+                    == document
+                        .routes
+                        .iter()
+                        .find(|route| route.method == "GET" && route.path == "/conflicting")
+                        .expect("/conflicting route should exist")
+                        .id
+        }));
+        assert!(document.policy_cases.iter().any(|case| {
+            case.kind == PolicyCaseKind::Unreachable
+                && case.route_id
+                    == document
+                        .routes
+                        .iter()
+                        .find(|route| route.method == "GET" && route.path == "/unreachable/admin")
+                        .expect("/unreachable/admin route should exist")
+                        .id
+        }));
+        let audit_only_route = document
+            .routes
+            .iter()
+            .find(|route| route.method == "GET" && route.path == "/child")
+            .expect("/child route should exist");
+        let audit_only_coverage = document
+            .coverage
+            .iter()
+            .find(|coverage| coverage.route_id == audit_only_route.id)
+            .expect("/child coverage should exist");
+        assert_eq!(audit_only_coverage.class, CoverageClass::Unauthenticated);
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::Express
                 && route.method == "GET"
@@ -8607,7 +8749,7 @@ function owningResource(req, res, next) { next(); }
 function workspaceGate(req, res, next) { next(); }
 function staffGate(req, res, next) { next(); }
 function anonymousAccess(req, res, next) { next(); }
-function securityLog(req, res, next) { next(); }
+function recordAuditTrail(req, res, next) { next(); }
 function authorizeRecord(req, res, next) { next(); }
 "#,
         );
