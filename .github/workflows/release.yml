@@ -3,13 +3,7 @@ name: release
 on:
   push:
     tags:
-      - "v*"
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: Release tag to publish, such as v1.0.0.
-        required: true
-        type: string
+      - 'v*'
 
 permissions:
   contents: read
@@ -17,8 +11,6 @@ permissions:
 jobs:
   prepare:
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    permissions:
-      contents: write
     outputs:
       tag: ${{ steps.release-context.outputs.tag }}
       version: ${{ steps.release-context.outputs.version }}
@@ -30,17 +22,11 @@ jobs:
         name: Validate release tag and workspace version
         shell: bash
         env:
-          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
 
-          tag="${GITHUB_REF_NAME}"
-          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            tag="${INPUT_TAG}"
-            git fetch --tags --force origin "refs/tags/${tag}:refs/tags/${tag}"
-            git checkout --detach "${tag}"
-          fi
-
+          tag="${REF_NAME}"
           case "${tag}" in
             v[0-9]*.[0-9]*.[0-9]*) ;;
             *) echo "Release tag must look like vMAJOR.MINOR.PATCH" >&2; exit 1 ;;
@@ -54,47 +40,9 @@ jobs:
 
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
-      - name: Extract release notes
-        shell: bash
-        env:
-          VERSION: ${{ steps.release-context.outputs.version }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY' > release-notes.md
-          from pathlib import Path
-          import os
-          import re
-          import sys
-
-          version = os.environ["VERSION"]
-          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-          pattern = re.compile(rf"^## {re.escape(version)}(?:\\s+-.*)?$", re.MULTILINE)
-          match = pattern.search(changelog)
-          if not match:
-              print(f"CHANGELOG.md does not contain a section for {version}", file=sys.stderr)
-              sys.exit(1)
-          next_match = re.search(r"^## ", changelog[match.end():], re.MULTILINE)
-          end = match.end() + next_match.start() if next_match else len(changelog)
-          notes = changelog[match.end():end].strip()
-          if not notes:
-              print(f"CHANGELOG.md section for {version} is empty", file=sys.stderr)
-              sys.exit(1)
-          print(notes)
-          PY
-      - name: Create or update draft GitHub Release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.release-context.outputs.tag }}
-        run: |
-          set -euo pipefail
-          if gh release view "${TAG}" >/dev/null 2>&1; then
-            gh release edit "${TAG}" --draft=true --title "AuthMap ${TAG}" --notes-file release-notes.md
-          else
-            gh release create "${TAG}" --draft --verify-tag --title "AuthMap ${TAG}" --notes-file release-notes.md
-          fi
 
   build:
+    name: Build ${{ matrix.os }}
     needs: prepare
     strategy:
       fail-fast: false
@@ -104,8 +52,6 @@ jobs:
           - blacksmith-6vcpu-macos-latest
           - blacksmith-4vcpu-windows-2025
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: write
     env:
       CARGO_TERM_COLOR: always
       RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
@@ -171,59 +117,155 @@ jobs:
           "${authmap_bin}" scan tests/fixtures/negative/frontend_only --format sarif --output "${report_dir}/authmap.sarif"
           "${authmap_bin}" baseline create tests/fixtures/negative/frontend_only --output "${report_dir}/authmap.baseline.json"
           "${authmap_bin}" diff --base "${report_dir}/authmap.baseline.json" --head "${report_dir}/authmap.json" --format json --output "${report_dir}/authmap.diff.json"
-      - name: Upload artifact to draft release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ARTIFACT: ${{ steps.package.outputs.artifact }}
-        run: gh release upload "${RELEASE_TAG}" "${ARTIFACT}" --clobber
+      - name: Upload release archive to workflow
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-archive-${{ matrix.os }}
+          path: ${{ steps.package.outputs.artifact }}
+          retention-days: 7
+          if-no-files-found: error
 
-  finalize:
-    needs:
-      - prepare
-      - build
+  source:
+    name: Build source archive
+    needs: prepare
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
     env:
       RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      VERSION: ${{ needs.prepare.outputs.version }}
     steps:
-      - name: Download release artifacts
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          ref: ${{ env.RELEASE_TAG }}
+      - name: Assemble source tarball
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p dist
-          gh release download "${RELEASE_TAG}" --dir dist --pattern 'authmap-*'
-      - name: Generate SHA-256 checksums
+          git archive --format=tar.gz --prefix="authmap-${VERSION}-source/" \
+            -o "dist/authmap-${VERSION}-source.tar.gz" "${RELEASE_TAG}"
+      - name: Upload source archive to workflow
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-archive-source
+          path: dist/authmap-${{ env.VERSION }}-source.tar.gz
+          retention-days: 7
+          if-no-files-found: error
+
+  subjects:
+    name: Compute release subjects
+    needs:
+      - prepare
+      - build
+      - source
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    outputs:
+      hashes: ${{ steps.hash.outputs.hashes }}
+      version: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Download release archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: release-archive-*
+          path: dist
+          merge-multiple: true
+      - name: Generate SHA-256 sidecars and SLSA subjects
+        id: hash
         shell: bash
+        working-directory: dist
         run: |
           set -euo pipefail
-          (cd dist && sha256sum authmap-* > SHA256SUMS)
-      - name: Upload checksums
+          for artifact in authmap-*; do
+            case "${artifact}" in
+              *.tar.gz|*.zip) sha256sum "$artifact" > "$artifact.sha256" ;;
+            esac
+          done
+          hashes="$(for artifact in authmap-*; do case "${artifact}" in *.tar.gz|*.zip) sha256sum "$artifact" ;; esac; done | base64 -w0)"
+          echo "hashes=${hashes}" >> "${GITHUB_OUTPUT}"
+      - name: Upload checksum sidecars to workflow
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-checksums
+          path: dist/*.sha256
+          retention-days: 7
+          if-no-files-found: error
+
+  provenance:
+    name: Generate SLSA provenance
+    needs: subjects
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@5a775b367a56d5bd118a224a811bba288150a563
+    with:
+      base64-subjects: ${{ needs.subjects.outputs.hashes }}
+      upload-assets: true
+      provenance-name: authmap-${{ needs.subjects.outputs.version }}.intoto.jsonl
+
+  release:
+    name: Publish GitHub release
+    needs:
+      - prepare
+      - build
+      - source
+      - subjects
+      - provenance
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+      - name: Download release archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: release-archive-*
+          path: dist
+          merge-multiple: true
+      - name: Download checksum sidecars
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-checksums
+          path: dist
+      - name: Extract release notes from CHANGELOG.md
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${RELEASE_TAG}" dist/SHA256SUMS --clobber
-      - name: Attest release artifacts when supported
-        continue-on-error: true
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
-          if gh attestation sign --help >/dev/null 2>&1; then
-            for artifact in dist/authmap-* dist/SHA256SUMS; do
-              gh attestation sign "${artifact}" --repo "${GITHUB_REPOSITORY}"
-            done
-          else
-            echo "gh attestation sign is not available on this runner"
-          fi
-      - name: Publish release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release edit "${RELEASE_TAG}" --draft=false
+          python3 - <<'PY' > release-notes.md
+          from pathlib import Path
+          import os
+          import re
+          import sys
+
+          version = os.environ["VERSION"]
+          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          pattern = re.compile(rf"^## {re.escape(version)}(?:\\s+-.*)?$", re.MULTILINE)
+          match = pattern.search(changelog)
+          if not match:
+              print(f"CHANGELOG.md does not contain a section for {version}", file=sys.stderr)
+              sys.exit(1)
+          next_match = re.search(r"^## ", changelog[match.end():], re.MULTILINE)
+          end = match.end() + next_match.start() if next_match else len(changelog)
+          notes = changelog[match.end():end].strip()
+          if not notes:
+              print(f"CHANGELOG.md section for {version} is empty", file=sys.stderr)
+              sys.exit(1)
+          print(notes)
+          PY
+      - name: Create or update GitHub release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: AuthMap ${{ needs.prepare.outputs.version }}
+          body_path: release-notes.md
+          files: |
+            dist/authmap-*
+            dist/*.sha256
+          draft: false
+          prerelease: ${{ contains(needs.prepare.outputs.tag, '-') }}
+          fail_on_unmatched_files: true

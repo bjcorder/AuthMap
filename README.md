@@ -139,7 +139,10 @@ authmap scan . --config authmap.yml --format json --output authmap.json
 Release archives contain the `authmap` binary for each supported platform. Cargo
 package artifacts are produced for reviewable package contents; registry
 publishing is not enabled yet, so local development installs use the workspace
-path until a registry policy is approved.
+path until a registry policy is approved. Published archives include matching
+`.sha256` sidecars and SLSA provenance; see
+[docs/VERIFYING_RELEASES.md](docs/VERIFYING_RELEASES.md) before trusting a
+downloaded binary in sensitive environments.
 
 Run from source during development with `cargo run -p authmap-cli --`:
 
@@ -190,6 +193,7 @@ lockfile review, dependency audit, license review, and release sanity
 expectations are documented in [docs/SUPPLY_CHAIN.md](docs/SUPPLY_CHAIN.md).
 Versioning, changelog, compatibility, and tagged release expectations are
 documented in [docs/RELEASES.md](docs/RELEASES.md).
+The maintainer release runbook is [RELEASING.md](RELEASING.md).
 Useful local commands:
 
 ```bash

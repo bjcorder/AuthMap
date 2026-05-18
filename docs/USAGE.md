@@ -11,8 +11,11 @@ report-sensitivity, CI artifact, SARIF, baseline, and sharing guidance.
 
 ## Installation And Setup
 
-From a tagged GitHub Release, download the archive for your platform, unpack it,
-and place the `authmap` binary on your `PATH`. Verify the install with:
+From a tagged GitHub Release, download the archive for your platform, its
+matching `.sha256` sidecar, and the `authmap-VERSION.intoto.jsonl` provenance
+file. Verify the artifact with [VERIFYING_RELEASES.md](VERIFYING_RELEASES.md),
+then unpack it and place the `authmap` binary on your `PATH`. Verify the
+install with:
 
 ```sh
 authmap --help

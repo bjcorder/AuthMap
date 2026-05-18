@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## Unreleased
 
+### Changed
+
+- Ported the release process to cargo-release-managed versioning, per-artifact
+  checksums, source archives, SLSA provenance, and release verification docs.
+
 ## 1.0.0 - 2026-05-14
 
 ### Added

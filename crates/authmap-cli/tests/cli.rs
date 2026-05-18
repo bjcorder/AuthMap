@@ -325,6 +325,41 @@ fn cli_package_metadata_is_publish_ready() {
 }
 
 #[test]
+fn cargo_release_config_matches_pr_mediated_release_policy() {
+    let root = repo_root();
+    let release_config =
+        fs::read_to_string(root.join("release.toml")).expect("release.toml should exist");
+    let workspace_manifest =
+        fs::read_to_string(root.join("Cargo.toml")).expect("workspace manifest should exist");
+    let cli_manifest = fs::read_to_string(root.join("crates/authmap-cli/Cargo.toml"))
+        .expect("CLI manifest should exist");
+
+    for expected in [
+        "allow-branch = [\"main\"]",
+        "publish = false",
+        "push = false",
+        "sign-tag = false",
+        "sign-commit = false",
+        "tag-name = \"v{{version}}\"",
+        "tag-message = \"Release {{tag_name}}\"",
+        "pre-release-commit-message = \"chore: release {{version}}\"",
+        "pre-release-hook = [\"cargo\", \"test\", \"--workspace\", \"--locked\"]",
+    ] {
+        assert!(
+            release_config.contains(expected),
+            "release.toml missing {expected}"
+        );
+    }
+
+    assert!(workspace_manifest.contains("[workspace.metadata.release]"));
+    assert!(workspace_manifest.contains("shared-version = true"));
+    assert!(cli_manifest.contains("[package.metadata.release]"));
+    assert!(cli_manifest.contains("pre-release-replacements"));
+    assert!(cli_manifest.contains("../../CHANGELOG.md"));
+    assert!(cli_manifest.contains("## Unreleased\\n\\n## {{version}} - {{date}}"));
+}
+
+#[test]
 fn scan_help_works() {
     let output = authmap(&["scan", "--help"]);
 
@@ -406,13 +441,16 @@ fn release_workflow_runs_locked_tests_and_smokes_unpacked_artifacts() {
         .expect("release workflow should exist");
 
     assert!(workflow.contains("tags:"));
-    assert!(workflow.contains("\"v*\""));
+    assert!(workflow.contains("'v*'"));
+    assert!(!workflow.contains("workflow_dispatch:"));
     assert!(workflow.contains("Tag ${tag} does not match workspace package version ${version}"));
-    assert!(workflow.contains("CHANGELOG.md does not contain a section for {version}"));
+    assert!(workflow.contains("CHANGELOG.md"));
     assert!(workflow.contains("cargo test --workspace --all-targets --locked"));
     assert!(
         workflow.contains("cargo build --package authmap-cli --bin authmap --release --locked")
     );
+    assert!(workflow.contains("git archive --format=tar.gz"));
+    assert!(workflow.contains("authmap-${VERSION}-source.tar.gz"));
     assert!(workflow.contains("tar -C package -czf \"dist/${base}.tar.gz\""));
     assert!(workflow.contains("Compress-Archive -Path '${base}'"));
     assert!(workflow.contains("tar -C \"${smoke_dir}\" -xzf \"${ARTIFACT}\""));
@@ -426,8 +464,61 @@ fn release_workflow_runs_locked_tests_and_smokes_unpacked_artifacts() {
     assert!(workflow.contains(
         "diff --base \"${report_dir}/authmap.baseline.json\" --head \"${report_dir}/authmap.json\""
     ));
-    assert!(workflow.contains("sha256sum authmap-* > SHA256SUMS"));
-    assert!(workflow.contains("gh release edit \"${RELEASE_TAG}\" --draft=false"));
+    assert!(workflow.contains("working-directory: dist"));
+    assert!(workflow.contains("for artifact in authmap-*; do"));
+    assert!(workflow.contains("sha256sum \"$artifact\" > \"$artifact.sha256\""));
+    assert!(workflow.contains(
+        "slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@"
+    ));
+    assert!(workflow.contains("base64-subjects: ${{ needs.subjects.outputs.hashes }}"));
+    assert!(
+        workflow.contains(
+            "provenance-name: authmap-${{ needs.subjects.outputs.version }}.intoto.jsonl"
+        )
+    );
+    assert!(workflow.contains("softprops/action-gh-release@"));
+    assert!(workflow.contains("dist/authmap-*"));
+    assert!(workflow.contains("dist/*.sha256"));
+    assert!(!workflow.contains("gh attestation sign"));
+    assert!(!workflow.contains("SHA256SUMS"));
+}
+
+#[test]
+fn release_docs_cover_runbook_and_slsa_verification() {
+    let root = repo_root();
+    let releasing =
+        fs::read_to_string(root.join("RELEASING.md")).expect("release runbook should exist");
+    let verifying = fs::read_to_string(root.join("docs/VERIFYING_RELEASES.md"))
+        .expect("release verification guide should exist");
+
+    for expected in [
+        "cargo release",
+        "release/v${VERSION}",
+        "NEVER squash",
+        "git merge-base --is-ancestor",
+        "git push origin \"v${VERSION}\"",
+        "slsa-verifier verify-artifact",
+        "Ozark-Security-Labs/AuthMap",
+    ] {
+        assert!(
+            releasing.contains(expected),
+            "RELEASING.md missing {expected}"
+        );
+    }
+
+    for expected in [
+        "SLSA",
+        "slsa-verifier verify-artifact",
+        "github.com/Ozark-Security-Labs/AuthMap",
+        "authmap-${TAG#v}.intoto.jsonl",
+        ".sha256",
+        "authmap-${TAG#v}-",
+    ] {
+        assert!(
+            verifying.contains(expected),
+            "VERIFYING_RELEASES.md missing {expected}"
+        );
+    }
 }
 
 #[test]

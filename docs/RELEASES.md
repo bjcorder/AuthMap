@@ -68,15 +68,28 @@ Before creating a release tag, maintainers should verify:
 
 ## Automated release workflow
 
-The release workflow runs on `v*` tags and can also be started manually by maintainers. It checks that the tag matches the workspace version, runs locked tests, builds platform binaries, generates SHA-256 checksums, and creates or updates a GitHub Release from the changelog section for that version.
+The release workflow runs on pushed `v*` tags. Maintainers use
+`cargo-release` locally to create the version-bump commit and tag, move the
+release commit through a protected-branch PR, then push the tag after verifying
+the tag commit is reachable from `main`. The step-by-step runbook is in
+[../RELEASING.md](../RELEASING.md).
+
+The workflow checks that the tag matches the workspace version, runs locked
+tests, builds platform binaries, creates a source archive, generates per-artifact
+SHA-256 sidecars, creates SLSA provenance, and publishes a GitHub Release from
+the changelog section for that version.
 
 The workflow publishes GitHub Release artifacts only. It does not publish crates to crates.io or any package registry. Cargo package artifacts are used to review package contents while AuthMap's internal crates remain unpublished. Registry publishing requires a separate reviewed policy and explicit maintainer approval.
 
 Release artifacts should include:
 
 - platform-specific `authmap` binaries packaged as archives;
-- `SHA256SUMS`; and
-- provenance metadata when GitHub artifact attestation support is available in the runner environment.
+- a `authmap-VERSION-source.tar.gz` source archive;
+- one `.sha256` sidecar per archive; and
+- `authmap-VERSION.intoto.jsonl` SLSA provenance.
+
+Users can verify release artifacts with
+[VERIFYING_RELEASES.md](VERIFYING_RELEASES.md).
 
 `authmap --version` prints one deterministic line containing the CLI package
 version and AuthMap schema version.

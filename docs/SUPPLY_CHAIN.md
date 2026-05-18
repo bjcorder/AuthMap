@@ -61,4 +61,10 @@ cargo install --path crates/authmap-cli --locked --root /tmp/authmap-install --d
 /tmp/authmap-install/bin/authmap --version
 ```
 
-Tagged release automation should generate platform archives, `SHA256SUMS`, and provenance metadata when GitHub artifact attestation support is available. Cargo package artifacts are currently used for package-content review; registry publishing is not enabled while AuthMap's internal crates remain unpublished. Release artifacts should not include generated reports, local baselines, credentials, or target application source code beyond what is intentionally packaged by Cargo.
+Tagged release automation should generate platform archives, a source archive,
+per-artifact `.sha256` sidecars, and SLSA provenance. Cargo package artifacts
+are currently used for package-content review; registry publishing is not
+enabled while AuthMap's internal crates remain unpublished. Release artifacts
+should not include generated reports, local baselines, credentials, or target
+application source code beyond what is intentionally packaged by Cargo. Users
+can verify published artifacts with [VERIFYING_RELEASES.md](VERIFYING_RELEASES.md).
