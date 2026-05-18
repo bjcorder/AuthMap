@@ -8,6 +8,11 @@ export const appRouter = {
   updateProfile: authedProcedure.mutation(async ({ ctx }) => {
     return ctx.user.id;
   }),
+  updateSettings: authedProcedure
+    .input(settingsSchema)
+    .mutation(async ({ ctx }) => {
+      return ctx.user.id;
+    }),
   adminStats: authedAdminProcedure.query(async () => {
     return [];
   }),

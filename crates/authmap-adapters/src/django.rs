@@ -317,13 +317,28 @@ impl DjangoIndex {
         active: &mut BTreeSet<(String, String)>,
         depth: usize,
     ) -> ViewSetAutoActions {
-        if let Some(actions) = builtin_drf_base_actions(base) {
-            return actions;
-        }
         if let Some(key) = self.resolve_class_key(file, base) {
             return self.resolve_class_actions(&key, active, depth);
         }
+        if let Some(actions) = builtin_drf_base_actions(base) {
+            return actions;
+        }
         ViewSetAutoActions::default()
+    }
+
+    fn base_resolves_viewset(
+        &self,
+        file: &str,
+        base: &str,
+        active: &mut BTreeSet<(String, String)>,
+        depth: usize,
+    ) -> bool {
+        if let Some(key) = self.resolve_class_key(file, base) {
+            return self.classes.get(&key).is_some_and(|base_class| {
+                self.class_resolves_viewset_base(base_class, active, depth + 1)
+            });
+        }
+        builtin_drf_base_actions(base).is_some()
     }
 
     fn resolve_class_key(&self, file: &str, symbol: &str) -> Option<(String, String)> {
@@ -360,15 +375,10 @@ impl DjangoIndex {
         {
             return false;
         }
-        let resolved = class.bases.iter().any(|base| {
-            builtin_drf_base_actions(base).is_some()
-                || self
-                    .resolve_class_key(&class.file, base)
-                    .and_then(|key| self.classes.get(&key))
-                    .is_some_and(|base_class| {
-                        self.class_resolves_viewset_base(base_class, active, depth + 1)
-                    })
-        });
+        let resolved = class
+            .bases
+            .iter()
+            .any(|base| self.base_resolves_viewset(&class.file, base, active, depth));
         active.remove(&(class.file.clone(), class.name.clone()));
         resolved
     }

@@ -9,6 +9,7 @@ const childRouter = express.Router();
 const dynamicPrefix = "/dynamic";
 const dynamicPath = "/generated";
 const routeFactories = {};
+const indexedRouteFactories = {};
 
 function requireAuth(req, res, next) {
   next();
@@ -73,6 +74,12 @@ routeFactories.mapped = (router, prefix) => {
   router.get(`/${prefix}/factory`, requireAuth, listAccounts);
 };
 routeFactories.mapped(localRouter, "mapped");
+
+indexedRouteFactories.indexed = (router, prefix) => {
+  router.get(`/${prefix}/indexed`, requireAuth, listAccounts);
+};
+const selectedFactory = "indexed";
+indexedRouteFactories[selectedFactory](localRouter, "mapped");
 
 app.use("/api", localRouter);
 app.use("/secure", requireAuth, usersRouter);

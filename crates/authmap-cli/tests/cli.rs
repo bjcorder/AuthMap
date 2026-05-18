@@ -444,6 +444,10 @@ fn release_workflow_runs_locked_tests_and_smokes_unpacked_artifacts() {
     assert!(workflow.contains("'v*'"));
     assert!(!workflow.contains("workflow_dispatch:"));
     assert!(workflow.contains("Tag ${tag} does not match workspace package version ${version}"));
+    assert!(
+        workflow
+            .contains("git merge-base --is-ancestor \"${tag_commit}\" refs/remotes/origin/main")
+    );
     assert!(workflow.contains("CHANGELOG.md"));
     assert!(workflow.contains("cargo test --workspace --all-targets --locked"));
     assert!(
@@ -467,6 +471,7 @@ fn release_workflow_runs_locked_tests_and_smokes_unpacked_artifacts() {
     assert!(workflow.contains("working-directory: dist"));
     assert!(workflow.contains("for artifact in authmap-*; do"));
     assert!(workflow.contains("sha256sum \"$artifact\" > \"$artifact.sha256\""));
+    assert!(workflow.contains("sha256sum -c ./*.sha256"));
     assert!(workflow.contains(
         "slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@"
     ));
@@ -1118,6 +1123,25 @@ def create_admin():
     assert!(checkout.contains("@app.post(\"/admin\")"));
     assert!(!temp.path().join("base").exists());
     assert!(!temp.path().join("head").exists());
+}
+
+#[test]
+fn diff_git_range_rejects_unsafe_refs() {
+    for args in [
+        vec!["diff", "--", "-main...HEAD"],
+        vec!["diff", "HEAD ~1...HEAD"],
+        vec!["diff", "HEAD...\nHEAD"],
+        vec!["diff", "...HEAD"],
+        vec!["diff", "HEAD..."],
+    ] {
+        let output = authmap(&args);
+        assert_exit(&output, 2);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("git range"),
+            "stderr should mention git range validation; got:\n{stderr}"
+        );
+    }
 }
 
 #[test]

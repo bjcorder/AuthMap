@@ -94,17 +94,11 @@ impl FrameworkAdapter for TrpcAdapter {
                 continue;
             }
             let router_name = trpc_router_name(&parsed.source.path);
-            for (line_index, line) in parsed.text.lines().enumerate() {
-                let Some((name, procedure)) = trpc_procedure_from_line(line) else {
-                    continue;
-                };
-                let Some(kind) = trpc_operation_kind(line) else {
-                    continue;
-                };
+            for operation in trpc_operations(&parsed.text) {
                 let span = Span {
                     file: parsed.source.path.clone(),
-                    line: line_index as u32 + 1,
-                    column: line.find(&name).unwrap_or_default() as u32,
+                    line: operation.line as u32,
+                    column: operation.column as u32,
                     byte_range: None,
                 };
                 let mut extensions = authmap_core::ExtensionMap::new();
@@ -112,28 +106,33 @@ impl FrameworkAdapter for TrpcAdapter {
                     "authmap.trpc".to_string(),
                     serde_json::json!({
                         "router": router_name,
-                        "procedure": name,
-                        "procedure_root": procedure,
-                        "operation_kind": kind,
+                        "procedure": operation.name,
+                        "procedure_root": operation.procedure,
+                        "operation_kind": operation.kind,
                     }),
                 );
-                let path = format!("/trpc/{router_name}/{name}");
+                let path = format!("/trpc/{router_name}/{}", operation.name);
                 routes.push(Route {
                     id: String::new(),
                     framework: Framework::Trpc,
-                    method: if kind == "mutation" { "POST" } else { "GET" }.to_string(),
+                    method: if operation.kind == "mutation" {
+                        "POST"
+                    } else {
+                        "GET"
+                    }
+                    .to_string(),
                     path,
-                    name: Some(name.clone()),
+                    name: Some(operation.name.clone()),
                     tags: Vec::new(),
                     middleware: Vec::new(),
                     handler: Some(SymbolRef {
-                        name: format!("{router_name}.{name}"),
+                        name: format!("{router_name}.{}", operation.name),
                         span: Some(span.clone()),
                     }),
                     span: Some(span.clone()),
                     source_evidence: vec![authmap_source_evidence(
                         "trpc_procedure",
-                        &procedure,
+                        &operation.procedure,
                         span.clone(),
                         Confidence::Medium,
                     )],
@@ -231,6 +230,47 @@ fn trpc_procedure_from_line(line: &str) -> Option<(String, String)> {
         }
     }
     None
+}
+
+#[derive(Clone, Debug)]
+struct TrpcOperation {
+    name: String,
+    procedure: String,
+    kind: &'static str,
+    line: usize,
+    column: usize,
+}
+
+fn trpc_operations(text: &str) -> Vec<TrpcOperation> {
+    let lines = text.lines().collect::<Vec<_>>();
+    let mut operations = Vec::new();
+    for (index, line) in lines.iter().enumerate() {
+        let Some((name, procedure)) = trpc_procedure_from_line(line) else {
+            continue;
+        };
+        let mut statement = line.trim().to_string();
+        for next in lines.iter().skip(index + 1).take(16) {
+            if trpc_procedure_from_line(next).is_some() {
+                break;
+            }
+            statement.push(' ');
+            statement.push_str(next.trim());
+            if trpc_operation_kind(&statement).is_some() {
+                break;
+            }
+        }
+        let Some(kind) = trpc_operation_kind(&statement) else {
+            continue;
+        };
+        operations.push(TrpcOperation {
+            column: line.find(&name).unwrap_or_default(),
+            line: index + 1,
+            name,
+            procedure,
+            kind,
+        });
+    }
+    operations
 }
 
 fn trpc_operation_kind(line: &str) -> Option<&'static str> {
@@ -3047,7 +3087,10 @@ impl<'a> ExpressCollector<'a> {
             .factories
             .iter()
             .find(|factory| {
-                factory.file == self.parsed.source.path && factory.name == function_text
+                factory.file == self.parsed.source.path
+                    && express_factory_call_names(self.parsed, function_text)
+                        .iter()
+                        .any(|name| name == &factory.name)
             })
             .cloned()
         else {
@@ -3563,6 +3606,57 @@ fn express_factory_definition<'tree>(
         }
         _ => None,
     }
+}
+
+fn express_factory_call_names(parsed: &ParsedFile, function_text: &str) -> Vec<String> {
+    let mut names = vec![function_text.to_string()];
+    let Some((object, rest)) = function_text.split_once('[') else {
+        return names;
+    };
+    let Some(key_expr) = rest.strip_suffix(']') else {
+        return names;
+    };
+    if let Some(key) = resolve_js_static_key(parsed, key_expr.trim()) {
+        names.push(key.clone());
+        names.push(format!("{object}.{key}"));
+    }
+    names
+}
+
+fn resolve_js_static_key(parsed: &ParsedFile, expr: &str) -> Option<String> {
+    decode_js_string(expr)
+        .or_else(|| decode_js_template(expr))
+        .or_else(|| js_static_string_binding(parsed, expr))
+}
+
+fn js_static_string_binding(parsed: &ParsedFile, name: &str) -> Option<String> {
+    if name.is_empty()
+        || !name
+            .chars()
+            .all(|ch| ch == '_' || ch == '$' || ch.is_ascii_alphanumeric())
+    {
+        return None;
+    }
+    for line in parsed.text.lines() {
+        let trimmed = line.trim().trim_end_matches(';');
+        let Some(rest) = trimmed
+            .strip_prefix("const ")
+            .or_else(|| trimmed.strip_prefix("let "))
+            .or_else(|| trimmed.strip_prefix("var "))
+        else {
+            continue;
+        };
+        let Some((left, right)) = rest.split_once('=') else {
+            continue;
+        };
+        if left.trim() == name
+            && let Some(value) =
+                decode_js_string(right.trim()).or_else(|| decode_js_template(right.trim()))
+        {
+            return Some(value);
+        }
+    }
+    None
 }
 
 fn express_factory_name_for_function(parsed: &ParsedFile, function: Node<'_>) -> Option<String> {
@@ -4312,7 +4406,7 @@ app.include_router(router, dependencies=build_runtime_dependencies())
         ]);
         let output = ExpressAdapter.discover_routes(&parsed, &AdapterContext::default());
 
-        assert_eq!(output.routes.len(), 25);
+        assert_eq!(output.routes.len(), 26);
         assert!(
             output
                 .routes
@@ -4390,7 +4484,7 @@ app.include_router(router, dependencies=build_runtime_dependencies())
                 .as_ref()
                 .and_then(|handler| handler.span.as_ref())
                 .map(|span| span.line),
-            Some(43)
+            Some(44)
         );
 
         let admin_jobs = route(&output, "POST", "/admin/jobs");
@@ -4434,6 +4528,16 @@ app.include_router(router, dependencies=build_runtime_dependencies())
             Some("listAccounts")
         );
         assert_eq!(middleware_names(mapped_factory), vec!["requireAuth"]);
+
+        let indexed_factory = route(&output, "GET", "/api/mapped/indexed");
+        assert_eq!(
+            indexed_factory
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("listAccounts")
+        );
+        assert_eq!(middleware_names(indexed_factory), vec!["requireAuth"]);
 
         let dynamic_mount = route(&output, "GET", "/child");
         assert_eq!(dynamic_mount.confidence, Confidence::Medium);
@@ -4739,6 +4843,47 @@ app.include_router(router, dependencies=build_runtime_dependencies())
     }
 
     #[test]
+    fn django_local_model_viewset_shadow_does_not_emit_drf_crud_routes() {
+        let parsed = parse_sources(&[
+            (
+                "tests/fixtures/generated_django_shadow/urls.py".to_string(),
+                Language::Python,
+                r#"
+from rest_framework.routers import DefaultRouter
+from .views import ShadowedViewSet
+
+router = DefaultRouter()
+router.register("shadowed", ShadowedViewSet, basename="shadowed")
+urlpatterns = router.urls
+"#
+                .to_string(),
+            ),
+            (
+                "tests/fixtures/generated_django_shadow/views.py".to_string(),
+                Language::Python,
+                r#"
+class ModelViewSet:
+    pass
+
+
+class ShadowedViewSet(ModelViewSet):
+    pass
+"#
+                .to_string(),
+            ),
+        ]);
+        let output = DjangoAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert!(output.routes.is_empty());
+        assert!(
+            output
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "drf_unresolved_viewset_base")
+        );
+    }
+
+    #[test]
     fn discovers_nextjs_app_router_handlers_segments_and_wrappers() {
         let parsed = parse_fixtures(&[
             "nextjs/app/route.ts",
@@ -4948,13 +5093,17 @@ app.include_router(router, dependencies=build_runtime_dependencies())
         let parsed = parse_fixtures(&["trpc/router.ts"]);
         let output = TrpcAdapter.discover_routes(&parsed, &AdapterContext::default());
 
-        assert_eq!(output.routes.len(), 3);
+        assert_eq!(output.routes.len(), 4);
         assert_eq!(
             route(&output, "GET", "/trpc/router/publicInfo").framework,
             Framework::Trpc
         );
         assert_eq!(
             route(&output, "POST", "/trpc/router/updateProfile").framework,
+            Framework::Trpc
+        );
+        assert_eq!(
+            route(&output, "POST", "/trpc/router/updateSettings").framework,
             Framework::Trpc
         );
         assert_eq!(

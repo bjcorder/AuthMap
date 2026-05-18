@@ -302,7 +302,7 @@ fn source_needs_syntax_tree(
 }
 
 fn python_needs_syntax_tree(text: &str) -> bool {
-    if text.len() <= 1024 && contains_any(text, &["def ", "class ", "import ", "from "]) {
+    if contains_any(text, &["def ", "class ", "import ", "from "]) {
         return true;
     }
     if python_text_may_contain_mutation(text) {
@@ -442,6 +442,11 @@ fn js_has_express_route_indicators(text: &str) -> bool {
             "require(\"express\")",
             "require('express')",
             "express.router(",
+            "setupapiroute(",
+            "setuppageroute(",
+            "setupadminpageroute(",
+            "app.use(",
+            "router.use(",
         ],
     )
 }
@@ -5382,7 +5387,7 @@ mod tests {
             "def save_item(item):\n    item.save()\n",
             &config
         ));
-        assert!(!source_needs_syntax_tree(
+        assert!(source_needs_syntax_tree(
             authmap_core::Language::Python,
             &format!(
                 "class ProductCreate(BaseMutation):\n    class Meta:\n        permissions = ()\n{}",
@@ -5390,12 +5395,25 @@ mod tests {
             ),
             &config
         ));
-        assert!(!source_needs_syntax_tree(
+        assert!(source_needs_syntax_tree(
             authmap_core::Language::Python,
             &format!(
                 "class Mutation(sgqlc.types.Type):\n    field = sgqlc.types.Field(String)\n{}",
                 "# generated schema\n".repeat(80)
             ),
+            &config
+        ));
+        assert!(source_needs_syntax_tree(
+            authmap_core::Language::Python,
+            &format!(
+                "from django.urls import path\n\ndef require_permission(user):\n    return user.is_staff\n{}",
+                "# ordinary module padding\n".repeat(80)
+            ),
+            &config
+        ));
+        assert!(!source_needs_syntax_tree(
+            authmap_core::Language::Python,
+            &"# generated metadata only\n".repeat(80),
             &config
         ));
     }
@@ -5428,6 +5446,45 @@ class ProductCreate(BaseMutation):
         assert_eq!(
             enabled_frameworks_for_sources(&[parsed]),
             vec!["graphql".to_string()]
+        );
+    }
+
+    #[test]
+    fn adapter_gating_keeps_express_helpers_in_mixed_projects() {
+        let helper = ParsedFile {
+            source: SourceFile {
+                path: "routes.js".to_string(),
+                language: authmap_core::Language::JavaScript,
+                size_bytes: 0,
+                sha256: None,
+                project_hints: Vec::new(),
+                skipped: None,
+            },
+            language: authmap_core::Language::JavaScript,
+            text: "setupApiRoute(router, 'GET', '/items', requireAuth, listItems);\n".to_string(),
+            tree: None,
+            status: ParseStatus::TextOnly,
+            diagnostics: Vec::new(),
+        };
+        let next = ParsedFile {
+            source: SourceFile {
+                path: "app/api/items/route.ts".to_string(),
+                language: authmap_core::Language::TypeScript,
+                size_bytes: 0,
+                sha256: None,
+                project_hints: Vec::new(),
+                skipped: None,
+            },
+            language: authmap_core::Language::TypeScript,
+            text: "import { NextResponse } from 'next/server';\n".to_string(),
+            tree: None,
+            status: ParseStatus::TextOnly,
+            diagnostics: Vec::new(),
+        };
+
+        assert_eq!(
+            enabled_frameworks_for_sources(&[helper, next]),
+            vec!["express".to_string(), "nextjs".to_string()]
         );
     }
 
@@ -6032,7 +6089,7 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 25);
+        assert_eq!(document.routes.len(), 26);
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::Express
                 && route.method == "POST"
@@ -6092,6 +6149,17 @@ sensitivity:
             route.framework == authmap_core::Framework::Express
                 && route.method == "GET"
                 && route.path == "/api/mapped/factory"
+                && route
+                    .middleware
+                    .iter()
+                    .map(|middleware| middleware.name.as_str())
+                    .collect::<Vec<_>>()
+                    == vec!["requireAuth"]
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Express
+                && route.method == "GET"
+                && route.path == "/api/mapped/indexed"
                 && route
                     .middleware
                     .iter()
@@ -6451,6 +6519,11 @@ sensitivity:
             route.framework == authmap_core::Framework::Trpc
                 && route.method == "POST"
                 && route.path == "/trpc/router/updateProfile"
+        }));
+        assert!(trpc_document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Trpc
+                && route.method == "POST"
+                && route.path == "/trpc/router/updateSettings"
         }));
         assert!(trpc_document.coverage.iter().any(|coverage| {
             coverage.class == CoverageClass::AuthnOnly

@@ -38,6 +38,13 @@ jobs:
             exit 1
           fi
 
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          tag_commit="$(git rev-list -n 1 "${tag}")"
+          if ! git merge-base --is-ancestor "${tag_commit}" refs/remotes/origin/main; then
+            echo "Release tag ${tag} does not point at a commit reachable from origin/main" >&2
+            exit 1
+          fi
+
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
@@ -230,6 +237,12 @@ jobs:
         with:
           name: release-checksums
           path: dist
+      - name: Verify checksum sidecars
+        shell: bash
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          sha256sum -c ./*.sha256
       - name: Extract release notes from CHANGELOG.md
         shell: bash
         env:
