@@ -1,250 +1,149 @@
-# AuthMap
+<p align="center">
+  <img src="docs/assets/authmap-banner.svg" alt="AuthMap" width="640">
+</p>
 
-AuthMap is a defensive product-security tool for mapping authorization coverage across an application.
+<p align="center"><strong>Authorization coverage mapping for application code.</strong></p>
 
-It answers a simple question:
+<p align="center">
+  <a href="https://github.com/Ozark-Security-Labs/AuthMap/actions/workflows/rust.yml"><img alt="CI" src="https://github.com/Ozark-Security-Labs/AuthMap/actions/workflows/rust.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/Ozark-Security-Labs/AuthMap/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Ozark-Security-Labs/AuthMap/actions/workflows/security.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/Ozark-Security-Labs/AuthMap/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/Ozark-Security-Labs/AuthMap/actions/workflows/codeql.yml/badge.svg?branch=main"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <img alt="Rust 1.95+" src="https://img.shields.io/badge/rust-1.95%2B-orange.svg">
+  <a href="https://github.com/Ozark-Security-Labs/AuthMap/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Ozark-Security-Labs/AuthMap?sort=semver&display_name=tag"></a>
+</p>
 
-> What protects each route, handler, service method, and data mutation?
+---
 
-AuthMap is intended for application security engineers, product-security teams, and developers who need a concrete inventory of where authentication, authorization, ownership checks, tenant isolation, and sensitive-operation controls actually live in a codebase.
+AuthMap maps authorization coverage across the routes, handlers, service calls, and data mutations in your application. It answers a foundational appsec question — **what protects each endpoint, and the data it touches?** — by building a structured, reviewable auth map with typed evidence so missing checks, misplaced controls, and risky drift surface before they ship.
 
-## Problem
-
-Most teams do not have a reliable map of authorization coverage. They may know that an app uses middleware, policies, guards, decorators, or service-layer checks, but they often cannot answer:
-
-- Which routes require authentication?
-- Which routes require a specific role?
-- Which database mutations are reachable from public endpoints?
-- Which paths rely on ownership checks?
-- Which sensitive operations are protected only in the frontend?
-- Which endpoints changed auth behavior in this pull request?
-
-Traditional SAST tools often produce noisy vulnerability findings. AuthMap starts one layer earlier: build the map, attach evidence, and make coverage reviewable.
-
-## Product thesis
-
-Authorization bugs are often inventory failures before they are coding failures.
-
-If reviewers can see the effective authorization surface of an application, they can spot missing checks, misplaced controls, and high-risk drift earlier.
-
-## Current scope
-
-AuthMap is a local CLI and CI-friendly analyzer that produces a structured
-authorization map.
-
-Current built-in targets:
-
-- FastAPI
-- Django and Django REST Framework
-- Express
-- Next.js route handlers
-- Common middleware/decorator/guard patterns
-- ORM mutation evidence for SQLAlchemy, Django ORM, and Prisma
-
-Current outputs:
-
-- Markdown report
-- JSON authorization map
-- SARIF for code-scanning integration
-- GitHub Actions summary
-
-The canonical JSON contract is documented in [docs/SCHEMA.md](docs/SCHEMA.md)
-and defined by [schemas/authmap.schema.json](schemas/authmap.schema.json).
-Diagnostic categories, stable codes, and CI exit behavior are documented in
-[docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md).
-Project configuration, custom authorization rules, and sensitivity labels are
-documented in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
-Privacy and data-handling expectations are documented in
-[docs/DATA_HANDLING.md](docs/DATA_HANDLING.md).
-Installation, CLI usage, report interpretation, examples, and limitations are
-documented in [docs/USAGE.md](docs/USAGE.md).
-
-## Example report shape
-
-```text
-Route: DELETE /accounts/:id
-Handler: src/routes/accounts.ts:88
-Auth evidence:
-  - requiresAuthenticatedUser middleware
-  - AccountPolicy.canDelete(user, account)
-Data mutations:
-  - prisma.account.delete(...)
-Coverage: authn + ownership_check
-Risk: low
-```
-
-```text
-Route: POST /admin/users/:id/disable
-Handler: app/api/admin/users/[id]/route.ts:41
-Auth evidence:
-  - session lookup detected
-  - no role or privilege check detected before mutation
-Data mutations:
-  - db.user.update({ disabled: true })
-Coverage: authn_only
-Risk: review_required
-Reviewer question:
-  - Should this path require admin role evidence?
-```
-
-## Core concepts
-
-### Authorization evidence
-
-AuthMap does not simply look for function names like `authorize`. It collects typed evidence:
-
-- authentication required
-- role check
-- permission check
-- ownership check
-- tenant isolation check
-- admin/superuser gate
-- policy object invocation
-- audit/logging control
-- explicit public route declaration
-
-### Reachability
-
-A control only matters if it is on a path that reaches the operation. AuthMap should distinguish between:
-
-- middleware protecting a route
-- decorator protecting a handler
-- service-layer guard protecting an operation
-- frontend-only checks that do not protect backend mutations
-
-### Coverage classes
-
-AuthMap should classify coverage in reviewable terms:
-
-- public_declared
-- unauthenticated
-- authn_only
-- role_guarded
-- permission_guarded
-- ownership_guarded
-- tenant_guarded
-- admin_guarded
-- unknown_or_dynamic
+Authorization bugs are often inventory failures before they are coding failures. AuthMap gives you the inventory.
 
 ## Quickstart
 
+Install from source:
+
 ```bash
-cargo install --path crates/authmap-cli
-authmap --version
+cargo install --git https://github.com/Ozark-Security-Labs/AuthMap authmap-cli
+```
+
+Prebuilt binaries for Linux, macOS, and Windows are attached to each [GitHub Release](https://github.com/Ozark-Security-Labs/AuthMap/releases).
+
+Then bootstrap a config and scan:
+
+```bash
 authmap init --output authmap.yml
 authmap scan . --config authmap.yml --format markdown --output authmap.md
-authmap scan . --config authmap.yml --format json --output authmap.json
 ```
 
-Release archives contain the `authmap` binary for each supported platform. Cargo
-package artifacts are produced for reviewable package contents; registry
-publishing is not enabled yet, so local development installs use the workspace
-path until a registry policy is approved. Published archives include matching
-`.sha256` sidecars and SLSA provenance; see
-[docs/VERIFYING_RELEASES.md](docs/VERIFYING_RELEASES.md) before trusting a
-downloaded binary in sensitive environments.
+Use it in CI with the GitHub Action:
 
-Run from source during development with `cargo run -p authmap-cli --`:
-
-```bash
-cargo run -p authmap-cli -- scan tests/fixtures/realistic/fastapi \
-  --format markdown --output authmap.md
-cargo run -p authmap-cli -- scan tests/fixtures/realistic/express \
-  --format json --output authmap.json
+```yaml
+- uses: actions/checkout@v4
+- uses: Ozark-Security-Labs/AuthMap@v1.0.0
+  with:
+    mode: advisory
+    output: markdown,json
 ```
 
-Use the generated Markdown for human review and the JSON document for
-automation. AuthMap redacts obvious high-risk values in generated artifacts, but
-reports can still contain sensitive application structure and should be treated
-as review material. See [docs/DATA_HANDLING.md](docs/DATA_HANDLING.md) for
-local analysis, report sensitivity, CI artifact, SARIF, baseline, and sharing
-guidance. SARIF is available for advisory GitHub code-scanning integration:
+## Sample output
 
-```bash
-authmap scan . --format sarif --output authmap.sarif
+A scan of an Express + Prisma service surfaces 15 routes, classifies each by coverage type, and flags routes that need human review:
+
+```text
+# AuthMap Report
+
+- Tool: authmap 1.0.0
+- Schema: 0.1.0
+
+## Summary
+- Mode: advisory
+- Routes: 15
+- Evidence entries: 23
+- Mutations: 4
+- Frameworks: express: 15
+
+## Route Inventory
+
+| ID         | Method | Path                  | Middleware                         | Coverage           | Risk            |
+| ---------- | ------ | --------------------- | ---------------------------------- | ------------------ | --------------- |
+| route_0001 | GET    | /health               | none                               | unauthenticated    | low             |
+| route_0005 | POST   | /api                  | requireAuth, audit                 | authn_only         | review_required |
+| route_0007 | PATCH  | /api/:accountId       | requireAuth, requirePermission     | permission_guarded | review_required |
+| route_0009 | DELETE | /api/:accountId       | requireAuth, requireAdmin          | admin_guarded      | review_required |
+| route_0014 | GET    | /api/tenant/:tenantId | requireAuth, requireTenant         | tenant_guarded     | low             |
 ```
 
-`authmap explain <id>` reads `authmap.json` by default, or another AuthMap JSON
-document via `--input <path>`, and explains route, evidence, mutation, or link
-IDs. It validates the schema version and treats risk as review priority rather
-than a confirmed vulnerability.
+The same scan emits JSON for automation, including per-route coverage with linked evidence and reachable mutations:
 
-`authmap rules suggest [target]` is a local read-only helper for discovering
-project-specific guard names. It prints Markdown by default, supports
-`--format json`, `--output <path>`, and `--config <path>`, and never modifies
-`authmap.yml`.
+```json
+{
+  "route_id": "route_0009",
+  "class": "admin_guarded",
+  "risk": "review_required",
+  "rationale": [
+    "1 strong authorization evidence item(s) support admin_guarded coverage.",
+    "Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.",
+    "Linked data mutation(s) increase review sensitivity."
+  ],
+  "extensions": {
+    "authmap.coverage": {
+      "evidence_ids": ["evidence_0014"],
+      "mutation_ids": ["mutation_0004"],
+      "link_ids": ["link_0004"],
+      "sensitivity_reasons": ["account_path", "linked_mutation", "path_param", "unsafe_method"]
+    }
+  }
+}
+```
 
-Baselines and diffs support pull request review:
+A SARIF report covering the same routes is available for GitHub code scanning.
+
+## Supported frameworks
+
+| Framework             | Language(s)          |
+| --------------------- | -------------------- |
+| FastAPI               | Python               |
+| Django                | Python               |
+| Django REST Framework | Python               |
+| Express               | Node.js / TypeScript |
+| Next.js (App Router)  | TypeScript           |
+| tRPC                  | TypeScript           |
+| GraphQL               | TypeScript / Node.js |
+
+Plus ORM mutation evidence for **SQLAlchemy**, **Django ORM**, and **Prisma**, linked to the routes that can reach them.
+
+Evidence sources include middleware, decorators, guards, policy objects, service-layer checks, ownership and tenant-isolation patterns, and ORM mutations. See [docs/PARSERS_AND_ADAPTERS.md](docs/PARSERS_AND_ADAPTERS.md) for the adapter contract.
+
+## What you get
+
+**Typed coverage classification.** Each route is placed into one of nine classes — `public_declared`, `unauthenticated`, `authn_only`, `role_guarded`, `permission_guarded`, `ownership_guarded`, `tenant_guarded`, `admin_guarded`, `unknown_or_dynamic` — with a risk label and a machine-readable rationale.
+
+**Drift detection in CI.** Capture a baseline JSON document and diff future scans against it. AuthMap reports added or removed routes, evidence changes, coverage downgrades, and newly reachable mutations — with policy knobs to fail builds on specific drift categories.
 
 ```bash
 authmap baseline create . --output authmap.baseline.json
 authmap scan . --format json --output authmap.json
 authmap diff --base authmap.baseline.json --head authmap.json --format markdown
-authmap diff main...HEAD --target .
 ```
 
-See [docs/USAGE.md](docs/USAGE.md) for end-to-end examples, output
-interpretation, limitations, and defensive-use guidance.
+**Rule suggestions.** `authmap rules suggest` is a local, read-only helper that scans for project-specific guard, role, and permission patterns and proposes additions to `authmap.yml`. It never modifies your config.
 
-## Local development
+**Explainable findings.** `authmap explain <id>` resolves any route, evidence, mutation, or link ID against a generated report and prints the supporting context — useful for triage and PR review.
 
-AuthMap is implemented as a Rust Cargo workspace. Supply-chain maintenance,
-lockfile review, dependency audit, license review, and release sanity
-expectations are documented in [docs/SUPPLY_CHAIN.md](docs/SUPPLY_CHAIN.md).
-Versioning, changelog, compatibility, and tagged release expectations are
-documented in [docs/RELEASES.md](docs/RELEASES.md).
-The maintainer release runbook is [RELEASING.md](RELEASING.md).
-Useful local commands:
+## Output formats
 
-```bash
-cargo run -p authmap-cli -- --help
-cargo run -p authmap-cli -- --version
-cargo run -p authmap-cli -- scan . --format json --output authmap.json
-cargo run -p authmap-cli -- scan . --format sarif --output authmap.sarif.json
-cargo test --workspace
-cargo package --list --manifest-path crates/authmap-cli/Cargo.toml --locked
-cargo install --path crates/authmap-cli --locked
-```
+| Format   | Use it for                                                |
+| -------- | --------------------------------------------------------- |
+| Markdown | Human review, PR comments, GitHub Actions job summaries   |
+| JSON     | Automation and downstream tooling (schema v0.1.0 contract) |
+| SARIF    | GitHub / GitLab code scanning, advisory alerts            |
 
-SARIF output is intended for GitHub code scanning. It emits advisory
-authorization coverage alerts for routes that need review, plus scan
-diagnostics. Coverage alerts are warnings by default; AuthMap risk and
-classification details are included as SARIF result properties rather than
-asserted as confirmed vulnerabilities.
+The canonical JSON contract is documented in [docs/SCHEMA.md](docs/SCHEMA.md) and defined by [schemas/authmap.schema.json](schemas/authmap.schema.json).
 
-`authmap scan` supports `--mode advisory|enforce`. In v1.0.0, enforce mode
-writes the requested report and exits `20` when the completed document contains
-any `error` or `fatal` diagnostic. Warnings remain non-blocking; incomplete
-discovery conditions such as file truncation or oversized supported files are
-promoted to error diagnostics in enforce mode.
+## CI integration
 
-`authmap baseline create [target] --output authmap.baseline.json` writes a
-normal AuthMap JSON document for later comparison. `authmap diff` supports
-map-file diffs with `--base` and `--head`, plus committed git ranges such as
-`main...HEAD` using `git archive` into temporary directories so the checkout is
-not mutated. Diff reports are available as Markdown or JSON; enforce mode exits
-`20` only when drift matches the effective `drift.fail_on` policy. Git range
-diffs require both `git` and `tar` on `PATH`.
-
-Discovery honors gitignore-style `include` and `exclude` entries in
-`authmap.yml`. Includes narrow the supported source-file set, excludes win over
-includes, and AuthMap always skips dependency, build, VCS, cache, and generated
-report output directories.
-
-### Exit codes
-
-| Code | Meaning |
-| --- | --- |
-| 0 | Success |
-| 2 | CLI usage error, including unsupported `--format` values |
-| 10 | Target path does not exist or is not readable |
-| 11 | Enforce-mode target exists but contains no supported source files |
-| 12 | Config file cannot be read, parsed, or validated |
-| 13 | Scan pipeline failed for another reason |
-| 14 | Report rendering or writing failed |
-| 20 | Enforce-mode diagnostic or drift policy failure after the report was written |
-
-## GitHub Action
+Run AuthMap on every pull request and gate enforcement on a baseline diff:
 
 ```yaml
 name: AuthMap
@@ -259,95 +158,80 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Ozark-Security-Labs/AuthMap@v1
+      - uses: Ozark-Security-Labs/AuthMap@v1.0.0
         with:
-          mode: advisory
+          mode: enforce
           output: markdown,json
+          baseline: authmap.baseline.json
+          fail-on: added_high_risk_route,auth_downgrade,new_linked_mutation
 ```
 
-The action writes Markdown output to the job summary and uploads generated
-reports as an artifact by default. These outputs can contain sensitive route,
-source-location, and review evidence; see
-[docs/DATA_HANDLING.md](docs/DATA_HANDLING.md). SARIF upload is optional and
-requires `security-events: write`:
+Enforce mode writes the requested reports first, then exits `20` when blocking diagnostics or baseline-drift policy matches are present. SARIF upload is optional and requires `security-events: write`. See [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md) for all inputs, outputs, and permission details.
 
-```yaml
-permissions:
-  contents: read
-  security-events: write
+### Exit codes
 
-steps:
-  - uses: actions/checkout@v4
-  - uses: Ozark-Security-Labs/AuthMap@v1
-    with:
-      mode: advisory
-      output: markdown,json,sarif
-      upload-sarif: "true"
-```
+| Code | Meaning                                                                   |
+| ---- | ------------------------------------------------------------------------- |
+| 0    | Success                                                                   |
+| 2    | CLI usage error                                                           |
+| 10   | Target path does not exist or is unreadable                               |
+| 11   | Enforce-mode target contains no supported source files                    |
+| 12   | Config file cannot be read, parsed, or validated                          |
+| 13   | Scan pipeline failed for another reason                                   |
+| 14   | Report rendering or writing failed                                        |
+| 20   | Enforce-mode diagnostic or drift policy failure (report was still written) |
 
-In enforce mode, AuthMap still writes requested reports first, then returns
-exit code `20` when enforce-blocking diagnostics or baseline drift policy
-matches are present:
+## Project status
 
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: Ozark-Security-Labs/AuthMap@v1
-    with:
-      mode: enforce
-      output: markdown,json
-```
+- **v1.0.0** — first stable release. Semantic versioning per [docs/RELEASES.md](docs/RELEASES.md).
+- **JSON schema** — v0.1.0 contract; breaking changes ship via the documented compatibility policy.
+- **Rust** — MSRV 1.95, edition 2024.
+- **Platforms** — Linux, macOS, and Windows are tested in CI.
 
-To review drift against a baseline in CI, provide `baseline`. Pull request runs
-read that baseline from the trusted base commit when available, or from
-`baseline-ref` when supplied, so PR changes cannot mask their own drift. The
-action generates `authmap.diff.json` and `authmap.diff.md`, appends the drift
-Markdown to the job summary, and honors `fail-on` in enforce mode:
+## Documentation
 
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: Ozark-Security-Labs/AuthMap@v1
-    with:
-      mode: enforce
-      output: markdown,json
-      baseline: authmap.baseline.json
-      fail-on: added_high_risk_route,auth_downgrade,new_linked_mutation
-```
+| Document                                                                       | Contents                                                              |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| [docs/USAGE.md](docs/USAGE.md)                                                 | End-to-end CLI usage, output interpretation, defensive-use guidance   |
+| [docs/SCHEMA.md](docs/SCHEMA.md)                                               | JSON schema and contract                                              |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md)                                 | `authmap.yml`, custom authorization rules, sensitivity labels         |
+| [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md)                                     | Diagnostic categories, stable codes, exit behavior                    |
+| [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md)                                 | All Action inputs, outputs, and permissions                           |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)                                   | Layered design overview                                               |
+| [docs/IMPLEMENTATION_ARCHITECTURE.md](docs/IMPLEMENTATION_ARCHITECTURE.md)     | Technical implementation patterns                                     |
+| [docs/PARSERS_AND_ADAPTERS.md](docs/PARSERS_AND_ADAPTERS.md)                   | Adding new framework adapters                                         |
+| [docs/PRODUCT_BRIEF.md](docs/PRODUCT_BRIEF.md)                                 | Product framing and threat model                                      |
+| [docs/ROADMAP.md](docs/ROADMAP.md)                                             | Future direction                                                      |
+| [docs/RELEASES.md](docs/RELEASES.md)                                           | Versioning, changelog, and compatibility policy                       |
+| [docs/SUPPLY_CHAIN.md](docs/SUPPLY_CHAIN.md)                                   | Dependency, lockfile, and CI security policy                          |
+| [docs/DATA_HANDLING.md](docs/DATA_HANDLING.md)                                 | Report sensitivity and sharing guidance                               |
 
-See [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md) for all inputs, outputs, and
-permission details.
+## Security
 
-## Relationship to adjacent projects
+AuthMap is intended for authorized, defensive analysis of code that you own or are explicitly approved to review. Report vulnerabilities privately via GitHub Security Advisories — see [SECURITY.md](SECURITY.md).
 
-AuthMap can become a foundation for higher-level product-security tools:
+Supply-chain posture:
 
-- invariant regression detection
-- tenant isolation checks
-- API security diffing
-- security control ledgers
-- threat-model updates
+- `Cargo.lock` is committed and reviewed.
+- All GitHub Actions in workflows are pinned to a full commit SHA.
+- CI runs `cargo audit`, GitHub dependency review, CodeQL, and dependency-determinism checks on every PR.
 
-It complements scanners by producing an evidence-backed map first, then allowing specific findings and policies to be layered on top.
+Details in [docs/SUPPLY_CHAIN.md](docs/SUPPLY_CHAIN.md).
+
+## Contributing
+
+Design-first contributions are welcome — new framework adapters, evidence detections, documentation, and reviewable detections.
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to propose and submit changes
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community standards
+- [GOVERNANCE.md](GOVERNANCE.md) — maintainer and decision-making model
+- [CHANGELOG.md](CHANGELOG.md) — what changed and when
+- [SUPPORT.md](SUPPORT.md) — getting help
 
 ## Non-goals
 
-AuthMap is not intended to:
+AuthMap will not exploit authorization bugs, attack live systems, or claim vulnerabilities without evidence. It is not a replacement for human security review and does not require running the target application.
 
-- exploit authorization bugs
-- attack live systems
-- replace human security review
-- claim vulnerabilities without evidence
-- require running the target application
+## License
 
-See [SECURITY.md](SECURITY.md) for authorized-use boundaries and finding
-language. AuthMap reports review prompts and evidence-backed hypotheses unless a
-finding is mechanically proven.
-
-## Status
-
-This repository contains the local CLI, configuration loading, deterministic
-source discovery, Tree-sitter parsing, canonical schema/IR, framework route
-adapters, evidence extraction, reachability linking, coverage classification,
-and JSON/Markdown/SARIF reporting. Current built-in route coverage includes
-FastAPI, Django/DRF, Express, and Next.js App Router handlers.
+AuthMap is licensed under the [MIT License](LICENSE).
