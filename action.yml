@@ -93,7 +93,7 @@ runs:
 
     - name: Upload AuthMap reports
       if: ${{ always() && inputs.upload-artifact == 'true' && steps.run-authmap.outputs.artifact-paths != '' && (steps.run-authmap.outputs.exit-code == '0' || steps.run-authmap.outputs.exit-code == '20') }}
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
       with:
         name: ${{ inputs.artifact-name }}
         path: ${{ steps.run-authmap.outputs.artifact-paths }}

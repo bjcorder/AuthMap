@@ -125,7 +125,7 @@ jobs:
           "${authmap_bin}" baseline create tests/fixtures/negative/frontend_only --output "${report_dir}/authmap.baseline.json"
           "${authmap_bin}" diff --base "${report_dir}/authmap.baseline.json" --head "${report_dir}/authmap.json" --format json --output "${report_dir}/authmap.diff.json"
       - name: Upload release archive to workflow
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: release-archive-${{ matrix.os }}
           path: ${{ steps.package.outputs.artifact }}
@@ -152,7 +152,7 @@ jobs:
           git archive --format=tar.gz --prefix="authmap-${VERSION}-source/" \
             -o "dist/authmap-${VERSION}-source.tar.gz" "${RELEASE_TAG}"
       - name: Upload source archive to workflow
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: release-archive-source
           path: dist/authmap-${{ env.VERSION }}-source.tar.gz
@@ -190,7 +190,7 @@ jobs:
           hashes="$(for artifact in authmap-*; do case "${artifact}" in *.tar.gz|*.zip) sha256sum "$artifact" ;; esac; done | base64 -w0)"
           echo "hashes=${hashes}" >> "${GITHUB_OUTPUT}"
       - name: Upload checksum sidecars to workflow
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: release-checksums
           path: dist/*.sha256
