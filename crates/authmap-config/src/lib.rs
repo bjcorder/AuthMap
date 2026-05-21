@@ -87,6 +87,8 @@ pub enum DriftFailCategory {
     AddedReviewRequiredRoute,
     AuthDowngrade,
     NewLinkedMutation,
+    RemovedAuthorizationEvidence,
+    PolicyDecisionChange,
 }
 
 pub fn default_drift_fail_on() -> Vec<DriftFailCategory> {
@@ -456,6 +458,8 @@ drift:
   fail_on:
     - added_review_required_route
     - auth_downgrade
+    - removed_authorization_evidence
+    - policy_decision_change
 "#,
         )
         .expect("drift config should parse");
@@ -465,6 +469,8 @@ drift:
             vec![
                 DriftFailCategory::AddedReviewRequiredRoute,
                 DriftFailCategory::AuthDowngrade,
+                DriftFailCategory::RemovedAuthorizationEvidence,
+                DriftFailCategory::PolicyDecisionChange,
             ]
         );
     }

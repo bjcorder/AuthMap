@@ -1255,6 +1255,74 @@ fn diff_map_files_emit_deterministic_json_markdown_and_enforce_policy() {
 }
 
 #[test]
+fn controls_map_files_emit_dedicated_control_report() {
+    let temp = TestDir::new("controls-map-files");
+    let base_path = temp.path().join("base.json");
+    let head_path = temp.path().join("head.json");
+    let base_document: Value =
+        serde_json::from_str(explain_document_json()).expect("fixture JSON should parse");
+    let mut head_document = drift_head_document();
+    head_document["evidence"] = json!([]);
+    assert_valid_authmap_document(&base_document);
+    assert_valid_authmap_document(&head_document);
+    write_file(
+        &base_path,
+        &serde_json::to_string_pretty(&base_document).expect("base should serialize"),
+    );
+    write_file(
+        &head_path,
+        &serde_json::to_string_pretty(&head_document).expect("head should serialize"),
+    );
+
+    let output = authmap(&[
+        "controls",
+        "--base",
+        base_path.to_str().expect("path should be UTF-8"),
+        "--head",
+        head_path.to_str().expect("path should be UTF-8"),
+        "--format",
+        "json",
+    ]);
+
+    assert_exit(&output, 0);
+    let report: Value = serde_json::from_slice(&output.stdout).expect("controls JSON should parse");
+    assert_eq!(report["report_type"], "authmap.controls");
+    assert_eq!(report["summary"]["total_findings"], 2);
+    assert!(
+        report["findings"]
+            .as_array()
+            .expect("findings should be an array")
+            .iter()
+            .any(|finding| finding["control_type"] == "route_guard"
+                && finding["source_change_kind"] == "coverage_changed")
+    );
+    assert!(
+        report["findings"]
+            .as_array()
+            .expect("findings should be an array")
+            .iter()
+            .any(|finding| finding["control_type"] == "guard"
+                && finding["source_change_kind"] == "removed_evidence")
+    );
+
+    let output = authmap(&[
+        "controls",
+        "--base",
+        base_path.to_str().expect("path should be UTF-8"),
+        "--head",
+        head_path.to_str().expect("path should be UTF-8"),
+        "--format",
+        "markdown",
+    ]);
+
+    assert_exit(&output, 0);
+    let markdown = String::from_utf8_lossy(&output.stdout);
+    assert!(markdown.contains("# AuthMap Controls Report"));
+    assert!(markdown.contains("route_guard"));
+    assert!(markdown.contains("removed_evidence"));
+}
+
+#[test]
 fn diff_git_range_scans_committed_refs_without_mutating_checkout() {
     if Command::new("git").arg("--version").output().is_err() {
         return;
