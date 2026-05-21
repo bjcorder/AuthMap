@@ -9,7 +9,7 @@
 - Targets: tests/fixtures/express
 - Source files: 5
 - Routes: 29
-- Evidence entries: 51
+- Evidence entries: 56
 - Mutations: 0
 - Policy cases: 30
 - Diagnostics: 7
@@ -235,11 +235,14 @@ No data mutations were detected.
 - Declared protection: requireAuth
 - Confidence: high
 - Coverage: authn_only (review_required)
-- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, tenant_path.
-- Coverage support: evidence: evidence_0010; policy cases: policy_case_0007; sensitivity: path_param, tenant_path
+- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, tenant_path.; Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal.
+- Coverage support: evidence: evidence_0010, evidence_0011; weak evidence: evidence_0011; policy cases: policy_case_0007; sensitivity: path_param, tenant_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this route require tenant isolation checks?
+  - Should this route require tenant or ownership scoping?
+- Coverage uncertainty:
+  - Low-confidence authorization evidence was detected.
 - PolicyLens:
   - policy_case_0007: effective_protection at tests/fixtures/express/app.js:14:10 (high)
     - Summary: 1 evidence support(s) route protection: authn.
@@ -250,6 +253,9 @@ No data mutations were detected.
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/express/app.js:14:10 (high)
     - Symbol: `requireAuth` (tests/fixtures/express/app.js:14:10)
+  - tenant_check `route_param_scope_signal` at tests/fixtures/express/app.js:65:1 (low)
+    - Symbol: `tenant` (tests/fixtures/express/app.js:65:1)
+    - Note: Route parameter name suggests tenant or ownership context but is not proof of scoping
 - Data mutations: none
 
 <a id="route-route_0007"></a>
@@ -264,7 +270,7 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param, unsafe_method.
-- Coverage support: evidence: evidence_0011, evidence_0012; weak evidence: evidence_0012; policy cases: policy_case_0008, policy_case_0009; sensitivity: account_path, path_param, unsafe_method
+- Coverage support: evidence: evidence_0012, evidence_0013; weak evidence: evidence_0013; policy cases: policy_case_0008, policy_case_0009; sensitivity: account_path, path_param, unsafe_method
 - Reviewer questions:
   - Can the dynamic authorization path be confirmed?
   - Should this route require ownership or permission checks?
@@ -276,13 +282,13 @@ No data mutations were detected.
   - policy_case_0008: effective_protection at tests/fixtures/express/app.js:27:10 (high)
     - Summary: 1 evidence support(s) route protection: permission_check.
     - Cites coverage: route_0007
-    - Cites evidence: evidence_0011
+    - Cites evidence: evidence_0012
     - Inputs: permission
     - Branch: static authorization evidence present -> allow (reachable)
   - policy_case_0009: dynamic at tests/fixtures/express/app.js:67:8 (low)
     - Summary: Dynamic policy behavior requires review.
     - Cites coverage: route_0007
-    - Cites evidence: evidence_0012
+    - Cites evidence: evidence_0013
     - Inputs: dynamicPolicyCheck
     - Branch: dynamic policy dispatch -> review_required (reachable)
     - Question: Can the dynamic authorization path be confirmed?
@@ -306,7 +312,7 @@ No data mutations were detected.
 - Confidence: low
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): unsafe_method.
-- Coverage support: evidence: evidence_0013; policy cases: policy_case_0010; sensitivity: unsafe_method
+- Coverage support: evidence: evidence_0014; policy cases: policy_case_0010; sensitivity: unsafe_method
 - Reviewer questions:
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
@@ -315,7 +321,7 @@ No data mutations were detected.
   - policy_case_0010: effective_protection at tests/fixtures/express/app.js:14:10 (high)
     - Summary: 1 evidence support(s) route protection: authn.
     - Cites coverage: route_0008
-    - Cites evidence: evidence_0013
+    - Cites evidence: evidence_0014
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
 - Uncertainty notes:
@@ -336,7 +342,7 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): admin_path.
-- Coverage support: evidence: evidence_0014; policy cases: policy_case_0011, policy_case_0012; sensitivity: admin_path
+- Coverage support: evidence: evidence_0015; policy cases: policy_case_0011, policy_case_0012; sensitivity: admin_path
 - Reviewer questions:
   - Is this policy branch reachable in the deployed code?
   - Should this route require an admin or role guard?
@@ -344,13 +350,13 @@ No data mutations were detected.
   - policy_case_0011: effective_protection at tests/fixtures/express/app.js:14:10 (high)
     - Summary: 1 evidence support(s) route protection: authn.
     - Cites coverage: route_0009
-    - Cites evidence: evidence_0014
+    - Cites evidence: evidence_0015
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
   - policy_case_0012: unreachable at tests/fixtures/express/app.js:74:3 (high)
     - Summary: Policy evidence appears inside a statically unreachable branch.
     - Cites coverage: route_0009
-    - Cites evidence: evidence_0014
+    - Cites evidence: evidence_0015
     - Inputs: identity
     - Branch: literal false branch -> review_required (unreachable)
     - Question: Is this policy branch reachable in the deployed code?
@@ -371,7 +377,7 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, unsafe_method.
-- Coverage support: evidence: evidence_0015; policy cases: policy_case_0013; sensitivity: path_param, unsafe_method
+- Coverage support: evidence: evidence_0016; policy cases: policy_case_0013; sensitivity: path_param, unsafe_method
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
@@ -379,7 +385,7 @@ No data mutations were detected.
   - policy_case_0013: effective_protection at tests/fixtures/express/app.js:14:10 (high)
     - Summary: 1 evidence support(s) route protection: authn.
     - Cites coverage: route_0010
-    - Cites evidence: evidence_0015
+    - Cites evidence: evidence_0016
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -398,12 +404,12 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
-- Coverage support: evidence: evidence_0016, evidence_0017; policy cases: policy_case_0014
+- Coverage support: evidence: evidence_0017, evidence_0018; policy cases: policy_case_0014
 - PolicyLens:
   - policy_case_0014: effective_protection at tests/fixtures/express/app.js:36:10 (high)
     - Summary: 2 evidence support(s) route protection: audit_log, authn.
     - Cites coverage: route_0011
-    - Cites evidence: evidence_0016, evidence_0017
+    - Cites evidence: evidence_0017, evidence_0018
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -423,7 +429,7 @@ No data mutations were detected.
 - Confidence: medium
 - Coverage: unauthenticated (low)
 - Coverage rationale: No authorization evidence was detected.
-- Coverage support: evidence: evidence_0018
+- Coverage support: evidence: evidence_0019
 - Coverage uncertainty:
   - Route inventory confidence is not high.
 - Uncertainty notes:
@@ -444,12 +450,12 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
-- Coverage support: evidence: evidence_0019; policy cases: policy_case_0015
+- Coverage support: evidence: evidence_0020; policy cases: policy_case_0015
 - PolicyLens:
   - policy_case_0015: effective_protection at tests/fixtures/express/app.js:14:10 (high)
     - Summary: 1 evidence support(s) route protection: authn.
     - Cites coverage: route_0013
-    - Cites evidence: evidence_0019
+    - Cites evidence: evidence_0020
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -468,12 +474,12 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
-- Coverage support: evidence: evidence_0020; policy cases: policy_case_0016
+- Coverage support: evidence: evidence_0021; policy cases: policy_case_0016
 - PolicyLens:
   - policy_case_0016: effective_protection at tests/fixtures/express/app.js:14:10 (high)
     - Summary: 1 evidence support(s) route protection: authn.
     - Cites coverage: route_0014
-    - Cites evidence: evidence_0020
+    - Cites evidence: evidence_0021
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -492,12 +498,12 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.
-- Coverage support: evidence: evidence_0021, evidence_0022; policy cases: policy_case_0017
+- Coverage support: evidence: evidence_0022, evidence_0023; policy cases: policy_case_0017
 - PolicyLens:
   - policy_case_0017: effective_protection at tests/fixtures/express/helpers/app.js:6:1 (high)
     - Summary: 2 evidence support(s) route protection: authn.
     - Cites coverage: route_0015
-    - Cites evidence: evidence_0021, evidence_0022
+    - Cites evidence: evidence_0022, evidence_0023
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -518,12 +524,12 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.
-- Coverage support: evidence: evidence_0023, evidence_0024; policy cases: policy_case_0018
+- Coverage support: evidence: evidence_0024, evidence_0025; policy cases: policy_case_0018
 - PolicyLens:
   - policy_case_0018: effective_protection at tests/fixtures/express/helpers/app.js:6:1 (high)
     - Summary: 2 evidence support(s) route protection: authn.
     - Cites coverage: route_0016
-    - Cites evidence: evidence_0023, evidence_0024
+    - Cites evidence: evidence_0024, evidence_0025
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -544,14 +550,14 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: admin_guarded (low)
 - Coverage rationale: 5 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): admin_path.
-- Coverage support: evidence: evidence_0025, evidence_0026, evidence_0027, evidence_0028, evidence_0029; policy cases: policy_case_0019; sensitivity: admin_path
+- Coverage support: evidence: evidence_0026, evidence_0027, evidence_0028, evidence_0029, evidence_0030; policy cases: policy_case_0019; sensitivity: admin_path
 - Reviewer questions:
   - Should this route require an admin or role guard?
 - PolicyLens:
   - policy_case_0019: effective_protection at tests/fixtures/express/app.js:55:19 (high)
     - Summary: 5 evidence support(s) route protection: admin_check, authn, permission_check.
     - Cites coverage: route_0017
-    - Cites evidence: evidence_0025, evidence_0026, evidence_0027, evidence_0028, evidence_0029
+    - Cites evidence: evidence_0026, evidence_0027, evidence_0028, evidence_0029, evidence_0030
     - Inputs: admin, identity, permission
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -578,14 +584,14 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: admin_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): admin_path.
-- Coverage support: evidence: evidence_0030, evidence_0031, evidence_0032; policy cases: policy_case_0020; sensitivity: admin_path
+- Coverage support: evidence: evidence_0031, evidence_0032, evidence_0033; policy cases: policy_case_0020; sensitivity: admin_path
 - Reviewer questions:
   - Should this route require an admin or role guard?
 - PolicyLens:
   - policy_case_0020: effective_protection at tests/fixtures/express/helpers/app.js:7:1 (high)
     - Summary: 3 evidence support(s) route protection: admin_check, authn, permission_check.
     - Cites coverage: route_0018
-    - Cites evidence: evidence_0030, evidence_0031, evidence_0032
+    - Cites evidence: evidence_0031, evidence_0032, evidence_0033
     - Inputs: admin, identity, permission
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -608,14 +614,14 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): unsafe_method.
-- Coverage support: evidence: evidence_0033, evidence_0034; policy cases: policy_case_0021; sensitivity: unsafe_method
+- Coverage support: evidence: evidence_0034, evidence_0035; policy cases: policy_case_0021; sensitivity: unsafe_method
 - Reviewer questions:
   - Should this state-changing route require more than authentication?
 - PolicyLens:
   - policy_case_0021: effective_protection at tests/fixtures/express/helpers/app.js:8:1 (high)
     - Summary: 2 evidence support(s) route protection: authn, permission_check.
     - Cites coverage: route_0019
-    - Cites evidence: evidence_0033, evidence_0034
+    - Cites evidence: evidence_0034, evidence_0035
     - Inputs: identity, permission
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -636,12 +642,12 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.
-- Coverage support: evidence: evidence_0035, evidence_0036; policy cases: policy_case_0022
+- Coverage support: evidence: evidence_0036, evidence_0037; policy cases: policy_case_0022
 - PolicyLens:
   - policy_case_0022: effective_protection at tests/fixtures/express/helpers/app.js:9:1 (high)
     - Summary: 2 evidence support(s) route protection: authn.
     - Cites coverage: route_0020
-    - Cites evidence: evidence_0035, evidence_0036
+    - Cites evidence: evidence_0036, evidence_0037
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -662,12 +668,12 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.
-- Coverage support: evidence: evidence_0037, evidence_0038; policy cases: policy_case_0023
+- Coverage support: evidence: evidence_0038, evidence_0039; policy cases: policy_case_0023
 - PolicyLens:
   - policy_case_0023: effective_protection at tests/fixtures/express/helpers/app.js:9:1 (high)
     - Summary: 2 evidence support(s) route protection: authn.
     - Cites coverage: route_0021
-    - Cites evidence: evidence_0037, evidence_0038
+    - Cites evidence: evidence_0038, evidence_0039
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -688,14 +694,14 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: admin_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): admin_path.
-- Coverage support: evidence: evidence_0039, evidence_0040, evidence_0041; policy cases: policy_case_0024; sensitivity: admin_path
+- Coverage support: evidence: evidence_0040, evidence_0041, evidence_0042; policy cases: policy_case_0024; sensitivity: admin_path
 - Reviewer questions:
   - Should this route require an admin or role guard?
 - PolicyLens:
   - policy_case_0024: effective_protection at tests/fixtures/express/app.js:55:19 (high)
     - Summary: 3 evidence support(s) route protection: admin_check, authn, permission_check.
     - Cites coverage: route_0022
-    - Cites evidence: evidence_0039, evidence_0040, evidence_0041
+    - Cites evidence: evidence_0040, evidence_0041, evidence_0042
     - Inputs: admin, identity, permission
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -717,7 +723,7 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: unauthenticated (high)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): unsafe_method.; No strong authorization evidence was found for a high-sensitivity route.
-- Coverage support: evidence: evidence_0042; sensitivity: unsafe_method
+- Coverage support: evidence: evidence_0043; sensitivity: unsafe_method
 - Reviewer questions:
   - Should this state-changing route require more than authentication?
 - Auth evidence:
@@ -737,14 +743,14 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, user_path.
-- Coverage support: evidence: evidence_0043, evidence_0044; policy cases: policy_case_0025; sensitivity: path_param, user_path
+- Coverage support: evidence: evidence_0044, evidence_0045; policy cases: policy_case_0025; sensitivity: path_param, user_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
 - PolicyLens:
   - policy_case_0025: effective_protection at tests/fixtures/express/app.js:94:20 (high)
     - Summary: 2 evidence support(s) route protection: authn.
     - Cites coverage: route_0024
-    - Cites evidence: evidence_0043, evidence_0044
+    - Cites evidence: evidence_0044, evidence_0045
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -766,14 +772,14 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, user_path.
-- Coverage support: evidence: evidence_0045; policy cases: policy_case_0026; sensitivity: path_param, user_path
+- Coverage support: evidence: evidence_0046; policy cases: policy_case_0026; sensitivity: path_param, user_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
 - PolicyLens:
   - policy_case_0026: effective_protection at tests/fixtures/express/routes/users.ts:5:10 (high)
     - Summary: 1 evidence support(s) route protection: authn.
     - Cites coverage: route_0025
-    - Cites evidence: evidence_0045
+    - Cites evidence: evidence_0046
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -793,7 +799,7 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, unsafe_method, user_path.
-- Coverage support: evidence: evidence_0046, evidence_0047; policy cases: policy_case_0027; sensitivity: path_param, unsafe_method, user_path
+- Coverage support: evidence: evidence_0047, evidence_0048; policy cases: policy_case_0027; sensitivity: path_param, unsafe_method, user_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
@@ -801,7 +807,7 @@ No data mutations were detected.
   - policy_case_0027: effective_protection at tests/fixtures/express/app.js:94:20 (high)
     - Summary: 2 evidence support(s) route protection: authn.
     - Cites coverage: route_0026
-    - Cites evidence: evidence_0046, evidence_0047
+    - Cites evidence: evidence_0047, evidence_0048
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -823,7 +829,7 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, unsafe_method, user_path.
-- Coverage support: evidence: evidence_0048; policy cases: policy_case_0028; sensitivity: path_param, unsafe_method, user_path
+- Coverage support: evidence: evidence_0049; policy cases: policy_case_0028; sensitivity: path_param, unsafe_method, user_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
@@ -831,7 +837,7 @@ No data mutations were detected.
   - policy_case_0028: effective_protection at tests/fixtures/express/routes/users.ts:5:10 (high)
     - Summary: 1 evidence support(s) route protection: authn.
     - Cites coverage: route_0027
-    - Cites evidence: evidence_0048
+    - Cites evidence: evidence_0049
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -847,19 +853,21 @@ No data mutations were detected.
 - Route location: tests/fixtures/express/routes/users.ts:27:1
 - Middleware: `requireAuth` (tests/fixtures/express/app.js:94:20), `requireTenant` (tests/fixtures/express/routes/users.ts:9:10)
 - Params: tenantId (high)
-- Declared protection: requireTenant, requireAuth
+- Declared protection: requireTenant, tenant, requireAuth
 - Confidence: high
 - Coverage: tenant_guarded (low)
-- Coverage rationale: 2 strong authorization evidence item(s) support tenant_guarded coverage.; Sensitive route modifier(s): path_param, tenant_path.
-- Coverage support: evidence: evidence_0049, evidence_0050; policy cases: policy_case_0029; sensitivity: path_param, tenant_path
+- Coverage rationale: 3 strong authorization evidence item(s) support tenant_guarded coverage.; Sensitive route modifier(s): path_param, tenant_path.
+- Coverage support: evidence: evidence_0050, evidence_0051, evidence_0052, evidence_0053; weak evidence: evidence_0052; policy cases: policy_case_0029; sensitivity: path_param, tenant_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this route require tenant isolation checks?
+- Coverage uncertainty:
+  - Low-confidence authorization evidence was detected.
 - PolicyLens:
   - policy_case_0029: effective_protection at tests/fixtures/express/app.js:94:20 (high)
-    - Summary: 2 evidence support(s) route protection: authn, tenant_check.
+    - Summary: 3 evidence support(s) route protection: authn, tenant_check.
     - Cites coverage: route_0028
-    - Cites evidence: evidence_0049, evidence_0050
+    - Cites evidence: evidence_0050, evidence_0051, evidence_0053
     - Inputs: identity, tenant
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -867,6 +875,12 @@ No data mutations were detected.
     - Symbol: `requireAuth` (tests/fixtures/express/app.js:94:20)
   - tenant_check `tenant_guard` at tests/fixtures/express/routes/users.ts:9:10 (high)
     - Symbol: `requireTenant` (tests/fixtures/express/routes/users.ts:9:10)
+  - tenant_check `route_param_scope_signal` at tests/fixtures/express/routes/users.ts:27:1 (low)
+    - Symbol: `tenantId` (tests/fixtures/express/routes/users.ts:27:1)
+    - Note: Route parameter name suggests tenant or ownership context but is not proof of scoping
+  - tenant_check `mutation_scope` at tests/fixtures/express/routes/users.ts:28:14 (high)
+    - Symbol: `tenant` (tests/fixtures/express/routes/users.ts:28:14)
+    - Note: Mutation input includes tenant scoping
 - Data mutations: none
 
 <a id="route-route_0029"></a>
@@ -877,24 +891,32 @@ No data mutations were detected.
 - Route location: tests/fixtures/express/routes/users.ts:27:1
 - Middleware: `requireTenant` (tests/fixtures/express/routes/users.ts:9:10)
 - Params: tenantId (high)
-- Declared protection: requireTenant
+- Declared protection: requireTenant, tenant
 - Confidence: high
 - Coverage: tenant_guarded (low)
-- Coverage rationale: 1 strong authorization evidence item(s) support tenant_guarded coverage.; Sensitive route modifier(s): path_param, tenant_path.
-- Coverage support: evidence: evidence_0051; policy cases: policy_case_0030; sensitivity: path_param, tenant_path
+- Coverage rationale: 2 strong authorization evidence item(s) support tenant_guarded coverage.; Sensitive route modifier(s): path_param, tenant_path.
+- Coverage support: evidence: evidence_0054, evidence_0055, evidence_0056; weak evidence: evidence_0055; policy cases: policy_case_0030; sensitivity: path_param, tenant_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this route require tenant isolation checks?
+- Coverage uncertainty:
+  - Low-confidence authorization evidence was detected.
 - PolicyLens:
   - policy_case_0030: effective_protection at tests/fixtures/express/routes/users.ts:9:10 (high)
-    - Summary: 1 evidence support(s) route protection: tenant_check.
+    - Summary: 2 evidence support(s) route protection: tenant_check.
     - Cites coverage: route_0029
-    - Cites evidence: evidence_0051
+    - Cites evidence: evidence_0054, evidence_0056
     - Inputs: tenant
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - tenant_check `tenant_guard` at tests/fixtures/express/routes/users.ts:9:10 (high)
     - Symbol: `requireTenant` (tests/fixtures/express/routes/users.ts:9:10)
+  - tenant_check `route_param_scope_signal` at tests/fixtures/express/routes/users.ts:27:1 (low)
+    - Symbol: `tenantId` (tests/fixtures/express/routes/users.ts:27:1)
+    - Note: Route parameter name suggests tenant or ownership context but is not proof of scoping
+  - tenant_check `mutation_scope` at tests/fixtures/express/routes/users.ts:28:14 (high)
+    - Symbol: `tenant` (tests/fixtures/express/routes/users.ts:28:14)
+    - Note: Mutation input includes tenant scoping
 - Data mutations: none
 
 ## Diagnostics

@@ -9,7 +9,7 @@
 - Targets: tests/fixtures/fastapi
 - Source files: 7
 - Routes: 26
-- Evidence entries: 12
+- Evidence entries: 14
 - Mutations: 0
 - Policy cases: 9
 - Diagnostics: 6
@@ -24,6 +24,8 @@
 | [route_0007](#route-route_0007) | PUT /relative/users/{user_id} | risk is high |
 | [route_0009](#route-route_0009) | PUT /v1/users/{user_id} | risk is high |
 | [route_0011](#route-route_0011) | POST /items | risk is high |
+| [route_0013](#route-route_0013) | DELETE /admin/accounts/{account_id} | risk is review_required |
+| [route_0014](#route-route_0014) | PATCH /accounts/{account_id}/permissions | risk is review_required |
 | [route_0015](#route-route_0015) | POST /service/accounts | risk is review_required; coverage is unknown_or_dynamic |
 | [route_0016](#route-route_0016) | DELETE /api/local/{item_id} | risk is review_required |
 | [route_0018](#route-route_0018) | GET /reports | confidence is medium; router prefix is dynamic and was not included in the route path; include_router prefix is dynamic and was not included in the route path |
@@ -53,8 +55,8 @@
 | [route_0010](#route-route_0010) | fast_api | GET | /health | \`health\` (tests/fixtures/fastapi/main.py:40:5) | none | high | unauthenticated | low |
 | [route_0011](#route-route_0011) | fast_api | POST | /items | \`create_item\` (tests/fixtures/fastapi/main.py:45:5) | none | high | unauthenticated | high |
 | [route_0012](#route-route_0012) | fast_api | GET | /profile | \`profile\` (tests/fixtures/fastapi/main.py:50:5) | none | high | authn_only | low |
-| [route_0013](#route-route_0013) | fast_api | DELETE | /admin/accounts/{account_id} | \`delete_account\` (tests/fixtures/fastapi/main.py:55:5) | \`require_admin\` (tests/fixtures/fastapi/main.py:54:67) | high | admin_guarded | low |
-| [route_0014](#route-route_0014) | fast_api | PATCH | /accounts/{account_id}/permissions | \`grant_permission\` (tests/fixtures/fastapi/main.py:60:5) | \`can_edit_account\` (tests/fixtures/fastapi/main.py:59:72) | high | permission_guarded | low |
+| [route_0013](#route-route_0013) | fast_api | DELETE | /admin/accounts/{account_id} | \`delete_account\` (tests/fixtures/fastapi/main.py:55:5) | \`require_admin\` (tests/fixtures/fastapi/main.py:54:67) | high | admin_guarded | review_required |
+| [route_0014](#route-route_0014) | fast_api | PATCH | /accounts/{account_id}/permissions | \`grant_permission\` (tests/fixtures/fastapi/main.py:60:5) | \`can_edit_account\` (tests/fixtures/fastapi/main.py:59:72) | high | permission_guarded | review_required |
 | [route_0015](#route-route_0015) | fast_api | POST | /service/accounts | \`service_account\` (tests/fixtures/fastapi/main.py:67:5) | none | high | unknown_or_dynamic | review_required |
 | [route_0016](#route-route_0016) | fast_api | DELETE | /api/local/{item_id} | \`delete_local\` (tests/fixtures/fastapi/main.py:73:5) | \`require_user\` (tests/fixtures/fastapi/main.py:128:71) | high | authn_only | review_required |
 | [route_0017](#route-route_0017) | fast_api | GET | /shared/variable/settings | \`variable_settings\` (tests/fixtures/fastapi/main.py:81:5) | \`require_user\` (tests/fixtures/fastapi/main.py:134:32), \`can_edit_account\` (tests/fixtures/fastapi/main.py:135:36), \`provide_database_interface\` (tests/fixtures/fastapi/main.py:136:36) | high | permission_guarded | low |
@@ -313,21 +315,27 @@ No data mutations were detected.
 - Params: account_id (high)
 - Declared protection: require_admin
 - Confidence: high
-- Coverage: admin_guarded (low)
-- Coverage rationale: 1 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): account_path, admin_path, path_param, unsafe_method.
-- Coverage support: evidence: evidence_0006; policy cases: policy_case_0004; sensitivity: account_path, admin_path, path_param, unsafe_method
+- Coverage: admin_guarded (review_required)
+- Coverage rationale: 1 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): account_path, admin_path, path_param, unsafe_method.; Tenant isolation review required: admin_bypass_requires_tenant_review, missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal.
+- Coverage support: evidence: evidence_0006, evidence_0007; weak evidence: evidence_0006; policy cases: policy_case_0004; sensitivity: account_path, admin_path, path_param, unsafe_method
 - Reviewer questions:
   - Should this route require an admin or role guard?
   - Should this route require ownership or permission checks?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
+- Coverage uncertainty:
+  - Low-confidence authorization evidence was detected.
 - PolicyLens:
   - policy_case_0004: effective_protection at tests/fixtures/fastapi/main.py:54:59 (high)
     - Summary: 1 evidence support(s) route protection: admin_check.
     - Cites coverage: route_0013
-    - Cites evidence: evidence_0006
+    - Cites evidence: evidence_0007
     - Inputs: admin
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
+  - tenant_check `route_param_scope_signal` at tests/fixtures/fastapi/main.py:54:2 (low)
+    - Symbol: `account_id` (tests/fixtures/fastapi/main.py:54:2)
+    - Note: Route parameter name suggests tenant or ownership context but is not proof of scoping
   - admin_check `admin_guard` at tests/fixtures/fastapi/main.py:54:59 (high)
     - Symbol: `require_admin` (tests/fixtures/fastapi/main.py:54:67)
 - Data mutations: none
@@ -342,12 +350,13 @@ No data mutations were detected.
 - Params: account_id (high)
 - Declared protection: can_edit_account, dynamic_policy_check
 - Confidence: high
-- Coverage: permission_guarded (low)
-- Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param, unsafe_method.
-- Coverage support: evidence: evidence_0007, evidence_0008; weak evidence: evidence_0008; policy cases: policy_case_0005, policy_case_0006; sensitivity: account_path, path_param, unsafe_method
+- Coverage: permission_guarded (review_required)
+- Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param, unsafe_method.; Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal.
+- Coverage support: evidence: evidence_0008, evidence_0009, evidence_0010; weak evidence: evidence_0008, evidence_0010; policy cases: policy_case_0005, policy_case_0006; sensitivity: account_path, path_param, unsafe_method
 - Reviewer questions:
   - Can the dynamic authorization path be confirmed?
   - Should this route require ownership or permission checks?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Dynamic authorization evidence requires review.
@@ -356,18 +365,21 @@ No data mutations were detected.
   - policy_case_0005: effective_protection at tests/fixtures/fastapi/main.py:59:64 (high)
     - Summary: 1 evidence support(s) route protection: permission_check.
     - Cites coverage: route_0014
-    - Cites evidence: evidence_0007
+    - Cites evidence: evidence_0009
     - Inputs: permission
     - Branch: static authorization evidence present -> allow (reachable)
   - policy_case_0006: dynamic at tests/fixtures/fastapi/main.py:61:12 (low)
     - Summary: Dynamic policy behavior requires review.
     - Cites coverage: route_0014
-    - Cites evidence: evidence_0008
+    - Cites evidence: evidence_0010
     - Inputs: dynamic_policy_check
     - Branch: dynamic policy dispatch -> review_required (reachable)
     - Question: Can the dynamic authorization path be confirmed?
     - Uncertainty: Dynamic authorization evidence requires review.
 - Auth evidence:
+  - tenant_check `route_param_scope_signal` at tests/fixtures/fastapi/main.py:59:2 (low)
+    - Symbol: `account_id` (tests/fixtures/fastapi/main.py:59:2)
+    - Note: Route parameter name suggests tenant or ownership context but is not proof of scoping
   - permission_check `permission_guard` at tests/fixtures/fastapi/main.py:59:64 (high)
     - Symbol: `can_edit_account` (tests/fixtures/fastapi/main.py:59:72)
   - unknown_dynamic_check `handler_call` at tests/fixtures/fastapi/main.py:61:12 (low)
@@ -386,7 +398,7 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: unknown_or_dynamic (review_required)
 - Coverage rationale: 1 weak or dynamic authorization evidence item(s) were detected.; Sensitive route modifier(s): account_path, unsafe_method.
-- Coverage support: evidence: evidence_0009; weak evidence: evidence_0009; links: link_0001; policy cases: policy_case_0007; sensitivity: account_path, unsafe_method
+- Coverage support: evidence: evidence_0011; weak evidence: evidence_0011; links: link_0001; policy cases: policy_case_0007; sensitivity: account_path, unsafe_method
 - Reviewer questions:
   - Can the dynamic authorization path be confirmed?
   - Should this route require ownership or permission checks?
@@ -398,7 +410,7 @@ No data mutations were detected.
   - policy_case_0007: dynamic at tests/fixtures/fastapi/app/services/account.py:7:9 (low)
     - Summary: Dynamic policy behavior requires review.
     - Cites coverage: route_0015
-    - Cites evidence: evidence_0009
+    - Cites evidence: evidence_0011
     - Inputs: authorize
     - Branch: dynamic policy dispatch -> review_required (reachable)
     - Question: Can the dynamic authorization path be confirmed?
@@ -421,7 +433,7 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, unsafe_method.
-- Coverage support: evidence: evidence_0010; policy cases: policy_case_0008; sensitivity: path_param, unsafe_method
+- Coverage support: evidence: evidence_0012; policy cases: policy_case_0008; sensitivity: path_param, unsafe_method
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
@@ -429,7 +441,7 @@ No data mutations were detected.
   - policy_case_0008: effective_protection at tests/fixtures/fastapi/main.py:128:71 (high)
     - Summary: 1 evidence support(s) route protection: authn.
     - Cites coverage: route_0016
-    - Cites evidence: evidence_0010
+    - Cites evidence: evidence_0012
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
@@ -448,12 +460,12 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.
-- Coverage support: evidence: evidence_0011, evidence_0012; policy cases: policy_case_0009
+- Coverage support: evidence: evidence_0013, evidence_0014; policy cases: policy_case_0009
 - PolicyLens:
   - policy_case_0009: effective_protection at tests/fixtures/fastapi/main.py:134:32 (high)
     - Summary: 2 evidence support(s) route protection: authn, permission_check.
     - Cites coverage: route_0017
-    - Cites evidence: evidence_0011, evidence_0012
+    - Cites evidence: evidence_0013, evidence_0014
     - Inputs: identity, permission
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:

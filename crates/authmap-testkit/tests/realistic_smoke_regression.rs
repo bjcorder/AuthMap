@@ -12,7 +12,7 @@ fn realistic_fastapi_json_and_markdown_match_goldens() {
         &document,
         RealisticExpectations {
             routes: 9,
-            evidence: 9,
+            evidence: 14,
             mutations: 4,
             links: 5,
             diagnostic_codes: &[
@@ -33,7 +33,7 @@ fn realistic_express_json_and_markdown_match_goldens() {
         &document,
         RealisticExpectations {
             routes: 15,
-            evidence: 25,
+            evidence: 37,
             mutations: 4,
             links: 10,
             diagnostic_codes: &[

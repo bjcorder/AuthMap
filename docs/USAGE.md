@@ -90,6 +90,28 @@ canonical AuthMap document. Use `scan --format json` when automation needs the
 complete schema-backed map with routes, evidence, mutations, links, coverage,
 and diagnostics.
 
+## Tenant Review
+
+Use `authmap tenants` when you want a focused tenant-isolation view without
+reading the full authorization map:
+
+```sh
+authmap tenants . --config authmap.yml --format markdown --output authmap.tenants.md
+authmap tenants . --config authmap.yml --format json --output authmap.tenants.json
+```
+
+The command uses the same static scan pipeline, configuration, limits, and
+advisory/enforce mode as `scan`. It reports tenant and ownership evidence,
+linked sensitive operations, uncertainty, and reviewer questions. Its JSON
+output is a focused `authmap.tenants` report, not the canonical AuthMap
+document. Use `scan --format json` when automation needs the complete
+schema-backed map.
+
+Tenant review findings are review prompts, not confirmed vulnerabilities.
+Missing tenant or ownership evidence on route-param and mutation-linked flows is
+reported as `review_required` so reviewers can confirm the intended isolation
+behavior.
+
 ## Scan Modes
 
 AuthMap supports `advisory` and `enforce` modes:
@@ -276,6 +298,11 @@ authorization:
       mechanism: billing_plan_guard
       match:
         exact: [ensureBillingPermission]
+    - name: workspace tenant guard
+      evidence_type: tenant_check
+      mechanism: workspace_guard
+      match:
+        exact: [ensureWorkspaceAccess]
 
 sensitivity:
   routes:

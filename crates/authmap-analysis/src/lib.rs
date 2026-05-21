@@ -1428,6 +1428,9 @@ fn route_protection(route: &authmap_core::Route, evidence: &[&Evidence]) -> Vec<
         }) {
             continue;
         }
+        if item.mechanism == "route_param_scope_signal" {
+            continue;
+        }
         let Some(kind) = protection_kind_for_evidence(item.evidence_type) else {
             continue;
         };
@@ -4057,8 +4060,17 @@ fn extract_express_route_evidence(
             evidence.extend(extract_guard_condition_evidence(
                 parsed, node, route, handler,
             ));
+            evidence.extend(extract_scoping_evidence_from_node(
+                parsed,
+                node,
+                route,
+                handler,
+                "handler_scope",
+                Confidence::High,
+            ));
         }
     }
+    evidence.extend(extract_route_param_scoping_evidence(route));
     evidence
 }
 
@@ -4083,6 +4095,14 @@ fn extract_fastapi_route_evidence(
     evidence.extend(extract_guard_condition_evidence(
         parsed, node, route, handler,
     ));
+    evidence.extend(extract_scoping_evidence_from_node(
+        parsed,
+        node,
+        route,
+        handler,
+        "handler_scope",
+        Confidence::High,
+    ));
     for dependency in &route.middleware {
         if let Some(rule) = rules.match_symbol(&dependency.name) {
             push_fastapi_dependency_evidence(&mut evidence, route, rule, dependency.clone());
@@ -4106,6 +4126,7 @@ fn extract_fastapi_route_evidence(
             );
         }
     }
+    evidence.extend(extract_route_param_scoping_evidence(route));
     evidence
 }
 
@@ -4164,6 +4185,14 @@ fn extract_django_route_evidence(
         evidence.extend(extract_guard_condition_evidence(
             parsed, node, route, handler,
         ));
+        evidence.extend(extract_scoping_evidence_from_node(
+            parsed,
+            node,
+            route,
+            handler,
+            "handler_scope",
+            Confidence::High,
+        ));
     }
     if let Some(metadata) = django_route_metadata(route)
         && let Some(class_name) = metadata.class_name.as_deref()
@@ -4177,6 +4206,7 @@ fn extract_django_route_evidence(
             class_name,
         ));
     }
+    evidence.extend(extract_route_param_scoping_evidence(route));
     evidence
 }
 
@@ -4212,7 +4242,16 @@ fn extract_nextjs_route_evidence(
         evidence.extend(extract_guard_condition_evidence(
             parsed, node, route, handler,
         ));
+        evidence.extend(extract_scoping_evidence_from_node(
+            parsed,
+            node,
+            route,
+            handler,
+            "handler_scope",
+            Confidence::High,
+        ));
     }
+    evidence.extend(extract_route_param_scoping_evidence(route));
     evidence
 }
 
@@ -4369,6 +4408,22 @@ fn extract_service_call_evidence(
                 ));
             }
             evidence.extend(service_evidence);
+            let mut scoping_evidence = extract_scoping_evidence_from_node(
+                resolved_parsed,
+                resolved.def.node,
+                route,
+                handler,
+                "service_scope",
+                resolved.confidence,
+            );
+            for item in &mut scoping_evidence {
+                item.notes.push(format!(
+                    "One-hop service call `{}` reaches `{}`",
+                    function_text.trim(),
+                    resolved.def.name
+                ));
+            }
+            evidence.extend(scoping_evidence);
         }
     }
     evidence
@@ -4553,6 +4608,338 @@ fn extract_guard_condition_evidence(
         stack.extend(current.children(&mut cursor));
     }
     evidence
+}
+
+fn extract_route_param_scoping_evidence(route: &authmap_core::Route) -> Vec<Evidence> {
+    route_params(&route.path)
+        .iter()
+        .filter_map(|param| {
+            let evidence_type = scope_evidence_type(&param.name)?;
+            Some(Evidence {
+                id: String::new(),
+                route_id: Some(route.id.clone()),
+                evidence_type,
+                mechanism: "route_param_scope_signal".to_string(),
+                symbol: Some(SymbolRef {
+                    name: param.name.clone(),
+                    span: param.span.clone().or_else(|| route.span.clone()),
+                }),
+                span: param.span.clone().or_else(|| route.span.clone()),
+                confidence: Confidence::Low,
+                notes: vec![
+                    "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+                        .to_string(),
+                ],
+                extensions: authmap_core::ExtensionMap::new(),
+            })
+        })
+        .collect()
+}
+
+fn extract_scoping_evidence_from_node(
+    parsed: &ParsedFile,
+    node: Node<'_>,
+    route: &authmap_core::Route,
+    symbol: &SymbolRef,
+    fallback_mechanism: &str,
+    confidence_cap: Confidence,
+) -> Vec<Evidence> {
+    let mut evidence = Vec::new();
+    let mut stack = vec![node];
+    while let Some(current) = stack.pop() {
+        if node_is_untrusted_text(current.kind()) {
+            continue;
+        }
+        match current.kind() {
+            "if" | "if_statement" => {
+                if let Some(condition) = condition_node(current) {
+                    push_scoping_evidence_for_text(
+                        &mut evidence,
+                        parsed,
+                        route,
+                        symbol,
+                        condition,
+                        "condition_scope",
+                        confidence_cap,
+                    );
+                }
+            }
+            "call" | "call_expression" => {
+                let mechanism = parsed
+                    .text_for(current.child_by_field_name("function").unwrap_or(current))
+                    .map(scope_call_mechanism)
+                    .unwrap_or(fallback_mechanism);
+                if mechanism != fallback_mechanism {
+                    push_scoping_evidence_for_text(
+                        &mut evidence,
+                        parsed,
+                        route,
+                        symbol,
+                        current,
+                        mechanism,
+                        confidence_cap,
+                    );
+                }
+            }
+            "assignment"
+            | "assignment_expression"
+            | "augmented_assignment_expression"
+            | "pair"
+            | "property_identifier" => {
+                let mechanism = parsed
+                    .text_for(current)
+                    .map(|text| {
+                        if contains_any(&text.to_ascii_lowercase(), &["filter", "where", "query"]) {
+                            "query_scope"
+                        } else {
+                            "mutation_scope"
+                        }
+                    })
+                    .unwrap_or("mutation_scope");
+                push_scoping_evidence_for_text(
+                    &mut evidence,
+                    parsed,
+                    route,
+                    symbol,
+                    current,
+                    mechanism,
+                    confidence_cap,
+                );
+            }
+            _ => {}
+        }
+        let mut cursor = current.walk();
+        stack.extend(current.children(&mut cursor));
+    }
+    evidence
+}
+
+fn push_scoping_evidence_for_text(
+    evidence: &mut Vec<Evidence>,
+    parsed: &ParsedFile,
+    route: &authmap_core::Route,
+    _symbol: &SymbolRef,
+    node: Node<'_>,
+    mechanism: &str,
+    confidence_cap: Confidence,
+) {
+    let Some(text) = parsed.text_for(node) else {
+        return;
+    };
+    let lower = text.to_ascii_lowercase();
+    let Some(evidence_type) = scope_text_evidence_type(&lower) else {
+        return;
+    };
+    if !scope_text_has_structure(&lower, mechanism) {
+        return;
+    }
+    let confidence = std::cmp::min(Confidence::High, confidence_cap);
+    push_unique_symbol_evidence(
+        evidence,
+        Evidence {
+            id: String::new(),
+            route_id: Some(route.id.clone()),
+            evidence_type,
+            mechanism: mechanism.to_string(),
+            symbol: Some(SymbolRef {
+                name: scope_symbol_name(text, evidence_type),
+                span: Some(parsed.span_for(node)),
+            }),
+            span: Some(parsed.span_for(node)),
+            confidence,
+            notes: vec![scope_evidence_note(evidence_type, mechanism).to_string()],
+            extensions: authmap_core::ExtensionMap::new(),
+        },
+    );
+    if mechanism == "mutation_scope" && text.contains("owner") && text.contains("tenant") {
+        push_unique_symbol_evidence(
+            evidence,
+            Evidence {
+                id: String::new(),
+                route_id: Some(route.id.clone()),
+                evidence_type: EvidenceType::OwnershipCheck,
+                mechanism: mechanism.to_string(),
+                symbol: Some(SymbolRef {
+                    name: "owner".to_string(),
+                    span: Some(parsed.span_for(node)),
+                }),
+                span: Some(parsed.span_for(node)),
+                confidence,
+                notes: vec![
+                    scope_evidence_note(EvidenceType::OwnershipCheck, mechanism).to_string(),
+                ],
+                extensions: authmap_core::ExtensionMap::new(),
+            },
+        );
+    }
+}
+
+fn scope_call_mechanism(function_text: &str) -> &'static str {
+    let lower = function_text.to_ascii_lowercase();
+    if contains_any(
+        &lower,
+        &[
+            "update",
+            "delete",
+            "create",
+            "save",
+            "add",
+            "insert",
+            "bulk_update",
+        ],
+    ) {
+        "mutation_scope"
+    } else if contains_any(
+        &lower,
+        &[
+            "filter",
+            "where",
+            "find",
+            "findunique",
+            "findfirst",
+            "get",
+            "query",
+        ],
+    ) {
+        "query_scope"
+    } else {
+        "handler_scope"
+    }
+}
+
+fn scope_text_evidence_type(lower: &str) -> Option<EvidenceType> {
+    if contains_tenant_token(lower) {
+        Some(EvidenceType::TenantCheck)
+    } else if contains_ownership_token(lower) {
+        Some(EvidenceType::OwnershipCheck)
+    } else {
+        None
+    }
+}
+
+fn scope_evidence_type(name: &str) -> Option<EvidenceType> {
+    let lower = name.to_ascii_lowercase();
+    if contains_tenant_token(&lower)
+        || contains_any(
+            &lower,
+            &["account_id", "accountid", "project_id", "projectid"],
+        )
+    {
+        Some(EvidenceType::TenantCheck)
+    } else if contains_ownership_token(&lower) {
+        Some(EvidenceType::OwnershipCheck)
+    } else {
+        None
+    }
+}
+
+fn scope_text_has_structure(lower: &str, mechanism: &str) -> bool {
+    match mechanism {
+        "condition_scope" => {
+            contains_any(lower, &["==", "!=", "===", "!==", " in ", ".includes"])
+                && contains_subject_token(lower)
+        }
+        "query_scope" => {
+            contains_any(lower, &["filter", "where", "find", "get", "query"])
+                && contains_any(lower, &["=", ":", "=="])
+        }
+        "mutation_scope" => {
+            contains_any(
+                lower,
+                &[
+                    "=", ":", "where", "data", "update", "create", "delete", "add",
+                ],
+            ) && (contains_subject_token(lower)
+                || contains_any(lower, &["req.params", "params.", "_id", "id:"]))
+        }
+        _ => false,
+    }
+}
+
+fn contains_tenant_token(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            "tenant_id",
+            "tenantid",
+            "tenant",
+            "org_id",
+            "orgid",
+            "organization_id",
+            "organizationid",
+            "organisation_id",
+            "workspace_id",
+            "workspaceid",
+            "workspace",
+        ],
+    )
+}
+
+fn contains_ownership_token(lower: &str) -> bool {
+    contains_any(lower, &["owner_id", "ownerid", "owner", "ownership"])
+}
+
+fn contains_subject_token(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            "req.user",
+            "request.user",
+            "current_user",
+            "user.",
+            "user[",
+            "ctx.user",
+            "session.user",
+        ],
+    )
+}
+
+fn node_is_untrusted_text(kind: &str) -> bool {
+    matches!(
+        kind,
+        "comment" | "string" | "string_fragment" | "template_string"
+    )
+}
+
+fn scope_symbol_name(text: &str, evidence_type: EvidenceType) -> String {
+    for token in scope_symbol_tokens(evidence_type) {
+        if text.to_ascii_lowercase().contains(token) {
+            return token.to_string();
+        }
+    }
+    evidence_type_label(evidence_type).to_string()
+}
+
+fn scope_symbol_tokens(evidence_type: EvidenceType) -> &'static [&'static str] {
+    match evidence_type {
+        EvidenceType::TenantCheck => &[
+            "tenant_id",
+            "tenant",
+            "org_id",
+            "organization_id",
+            "workspace_id",
+        ],
+        EvidenceType::OwnershipCheck => &["owner_id", "owner"],
+        _ => &[],
+    }
+}
+
+fn scope_evidence_note(evidence_type: EvidenceType, mechanism: &str) -> &'static str {
+    match (evidence_type, mechanism) {
+        (EvidenceType::TenantCheck, "query_scope") => "Query filter includes tenant scoping",
+        (EvidenceType::OwnershipCheck, "query_scope") => "Query filter includes ownership scoping",
+        (EvidenceType::TenantCheck, "condition_scope") => {
+            "Condition compares tenant context before continuing"
+        }
+        (EvidenceType::OwnershipCheck, "condition_scope") => {
+            "Condition compares ownership context before continuing"
+        }
+        (EvidenceType::TenantCheck, "mutation_scope") => "Mutation input includes tenant scoping",
+        (EvidenceType::OwnershipCheck, "mutation_scope") => {
+            "Mutation input includes ownership scoping"
+        }
+        _ => "Tenant or ownership scoping evidence was detected",
+    }
 }
 
 fn extract_django_class_evidence(
@@ -5816,6 +6203,12 @@ fn classify_route(route: &authmap_core::Route, facts: &CoverageRouteFacts<'_>) -
         sensitive,
         has_linked_mutations,
     );
+    let tenant_review_reasons = tenant_review_reasons(route, &strong, &weak, &sensitivity, facts);
+    let risk = if tenant_review_reasons.is_empty() {
+        risk
+    } else {
+        RiskLevel::ReviewRequired
+    };
     let mut reviewer_questions = reviewer_questions(
         route,
         class,
@@ -5823,27 +6216,116 @@ fn classify_route(route: &authmap_core::Route, facts: &CoverageRouteFacts<'_>) -
         has_linked_mutations,
         &facts.configured_reviewer_questions,
     );
+    if !tenant_review_reasons.is_empty() {
+        reviewer_questions
+            .push("Should this route require tenant or ownership scoping?".to_string());
+    }
     if risk == RiskLevel::High && reviewer_questions.is_empty() {
         reviewer_questions
             .push("Should this route have server-side authorization evidence?".to_string());
+    }
+    reviewer_questions.sort();
+    reviewer_questions.dedup();
+    let mut rationale = coverage_rationale(
+        class,
+        risk,
+        &strong,
+        &weak,
+        &sensitivity,
+        has_linked_mutations,
+    );
+    if !tenant_review_reasons.is_empty() {
+        rationale.push(format!(
+            "Tenant isolation review required: {}.",
+            tenant_review_reasons.join(", ")
+        ));
+    }
+    let mut extensions = coverage_extensions(evidence, &weak, facts, &sensitivity);
+    if !tenant_review_reasons.is_empty() {
+        extensions.insert(
+            "authmap.tenant_review".to_string(),
+            serde_json::json!({
+                "review_required": true,
+                "reasons": tenant_review_reasons,
+                "evidence_ids": sorted_ids(strong.iter().filter(|item| {
+                    matches!(
+                        item.evidence_type,
+                        EvidenceType::TenantCheck | EvidenceType::OwnershipCheck
+                    )
+                }).map(|item| item.id.as_str())),
+                "weak_evidence_ids": sorted_ids(weak.iter().filter(|item| {
+                    matches!(
+                        item.evidence_type,
+                        EvidenceType::TenantCheck | EvidenceType::OwnershipCheck
+                    )
+                }).map(|item| item.id.as_str())),
+            }),
+        );
     }
 
     Coverage {
         route_id: route.id.clone(),
         class,
         risk,
-        rationale: coverage_rationale(
-            class,
-            risk,
-            &strong,
-            &weak,
-            &sensitivity,
-            has_linked_mutations,
-        ),
+        rationale,
         reviewer_questions,
         uncertainty_reasons: uncertainty_reasons(route, evidence),
-        extensions: coverage_extensions(evidence, &weak, facts, &sensitivity),
+        extensions,
     }
+}
+
+fn tenant_review_reasons(
+    route: &authmap_core::Route,
+    strong: &[&Evidence],
+    weak: &[&Evidence],
+    sensitivity: &[String],
+    facts: &CoverageRouteFacts<'_>,
+) -> Vec<String> {
+    let has_strong_scope = strong.iter().any(|item| {
+        matches!(
+            item.evidence_type,
+            EvidenceType::TenantCheck | EvidenceType::OwnershipCheck
+        )
+    });
+    if has_strong_scope {
+        return Vec::new();
+    }
+
+    let mut reasons = Vec::new();
+    let has_scope_signal = weak.iter().any(|item| {
+        matches!(
+            item.evidence_type,
+            EvidenceType::TenantCheck | EvidenceType::OwnershipCheck
+        )
+    });
+    let tenant_like_path_param = route
+        .params
+        .iter()
+        .any(|param| scope_evidence_type(&param.name).is_some());
+    let has_path_param = !route.params.is_empty();
+    let sensitive_for_tenants = !sensitivity.is_empty()
+        || tenant_like_path_param
+        || !facts.linked_mutations.is_empty()
+        || unsafe_method(route);
+
+    if sensitive_for_tenants && (!facts.linked_mutations.is_empty() || tenant_like_path_param) {
+        reasons.push("missing_tenant_or_ownership_evidence".to_string());
+    }
+    if has_scope_signal {
+        reasons.push("only_weak_tenant_or_ownership_signal".to_string());
+    }
+    if has_path_param && !facts.linked_mutations.is_empty() {
+        reasons.push("route_param_mutation_without_scope".to_string());
+    }
+    if route.path.to_ascii_lowercase().contains("admin")
+        && (!facts.linked_mutations.is_empty() || tenant_like_path_param)
+    {
+        reasons.push("admin_bypass_requires_tenant_review".to_string());
+    }
+
+    reasons.sort();
+    reasons.dedup();
+    reasons
 }
 
 fn coverage_class(strong: &[&Evidence], all_evidence: &[&Evidence]) -> CoverageClass {
@@ -6856,7 +7338,7 @@ class ProductCreate(BaseMutation):
             .find(|coverage| coverage.route_id == "route_mutation")
             .expect("route should be classified");
         assert_eq!(item.class, CoverageClass::Unauthenticated);
-        assert_eq!(item.risk, RiskLevel::High);
+        assert_eq!(item.risk, RiskLevel::ReviewRequired);
         let support = item
             .extensions
             .get("authmap.coverage")
@@ -6870,6 +7352,7 @@ class ProductCreate(BaseMutation):
             support["sensitivity_reasons"],
             serde_json::json!(["linked_mutation"])
         );
+        assert!(item.extensions.contains_key("authmap.tenant_review"));
 
         let role_item = coverage
             .iter()
@@ -6976,13 +7459,14 @@ sensitivity:
             .expect("route should be classified");
 
         assert_eq!(item.class, CoverageClass::Unauthenticated);
-        assert_eq!(item.risk, RiskLevel::High);
+        assert_eq!(item.risk, RiskLevel::ReviewRequired);
         assert_eq!(
             item.reviewer_questions,
             vec![
                 "Should invoice writes require finance approval?".to_string(),
                 "Should linked data mutations have resource-specific authorization evidence?"
                     .to_string(),
+                "Should this route require tenant or ownership scoping?".to_string(),
             ]
         );
         let support = item
@@ -8775,6 +9259,151 @@ function authorizeRecord(req, res, next) { next(); }
         ] {
             assert!(types.contains(&expected), "missing {expected:?}");
         }
+    }
+
+    #[test]
+    fn scan_pipeline_detects_structured_tenant_and_ownership_scoping() {
+        let temp = TestDir::new("tenant-structured-scoping");
+        write_file(
+            &temp.path().join("app.py"),
+            r#"
+from fastapi import Depends, FastAPI
+
+app = FastAPI()
+
+def require_user():
+    return {"id": "user_1", "org_id": "org_1"}
+
+def get_db():
+    return object()
+
+@app.patch("/orgs/{org_id}/projects/{project_id}")
+def update_project(org_id: str, project_id: str, user=Depends(require_user), db=Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id, Project.org_id == user["org_id"]).one()
+    project.owner_id = user["id"]
+    project.name = "renamed"
+    db.add(project)
+    return {"id": project_id}
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let document = run_scan(&plan).expect("scan should succeed");
+        let route = route_by_path(&document, "/orgs/{org_id}/projects/{project_id}");
+        let route_evidence = document
+            .evidence
+            .iter()
+            .filter(|item| item.route_id.as_deref() == Some(route.id.as_str()))
+            .collect::<Vec<_>>();
+
+        assert!(
+            route_evidence.iter().any(|item| {
+                item.evidence_type == EvidenceType::TenantCheck
+                    && item.confidence == Confidence::High
+                    && item.mechanism == "query_scope"
+            }),
+            "tenant query scoping evidence should be detected"
+        );
+        assert!(
+            route_evidence.iter().any(|item| {
+                item.evidence_type == EvidenceType::OwnershipCheck
+                    && item.confidence == Confidence::High
+                    && item.mechanism == "mutation_scope"
+            }),
+            "ownership mutation scoping evidence should be detected"
+        );
+        let coverage = coverage_for_route(&document, &route.id);
+        assert_eq!(coverage.class, CoverageClass::OwnershipGuarded);
+    }
+
+    #[test]
+    fn scan_pipeline_reviews_linked_mutations_without_tenant_scope() {
+        let temp = TestDir::new("tenant-missing-scope");
+        write_file(
+            &temp.path().join("app.ts"),
+            r#"
+import express from "express";
+
+const app = express();
+
+function requireUser(req, res, next) {
+  next();
+}
+
+async function updateProject(req, res) {
+  await prisma.project.update({
+    where: { id: req.params.projectId },
+    data: { name: req.body.name },
+  });
+  res.sendStatus(204);
+}
+
+app.patch("/orgs/:orgId/projects/:projectId", requireUser, updateProject);
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let document = run_scan(&plan).expect("scan should succeed");
+        let route = route_by_path(&document, "/orgs/:orgId/projects/:projectId");
+        let coverage = coverage_for_route(&document, &route.id);
+        let tenant_review = coverage
+            .extensions
+            .get("authmap.tenant_review")
+            .expect("missing tenant scope should add tenant review metadata");
+
+        assert!(document.evidence.iter().any(|item| {
+            item.route_id.as_deref() == Some(route.id.as_str())
+                && item.evidence_type == EvidenceType::TenantCheck
+                && item.mechanism == "route_param_scope_signal"
+                && item.confidence == Confidence::Low
+        }));
+        assert_eq!(coverage.risk, RiskLevel::ReviewRequired);
+        assert_eq!(tenant_review["review_required"], serde_json::json!(true));
+        assert!(tenant_review["reasons"].as_array().is_some_and(|items| {
+            items
+                .iter()
+                .any(|item| item == "missing_tenant_or_ownership_evidence")
+        }));
+        assert!(
+            coverage
+                .reviewer_questions
+                .iter()
+                .any(|question| question.contains("tenant or ownership"))
+        );
+    }
+
+    #[test]
+    fn scan_pipeline_keeps_tenant_names_in_comments_and_strings_out_of_evidence() {
+        let temp = TestDir::new("tenant-false-positives");
+        write_file(
+            &temp.path().join("app.js"),
+            r#"
+const express = require("express");
+const app = express();
+
+function requireUser(req, res, next) {
+  next();
+}
+
+function listProjects(req, res) {
+  // tenant_id owner_id org_id should not count from a comment
+  const message = "workspace_id account_id organization_id should not count from a string";
+  res.json({ message });
+}
+
+app.get("/projects", requireUser, listProjects);
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        assert!(document.evidence.iter().all(|item| {
+            !matches!(
+                item.evidence_type,
+                EvidenceType::TenantCheck | EvidenceType::OwnershipCheck
+            )
+        }));
     }
 
     struct TestDir {
