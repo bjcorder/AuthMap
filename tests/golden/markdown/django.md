@@ -11,7 +11,8 @@
 - Routes: 34
 - Evidence entries: 28
 - Mutations: 7
-- Diagnostics: 6
+- Policy cases: 19
+- Diagnostics: 7
 - Frameworks: django: 7, django_rest_framework: 27
 
 ## Review Required
@@ -40,6 +41,7 @@
 | diagnostic | django_custom_router | DRF custom router behavior could not be resolved statically at tests/fixtures/django/accounts/urls.py:15:17 |
 | diagnostic | django_dynamic_url_path | Django URL path is dynamic and could not be resolved at tests/fixtures/django/accounts/urls.py:26:10 |
 | diagnostic | django_urlpattern_context_uncertain | Django URL helper call is outside a statically recognized urlpatterns context at tests/fixtures/django/accounts/urls.py:34:5 |
+| diagnostic | policy.dynamic_behavior | Dynamic policy evidence requires review. at tests/fixtures/django/accounts/views.py:44:12 |
 
 ## Route Inventory
 
@@ -105,7 +107,14 @@
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.
-- Coverage support: evidence: evidence_0001
+- Coverage support: evidence: evidence_0001; policy cases: policy_case_0001
+- PolicyLens:
+  - policy_case_0001: effective_protection at tests/fixtures/django/accounts/views.py:121:5 (high)
+    - Summary: 1 evidence support(s) route protection: permission_check.
+    - Cites coverage: route_0001
+    - Cites evidence: evidence_0001
+    - Inputs: permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - permission_check `drf_permission_classes` at tests/fixtures/django/accounts/views.py:121:5 (high)
     - Symbol: `permission_classes` (tests/fixtures/django/accounts/views.py:121:5)
@@ -123,9 +132,16 @@
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): path_param.
-- Coverage support: evidence: evidence_0002; sensitivity: path_param
+- Coverage support: evidence: evidence_0002; policy cases: policy_case_0002; sensitivity: path_param
 - Reviewer questions:
   - Should this route require ownership or permission checks?
+- PolicyLens:
+  - policy_case_0002: effective_protection at tests/fixtures/django/accounts/views.py:121:5 (high)
+    - Summary: 1 evidence support(s) route protection: permission_check.
+    - Cites coverage: route_0002
+    - Cites evidence: evidence_0002
+    - Inputs: permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - permission_check `drf_permission_classes` at tests/fixtures/django/accounts/views.py:121:5 (high)
     - Symbol: `permission_classes` (tests/fixtures/django/accounts/views.py:121:5)
@@ -160,9 +176,16 @@
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, user_path.
-- Coverage support: evidence: evidence_0003; sensitivity: account_path, user_path
+- Coverage support: evidence: evidence_0003; policy cases: policy_case_0003; sensitivity: account_path, user_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
+- PolicyLens:
+  - policy_case_0003: effective_protection at tests/fixtures/django/accounts/views.py:68:9 (high)
+    - Summary: 1 evidence support(s) route protection: permission_check.
+    - Cites coverage: route_0004
+    - Cites evidence: evidence_0003
+    - Inputs: permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - permission_check `permission_guard` at tests/fixtures/django/accounts/views.py:68:9 (high)
     - Symbol: `require_permission` (tests/fixtures/django/accounts/views.py:68:9)
@@ -213,11 +236,20 @@
 - Confidence: high
 - Coverage: unauthenticated (high)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, linked_mutation, unsafe_method, user_path.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
-- Coverage support: mutations: mutation_0004; links: link_0001; sensitivity: account_path, linked_mutation, unsafe_method, user_path
+- Coverage support: mutations: mutation_0004; links: link_0001; policy cases: policy_case_0004; sensitivity: account_path, linked_mutation, unsafe_method, user_path
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0004: linked_mutation_protection at tests/fixtures/django/accounts/urls.py:7:1 (high)
+    - Summary: Route reaches linked mutation(s): mutation_0004 (Account).
+    - Cites coverage: route_0007
+    - Cites mutations: mutation_0004
+    - Cites links: link_0001
+    - Inputs: Account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Auth evidence: none
 - Data mutations:
   - create `Account` via `django_orm` at tests/fixtures/django/accounts/views.py:72:16 (high)
@@ -233,11 +265,20 @@
 - Confidence: high
 - Coverage: unauthenticated (high)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method, user_path.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
-- Coverage support: mutations: mutation_0005; links: link_0002; sensitivity: account_path, linked_mutation, path_param, unsafe_method, user_path
+- Coverage support: mutations: mutation_0005; links: link_0002; policy cases: policy_case_0005; sensitivity: account_path, linked_mutation, path_param, unsafe_method, user_path
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0005: linked_mutation_protection at tests/fixtures/django/accounts/urls.py:7:1 (high)
+    - Summary: Route reaches linked mutation(s): mutation_0005 (Account).
+    - Cites coverage: route_0008
+    - Cites mutations: mutation_0005
+    - Cites links: link_0002
+    - Inputs: Account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Auth evidence: none
 - Data mutations:
   - bulk_update `Account` via `django_orm` at tests/fixtures/django/accounts/views.py:76:16 (high)
@@ -342,10 +383,17 @@
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param, unsafe_method.
-- Coverage support: evidence: evidence_0004, evidence_0005, evidence_0006; sensitivity: account_path, path_param, unsafe_method
+- Coverage support: evidence: evidence_0004, evidence_0005, evidence_0006; policy cases: policy_case_0006; sensitivity: account_path, path_param, unsafe_method
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0006: effective_protection at tests/fixtures/django/accounts/views.py:112:5 (medium)
+    - Summary: 3 evidence support(s) route protection: authn, permission_check.
+    - Cites coverage: route_0014
+    - Cites evidence: evidence_0004, evidence_0005, evidence_0006
+    - Inputs: identity, permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - authn `drf_permission_classes` at tests/fixtures/django/accounts/views.py:112:5 (medium)
     - Symbol: `IsAuthenticated` (tests/fixtures/django/accounts/views.py:112:5)
@@ -369,9 +417,16 @@
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path.
-- Coverage support: evidence: evidence_0007, evidence_0008, evidence_0009; sensitivity: account_path
+- Coverage support: evidence: evidence_0007, evidence_0008, evidence_0009; policy cases: policy_case_0007; sensitivity: account_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
+- PolicyLens:
+  - policy_case_0007: effective_protection at tests/fixtures/django/accounts/views.py:112:5 (medium)
+    - Summary: 3 evidence support(s) route protection: authn, permission_check.
+    - Cites coverage: route_0015
+    - Cites evidence: evidence_0007, evidence_0008, evidence_0009
+    - Inputs: identity, permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - authn `drf_permission_classes` at tests/fixtures/django/accounts/views.py:112:5 (medium)
     - Symbol: `IsAuthenticated` (tests/fixtures/django/accounts/views.py:112:5)
@@ -396,9 +451,16 @@
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param.
-- Coverage support: evidence: evidence_0010, evidence_0011, evidence_0012; sensitivity: account_path, path_param
+- Coverage support: evidence: evidence_0010, evidence_0011, evidence_0012; policy cases: policy_case_0008; sensitivity: account_path, path_param
 - Reviewer questions:
   - Should this route require ownership or permission checks?
+- PolicyLens:
+  - policy_case_0008: effective_protection at tests/fixtures/django/accounts/views.py:112:5 (medium)
+    - Summary: 3 evidence support(s) route protection: authn, permission_check.
+    - Cites coverage: route_0016
+    - Cites evidence: evidence_0010, evidence_0011, evidence_0012
+    - Inputs: identity, permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - authn `drf_permission_classes` at tests/fixtures/django/accounts/views.py:112:5 (medium)
     - Symbol: `IsAuthenticated` (tests/fixtures/django/accounts/views.py:112:5)
@@ -423,10 +485,17 @@
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param, unsafe_method.
-- Coverage support: evidence: evidence_0013, evidence_0014, evidence_0015; sensitivity: account_path, path_param, unsafe_method
+- Coverage support: evidence: evidence_0013, evidence_0014, evidence_0015; policy cases: policy_case_0009; sensitivity: account_path, path_param, unsafe_method
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0009: effective_protection at tests/fixtures/django/accounts/views.py:112:5 (medium)
+    - Summary: 3 evidence support(s) route protection: authn, permission_check.
+    - Cites coverage: route_0017
+    - Cites evidence: evidence_0013, evidence_0014, evidence_0015
+    - Inputs: identity, permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - authn `drf_permission_classes` at tests/fixtures/django/accounts/views.py:112:5 (medium)
     - Symbol: `IsAuthenticated` (tests/fixtures/django/accounts/views.py:112:5)
@@ -450,10 +519,17 @@
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, unsafe_method.
-- Coverage support: evidence: evidence_0016, evidence_0017, evidence_0018; sensitivity: account_path, unsafe_method
+- Coverage support: evidence: evidence_0016, evidence_0017, evidence_0018; policy cases: policy_case_0010; sensitivity: account_path, unsafe_method
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0010: effective_protection at tests/fixtures/django/accounts/views.py:112:5 (medium)
+    - Summary: 3 evidence support(s) route protection: authn, permission_check.
+    - Cites coverage: route_0018
+    - Cites evidence: evidence_0016, evidence_0017, evidence_0018
+    - Inputs: identity, permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - authn `drf_permission_classes` at tests/fixtures/django/accounts/views.py:112:5 (medium)
     - Symbol: `IsAuthenticated` (tests/fixtures/django/accounts/views.py:112:5)
@@ -478,10 +554,17 @@
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param, unsafe_method.
-- Coverage support: evidence: evidence_0019, evidence_0020, evidence_0021; sensitivity: account_path, path_param, unsafe_method
+- Coverage support: evidence: evidence_0019, evidence_0020, evidence_0021; policy cases: policy_case_0011; sensitivity: account_path, path_param, unsafe_method
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0011: effective_protection at tests/fixtures/django/accounts/views.py:112:5 (medium)
+    - Summary: 3 evidence support(s) route protection: authn, permission_check.
+    - Cites coverage: route_0019
+    - Cites evidence: evidence_0019, evidence_0020, evidence_0021
+    - Inputs: identity, permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - authn `drf_permission_classes` at tests/fixtures/django/accounts/views.py:112:5 (medium)
     - Symbol: `IsAuthenticated` (tests/fixtures/django/accounts/views.py:112:5)
@@ -505,9 +588,16 @@
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path.
-- Coverage support: evidence: evidence_0022; sensitivity: account_path
+- Coverage support: evidence: evidence_0022; policy cases: policy_case_0012; sensitivity: account_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
+- PolicyLens:
+  - policy_case_0012: effective_protection at tests/fixtures/django/accounts/views.py:121:5 (medium)
+    - Summary: 1 evidence support(s) route protection: permission_check.
+    - Cites coverage: route_0020
+    - Cites evidence: evidence_0022
+    - Inputs: permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - permission_check `drf_permission_classes` at tests/fixtures/django/accounts/views.py:121:5 (medium)
     - Symbol: `permission_classes` (tests/fixtures/django/accounts/views.py:121:5)
@@ -526,9 +616,16 @@
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param.
-- Coverage support: evidence: evidence_0023; sensitivity: account_path, path_param
+- Coverage support: evidence: evidence_0023; policy cases: policy_case_0013; sensitivity: account_path, path_param
 - Reviewer questions:
   - Should this route require ownership or permission checks?
+- PolicyLens:
+  - policy_case_0013: effective_protection at tests/fixtures/django/accounts/views.py:121:5 (medium)
+    - Summary: 1 evidence support(s) route protection: permission_check.
+    - Cites coverage: route_0021
+    - Cites evidence: evidence_0023
+    - Inputs: permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - permission_check `drf_permission_classes` at tests/fixtures/django/accounts/views.py:121:5 (medium)
     - Symbol: `permission_classes` (tests/fixtures/django/accounts/views.py:121:5)
@@ -629,11 +726,20 @@
 - Confidence: high
 - Coverage: unauthenticated (high)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
-- Coverage support: mutations: mutation_0007; links: link_0003; sensitivity: account_path, linked_mutation, unsafe_method
+- Coverage support: mutations: mutation_0007; links: link_0003; policy cases: policy_case_0014; sensitivity: account_path, linked_mutation, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0014: linked_mutation_protection at tests/fixtures/django/accounts/urls.py:17:1 (high)
+    - Summary: Route reaches linked mutation(s): mutation_0007 (Account).
+    - Cites coverage: route_0027
+    - Cites mutations: mutation_0007
+    - Cites links: link_0003
+    - Inputs: Account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Auth evidence: none
 - Data mutations:
   - bulk_update `Account` via `django_orm` at tests/fixtures/django/accounts/views.py:90:16 (high)
@@ -648,11 +754,20 @@
 - Confidence: high
 - Coverage: unauthenticated (high)
 - Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, any_method, linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
-- Coverage support: mutations: mutation_0001; links: link_0004; sensitivity: account_path, any_method, linked_mutation, unsafe_method
+- Coverage support: mutations: mutation_0001; links: link_0004; policy cases: policy_case_0015; sensitivity: account_path, any_method, linked_mutation, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0015: linked_mutation_protection at tests/fixtures/django/accounts/urls.py:20:5 (medium)
+    - Summary: Route reaches linked mutation(s): mutation_0001 (Account).
+    - Cites coverage: route_0028
+    - Cites mutations: mutation_0001
+    - Cites links: link_0004
+    - Inputs: Account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Auth evidence: none
 - Data mutations:
   - create `Account` via `django_orm` at tests/fixtures/django/accounts/services.py:5:12 (high)
@@ -669,7 +784,7 @@
 - Confidence: high
 - Coverage: unknown_or_dynamic (review_required)
 - Coverage rationale: 1 weak or dynamic authorization evidence item(s) were detected.; Sensitive route modifier(s): account_path, any_method, linked_mutation, path_param, unsafe_method, user_path.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0024; weak evidence: evidence_0024; mutations: mutation_0002, mutation_0003; links: link_0005, link_0006, link_0007; sensitivity: account_path, any_method, linked_mutation, path_param, unsafe_method, user_path
+- Coverage support: evidence: evidence_0024; weak evidence: evidence_0024; mutations: mutation_0002, mutation_0003; links: link_0005, link_0006, link_0007; policy cases: policy_case_0016, policy_case_0017; sensitivity: account_path, any_method, linked_mutation, path_param, unsafe_method, user_path
 - Reviewer questions:
   - Can the dynamic authorization path be confirmed?
   - Should linked data mutations have resource-specific authorization evidence?
@@ -678,6 +793,23 @@
 - Coverage uncertainty:
   - Dynamic authorization evidence requires review.
   - Low-confidence authorization evidence was detected.
+- PolicyLens:
+  - policy_case_0016: linked_mutation_protection at tests/fixtures/django/accounts/urls.py:21:5 (low)
+    - Summary: Route reaches linked mutation(s): mutation_0002, mutation_0003 (Account).
+    - Cites coverage: route_0029
+    - Cites mutations: mutation_0002, mutation_0003
+    - Cites links: link_0005, link_0006, link_0007
+    - Inputs: Account
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
+  - policy_case_0017: dynamic at tests/fixtures/django/accounts/views.py:44:12 (low)
+    - Summary: Dynamic policy behavior requires review.
+    - Cites coverage: route_0029
+    - Cites evidence: evidence_0024
+    - Inputs: AccountDetailView
+    - Branch: dynamic policy dispatch -> review_required (reachable)
+    - Question: Can the dynamic authorization path be confirmed?
+    - Uncertainty: Dynamic authorization evidence requires review.
 - Auth evidence:
   - unknown_dynamic_check `handler_condition` at tests/fixtures/django/accounts/views.py:44:12 (low)
     - Symbol: `AccountDetailView` (tests/fixtures/django/accounts/views.py:41:7)
@@ -717,12 +849,19 @@
 - Confidence: medium
 - Coverage: permission_guarded (low)
 - Coverage rationale: 3 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, any_method, unsafe_method.
-- Coverage support: evidence: evidence_0025, evidence_0026, evidence_0027; sensitivity: account_path, any_method, unsafe_method
+- Coverage support: evidence: evidence_0025, evidence_0026, evidence_0027; policy cases: policy_case_0018; sensitivity: account_path, any_method, unsafe_method
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Route inventory confidence is not high.
+- PolicyLens:
+  - policy_case_0018: effective_protection at tests/fixtures/django/accounts/views.py:112:5 (medium)
+    - Summary: 3 evidence support(s) route protection: authn, permission_check.
+    - Cites coverage: route_0031
+    - Cites evidence: evidence_0025, evidence_0026, evidence_0027
+    - Inputs: identity, permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Uncertainty notes:
   - Route emitted from statically matched generated URL helper
 - Auth evidence:
@@ -749,12 +888,19 @@
 - Confidence: medium
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, any_method, path_param, unsafe_method.
-- Coverage support: evidence: evidence_0028; sensitivity: account_path, any_method, path_param, unsafe_method
+- Coverage support: evidence: evidence_0028; policy cases: policy_case_0019; sensitivity: account_path, any_method, path_param, unsafe_method
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Route inventory confidence is not high.
+- PolicyLens:
+  - policy_case_0019: effective_protection at tests/fixtures/django/shared/generic/object_views.py:1:7 (medium)
+    - Summary: 1 evidence support(s) route protection: permission_check.
+    - Cites coverage: route_0032
+    - Cites evidence: evidence_0028
+    - Inputs: permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Uncertainty notes:
   - Route emitted from statically matched generated URL helper
 - Auth evidence:
@@ -811,6 +957,7 @@
 | warning | django_custom_router | tests/fixtures/django/accounts/urls.py:15:17 | DRF custom router behavior could not be resolved statically |
 | warning | django_dynamic_url_path | tests/fixtures/django/accounts/urls.py:26:10 | Django URL path is dynamic and could not be resolved |
 | warning | django_urlpattern_context_uncertain | tests/fixtures/django/accounts/urls.py:34:5 | Django URL helper call is outside a statically recognized urlpatterns context |
+| warning | policy.dynamic_behavior | tests/fixtures/django/accounts/views.py:44:12 | Dynamic policy evidence requires review. |
 
 ## Skipped Files
 

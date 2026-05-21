@@ -11,6 +11,7 @@
 - Routes: 0
 - Evidence entries: 0
 - Mutations: 0
+- Policy cases: 0
 - Diagnostics: 0
 - Frameworks: none
 

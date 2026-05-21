@@ -16,6 +16,7 @@ Every document contains:
 - `mutations`: sensitive operations such as ORM writes or deletes.
 - `links`: normalized relationships between routes, evidence, and mutations.
 - `coverage`: review-oriented classification for routes.
+- `policy_cases`: optional static policy decision summaries for route review.
 - `diagnostics`: structured scan diagnostics with stable categories and codes.
 
 The JSON schema is strict: misspelled core fields are rejected.
@@ -78,7 +79,14 @@ Risk scoring uses route sensitivity modifiers and linked facts:
 
 Coverage entries include machine-readable support metadata in the namespaced
 extension key `authmap.coverage`. The extension can contain `evidence_ids`,
-`weak_evidence_ids`, `mutation_ids`, `link_ids`, and `sensitivity_reasons`.
+`weak_evidence_ids`, `mutation_ids`, `link_ids`, `policy_case_ids`, and
+`sensitivity_reasons`.
+
+Policy decision cases are optional static summaries, not runtime proofs. When
+present, `policy_cases[]` entries cite route and evidence IDs, summarize
+effective protection or review-required policy behavior, record observed inputs
+and branches, and carry reviewer questions or uncertainty notes for dynamic,
+conflicting, duplicated, unreachable, or linked-mutation policy evidence.
 
 Raw or ambiguous mutation facts can include machine-readable review metadata in
 `mutation.extensions["authmap.mutation"]`. The MVP uses `review_required`,

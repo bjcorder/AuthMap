@@ -11,7 +11,8 @@
 - Routes: 26
 - Evidence entries: 12
 - Mutations: 0
-- Diagnostics: 4
+- Policy cases: 9
+- Diagnostics: 6
 - Frameworks: fast_api: 26
 
 ## Review Required
@@ -29,7 +30,9 @@
 | [route_0020](#route-route_0020) | POST /search | risk is high |
 | [route_0021](#route-route_0021) | ANY /fallback | confidence is medium; api_route methods are dynamic or missing; emitted as ANY; risk is high |
 | [route_0024](#route-route_0024) | GET &lt;dynamic&gt; | confidence is medium; route path is dynamic and was emitted as &lt;dynamic&gt;; route path is dynamic and was not fully resolved |
+| diagnostic | policy.dynamic_behavior | Dynamic policy evidence requires review. at tests/fixtures/fastapi/app/services/account.py:7:9 |
 | diagnostic | fastapi_dynamic_router_prefix | FastAPI router prefix is dynamic and could not be resolved at tests/fixtures/fastapi/main.py:14:18 |
+| diagnostic | policy.dynamic_behavior | Dynamic policy evidence requires review. at tests/fixtures/fastapi/main.py:61:12 |
 | diagnostic | fastapi_dynamic_api_route_methods | FastAPI api_route methods are dynamic or missing at tests/fixtures/fastapi/main.py:95:2 |
 | diagnostic | fastapi_dynamic_route_path | FastAPI route path is dynamic and could not be resolved at tests/fixtures/fastapi/main.py:110:2 |
 | diagnostic | fastapi_dynamic_include_router_prefix | FastAPI include_router prefix is dynamic and could not be resolved at tests/fixtures/fastapi/main.py:140:1 |
@@ -147,9 +150,16 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): path_param, user_path.
-- Coverage support: evidence: evidence_0001, evidence_0002; sensitivity: path_param, user_path
+- Coverage support: evidence: evidence_0001, evidence_0002; policy cases: policy_case_0001; sensitivity: path_param, user_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
+- PolicyLens:
+  - policy_case_0001: effective_protection at tests/fixtures/fastapi/main.py:134:32 (high)
+    - Summary: 2 evidence support(s) route protection: authn, permission_check.
+    - Cites coverage: route_0005
+    - Cites evidence: evidence_0001, evidence_0002
+    - Inputs: identity, permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/fastapi/main.py:134:32 (high)
     - Symbol: `require_user` (tests/fixtures/fastapi/main.py:134:32)
@@ -204,10 +214,17 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): path_param, unsafe_method, user_path.
-- Coverage support: evidence: evidence_0003, evidence_0004; sensitivity: path_param, unsafe_method, user_path
+- Coverage support: evidence: evidence_0003, evidence_0004; policy cases: policy_case_0002; sensitivity: path_param, unsafe_method, user_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0002: effective_protection at tests/fixtures/fastapi/main.py:134:32 (high)
+    - Summary: 2 evidence support(s) route protection: authn, permission_check.
+    - Cites coverage: route_0008
+    - Cites evidence: evidence_0003, evidence_0004
+    - Inputs: identity, permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/fastapi/main.py:134:32 (high)
     - Symbol: `require_user` (tests/fixtures/fastapi/main.py:134:32)
@@ -273,7 +290,14 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
-- Coverage support: evidence: evidence_0005
+- Coverage support: evidence: evidence_0005; policy cases: policy_case_0003
+- PolicyLens:
+  - policy_case_0003: effective_protection at tests/fixtures/fastapi/main.py:50:18 (high)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0012
+    - Cites evidence: evidence_0005
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/fastapi/main.py:50:18 (high)
     - Symbol: `require_user` (tests/fixtures/fastapi/main.py:50:26)
@@ -291,11 +315,18 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: admin_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): account_path, admin_path, path_param, unsafe_method.
-- Coverage support: evidence: evidence_0006; sensitivity: account_path, admin_path, path_param, unsafe_method
+- Coverage support: evidence: evidence_0006; policy cases: policy_case_0004; sensitivity: account_path, admin_path, path_param, unsafe_method
 - Reviewer questions:
   - Should this route require an admin or role guard?
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0004: effective_protection at tests/fixtures/fastapi/main.py:54:59 (high)
+    - Summary: 1 evidence support(s) route protection: admin_check.
+    - Cites coverage: route_0013
+    - Cites evidence: evidence_0006
+    - Inputs: admin
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - admin_check `admin_guard` at tests/fixtures/fastapi/main.py:54:59 (high)
     - Symbol: `require_admin` (tests/fixtures/fastapi/main.py:54:67)
@@ -313,13 +344,29 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, path_param, unsafe_method.
-- Coverage support: evidence: evidence_0007, evidence_0008; weak evidence: evidence_0008; sensitivity: account_path, path_param, unsafe_method
+- Coverage support: evidence: evidence_0007, evidence_0008; weak evidence: evidence_0008; policy cases: policy_case_0005, policy_case_0006; sensitivity: account_path, path_param, unsafe_method
 - Reviewer questions:
+  - Can the dynamic authorization path be confirmed?
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Dynamic authorization evidence requires review.
   - Low-confidence authorization evidence was detected.
+- PolicyLens:
+  - policy_case_0005: effective_protection at tests/fixtures/fastapi/main.py:59:64 (high)
+    - Summary: 1 evidence support(s) route protection: permission_check.
+    - Cites coverage: route_0014
+    - Cites evidence: evidence_0007
+    - Inputs: permission
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0006: dynamic at tests/fixtures/fastapi/main.py:61:12 (low)
+    - Summary: Dynamic policy behavior requires review.
+    - Cites coverage: route_0014
+    - Cites evidence: evidence_0008
+    - Inputs: dynamic_policy_check
+    - Branch: dynamic policy dispatch -> review_required (reachable)
+    - Question: Can the dynamic authorization path be confirmed?
+    - Uncertainty: Dynamic authorization evidence requires review.
 - Auth evidence:
   - permission_check `permission_guard` at tests/fixtures/fastapi/main.py:59:64 (high)
     - Symbol: `can_edit_account` (tests/fixtures/fastapi/main.py:59:72)
@@ -339,7 +386,7 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: unknown_or_dynamic (review_required)
 - Coverage rationale: 1 weak or dynamic authorization evidence item(s) were detected.; Sensitive route modifier(s): account_path, unsafe_method.
-- Coverage support: evidence: evidence_0009; weak evidence: evidence_0009; links: link_0001; sensitivity: account_path, unsafe_method
+- Coverage support: evidence: evidence_0009; weak evidence: evidence_0009; links: link_0001; policy cases: policy_case_0007; sensitivity: account_path, unsafe_method
 - Reviewer questions:
   - Can the dynamic authorization path be confirmed?
   - Should this route require ownership or permission checks?
@@ -347,6 +394,15 @@ No data mutations were detected.
 - Coverage uncertainty:
   - Dynamic authorization evidence requires review.
   - Low-confidence authorization evidence was detected.
+- PolicyLens:
+  - policy_case_0007: dynamic at tests/fixtures/fastapi/app/services/account.py:7:9 (low)
+    - Summary: Dynamic policy behavior requires review.
+    - Cites coverage: route_0015
+    - Cites evidence: evidence_0009
+    - Inputs: authorize
+    - Branch: dynamic policy dispatch -> review_required (reachable)
+    - Question: Can the dynamic authorization path be confirmed?
+    - Uncertainty: Dynamic authorization evidence requires review.
 - Auth evidence:
   - unknown_dynamic_check `dynamic_policy` at tests/fixtures/fastapi/app/services/account.py:7:9 (low)
     - Symbol: `authorize` (tests/fixtures/fastapi/app/services/account.py:7:9)
@@ -365,10 +421,17 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): path_param, unsafe_method.
-- Coverage support: evidence: evidence_0010; sensitivity: path_param, unsafe_method
+- Coverage support: evidence: evidence_0010; policy cases: policy_case_0008; sensitivity: path_param, unsafe_method
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0008: effective_protection at tests/fixtures/fastapi/main.py:128:71 (high)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0016
+    - Cites evidence: evidence_0010
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/fastapi/main.py:128:71 (high)
     - Symbol: `require_user` (tests/fixtures/fastapi/main.py:128:71)
@@ -385,7 +448,14 @@ No data mutations were detected.
 - Confidence: high
 - Coverage: permission_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.
-- Coverage support: evidence: evidence_0011, evidence_0012
+- Coverage support: evidence: evidence_0011, evidence_0012; policy cases: policy_case_0009
+- PolicyLens:
+  - policy_case_0009: effective_protection at tests/fixtures/fastapi/main.py:134:32 (high)
+    - Summary: 2 evidence support(s) route protection: authn, permission_check.
+    - Cites coverage: route_0017
+    - Cites evidence: evidence_0011, evidence_0012
+    - Inputs: identity, permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/fastapi/main.py:134:32 (high)
     - Symbol: `require_user` (tests/fixtures/fastapi/main.py:134:32)
@@ -534,7 +604,9 @@ No data mutations were detected.
 
 | Severity | Code | Location | Message |
 | --- | --- | --- | --- |
+| warning | policy.dynamic_behavior | tests/fixtures/fastapi/app/services/account.py:7:9 | Dynamic policy evidence requires review. |
 | warning | fastapi_dynamic_router_prefix | tests/fixtures/fastapi/main.py:14:18 | FastAPI router prefix is dynamic and could not be resolved |
+| warning | policy.dynamic_behavior | tests/fixtures/fastapi/main.py:61:12 | Dynamic policy evidence requires review. |
 | warning | fastapi_dynamic_api_route_methods | tests/fixtures/fastapi/main.py:95:2 | FastAPI api_route methods are dynamic or missing |
 | warning | fastapi_dynamic_route_path | tests/fixtures/fastapi/main.py:110:2 | FastAPI route path is dynamic and could not be resolved |
 | warning | fastapi_dynamic_include_router_prefix | tests/fixtures/fastapi/main.py:140:1 | FastAPI include_router prefix is dynamic and could not be resolved |

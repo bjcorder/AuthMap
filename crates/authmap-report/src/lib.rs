@@ -11,8 +11,9 @@ use authmap_analysis::{
 };
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticSeverity, Evidence,
-    EvidenceType, Framework, Mutation, MutationOperation, ReachabilityLink, RiskLevel,
-    SCHEMA_VERSION, ScanMode, SourceFile, Span, SymbolRef,
+    EvidenceType, Framework, Mutation, MutationOperation, PolicyCase, PolicyCaseKind,
+    PolicyOutcome, ReachabilityLink, RiskLevel, SCHEMA_VERSION, ScanMode, SourceFile, Span,
+    SymbolRef,
 };
 use regex::{Captures, Regex};
 use serde_json::{Map, Value, json};
@@ -213,6 +214,7 @@ struct ReportIndex<'a> {
     evidence_by_route: BTreeMap<&'a str, Vec<&'a Evidence>>,
     mutations_by_route: BTreeMap<&'a str, Vec<&'a Mutation>>,
     links_by_route: BTreeMap<&'a str, Vec<&'a ReachabilityLink>>,
+    policy_cases_by_route: BTreeMap<&'a str, Vec<&'a PolicyCase>>,
 }
 
 impl<'a> ReportIndex<'a> {
@@ -282,6 +284,16 @@ impl<'a> ReportIndex<'a> {
         for links in links_by_route.values_mut() {
             dedup_links(links);
         }
+        let mut policy_cases_by_route: BTreeMap<&str, Vec<&PolicyCase>> = BTreeMap::new();
+        for case in &document.policy_cases {
+            policy_cases_by_route
+                .entry(case.route_id.as_str())
+                .or_default()
+                .push(case);
+        }
+        for cases in policy_cases_by_route.values_mut() {
+            cases.sort_by(|left, right| left.id.cmp(&right.id));
+        }
 
         Self {
             coverage_by_route,
@@ -291,6 +303,7 @@ impl<'a> ReportIndex<'a> {
             evidence_by_route,
             mutations_by_route,
             links_by_route,
+            policy_cases_by_route,
         }
     }
 }
@@ -336,6 +349,7 @@ fn render_summary(output: &mut String, document: &AuthMapDocument) {
     let _ = writeln!(output, "- Routes: {}", document.routes.len());
     let _ = writeln!(output, "- Evidence entries: {}", document.evidence.len());
     let _ = writeln!(output, "- Mutations: {}", document.mutations.len());
+    let _ = writeln!(output, "- Policy cases: {}", document.policy_cases.len());
     let _ = writeln!(output, "- Diagnostics: {}", document.diagnostics.len());
 
     let framework_counts = framework_counts(document);
@@ -618,6 +632,7 @@ fn render_route_details(output: &mut String, document: &AuthMapDocument, index: 
             let _ = writeln!(output, "- Coverage: not classified");
         }
 
+        render_policy_lens(output, route.id.as_str(), index);
         if !route.notes.is_empty() {
             let _ = writeln!(output, "- Uncertainty notes:");
             for note in &route.notes {
@@ -640,6 +655,7 @@ fn render_coverage_support(output: &mut String, coverage: &Coverage) {
         ("weak evidence", support_ids(support, "weak_evidence_ids")),
         ("mutations", support_ids(support, "mutation_ids")),
         ("links", support_ids(support, "link_ids")),
+        ("policy cases", support_ids(support, "policy_case_ids")),
         ("sensitivity", support_ids(support, "sensitivity_reasons")),
     ]
     .into_iter()
@@ -674,6 +690,109 @@ fn support_ids(value: &Value, key: &str) -> Vec<String> {
                 .map(str::to_string)
                 .collect::<Vec<_>>()
         })
+        .unwrap_or_default()
+}
+
+fn render_policy_lens(output: &mut String, route_id: &str, index: &ReportIndex<'_>) {
+    let Some(cases) = index.policy_cases_by_route.get(route_id) else {
+        return;
+    };
+    if cases.is_empty() {
+        return;
+    }
+
+    let _ = writeln!(output, "- PolicyLens:");
+    for case in cases {
+        render_policy_case(output, case, "  -");
+    }
+}
+
+fn render_policy_case(output: &mut String, case: &PolicyCase, prefix: &str) {
+    let _ = writeln!(
+        output,
+        "{prefix} {}: {} at {} ({})",
+        escape_inline(&case.id),
+        policy_case_kind_label(case.kind),
+        format_optional_span(case.span.as_ref()),
+        confidence_label(case.confidence)
+    );
+    let _ = writeln!(output, "    - Summary: {}", escape_inline(&case.summary));
+    let _ = writeln!(
+        output,
+        "    - Cites coverage: {}",
+        escape_inline(&case.route_id)
+    );
+    if !case.evidence_ids.is_empty() {
+        let _ = writeln!(
+            output,
+            "    - Cites evidence: {}",
+            case.evidence_ids
+                .iter()
+                .map(|id| escape_inline(id))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    let mutation_ids = policy_extension_ids(case, "mutation_ids");
+    if !mutation_ids.is_empty() {
+        let _ = writeln!(
+            output,
+            "    - Cites mutations: {}",
+            mutation_ids
+                .iter()
+                .map(|id| escape_inline(id))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    let link_ids = policy_extension_ids(case, "link_ids");
+    if !link_ids.is_empty() {
+        let _ = writeln!(
+            output,
+            "    - Cites links: {}",
+            link_ids
+                .iter()
+                .map(|id| escape_inline(id))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    if !case.input_names.is_empty() {
+        let _ = writeln!(
+            output,
+            "    - Inputs: {}",
+            case.input_names
+                .iter()
+                .map(|input| escape_inline(input))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    for branch in &case.branches {
+        let _ = writeln!(
+            output,
+            "    - Branch: {} -> {} ({})",
+            escape_inline(&branch.condition),
+            policy_outcome_label(branch.outcome),
+            if branch.reachable {
+                "reachable"
+            } else {
+                "unreachable"
+            }
+        );
+    }
+    for question in &case.reviewer_questions {
+        let _ = writeln!(output, "    - Question: {}", escape_inline(question));
+    }
+    for reason in &case.uncertainty_reasons {
+        let _ = writeln!(output, "    - Uncertainty: {}", escape_inline(reason));
+    }
+}
+
+fn policy_extension_ids(case: &PolicyCase, key: &str) -> Vec<String> {
+    case.extensions
+        .get("authmap.policy")
+        .map(|value| support_ids(value, key))
         .unwrap_or_default()
 }
 
@@ -1351,6 +1470,7 @@ fn render_explain_route_context(
     );
     render_explain_source_evidence(output, route);
     render_explain_coverage(output, route.id.as_str(), index);
+    render_policy_lens(output, route.id.as_str(), index);
     render_explain_route_evidence(output, route.id.as_str(), index);
     render_explain_route_mutations(output, route.id.as_str(), index);
     render_explain_route_links(output, route.id.as_str(), index);
@@ -1966,6 +2086,26 @@ fn evidence_type_label(evidence_type: EvidenceType) -> &'static str {
         EvidenceType::ExplicitPublic => "explicit_public",
         EvidenceType::AuditLog => "audit_log",
         EvidenceType::UnknownDynamicCheck => "unknown_dynamic_check",
+    }
+}
+
+fn policy_case_kind_label(kind: PolicyCaseKind) -> &'static str {
+    match kind {
+        PolicyCaseKind::EffectiveProtection => "effective_protection",
+        PolicyCaseKind::LinkedMutationProtection => "linked_mutation_protection",
+        PolicyCaseKind::Conflict => "conflict",
+        PolicyCaseKind::Duplicate => "duplicate",
+        PolicyCaseKind::Unreachable => "unreachable",
+        PolicyCaseKind::Dynamic => "dynamic",
+    }
+}
+
+fn policy_outcome_label(outcome: PolicyOutcome) -> &'static str {
+    match outcome {
+        PolicyOutcome::Allow => "allow",
+        PolicyOutcome::Deny => "deny",
+        PolicyOutcome::Unknown => "unknown",
+        PolicyOutcome::ReviewRequired => "review_required",
     }
 }
 
@@ -2706,9 +2846,10 @@ mod tests {
     use authmap_core::{
         AuthMapDocument, ByteRange, Confidence, Coverage, CoverageClass, Diagnostic,
         DiagnosticCategory, DiagnosticSeverity, Evidence, EvidenceType, ExtensionMap, Framework,
-        Mutation, MutationOperation, ReachabilityLink, Recoverability, RiskLevel, Route,
-        RouteParam, RouteProtection, RouteProtectionKind, ScanMetadata, SkipReason, SourceFile,
-        Span, SymbolRef, diagnostic_codes,
+        Mutation, MutationOperation, PolicyBranch, PolicyCase, PolicyCaseKind, PolicyOutcome,
+        ReachabilityLink, Recoverability, RiskLevel, Route, RouteParam, RouteProtection,
+        RouteProtectionKind, ScanMetadata, SkipReason, SourceFile, Span, SymbolRef,
+        diagnostic_codes,
     };
 
     #[test]
@@ -3005,6 +3146,11 @@ mod tests {
         assert!(rendered.contains("evidence_0001: admin_check `requires_admin`"));
         assert!(rendered.contains("mutation_0001: update `user.disabled` via `sqlalchemy`"));
         assert!(rendered.contains("link_0001: route=route_0001"));
+        assert!(rendered.contains("- PolicyLens:"));
+        assert!(rendered.contains("policy_case_0001: dynamic"));
+        assert!(rendered.contains("Cites coverage: route_0001"));
+        assert!(rendered.contains("Cites evidence: evidence_0001"));
+        assert!(rendered.contains("Cites mutations: mutation_0001"));
         assert!(rendered.contains("Should this require a tenant check?"));
         assert!(rendered.contains("warning dynamic_policy"));
         assert!(rendered.contains("not confirmed vulnerabilities"));
@@ -3787,6 +3933,38 @@ mod tests {
                 reviewer_questions: vec!["Should this require a tenant check?".to_string()],
                 uncertainty_reasons: Vec::new(),
                 extensions: ExtensionMap::new(),
+            }],
+            policy_cases: vec![PolicyCase {
+                id: "policy_case_0001".to_string(),
+                route_id: "route_0001".to_string(),
+                kind: PolicyCaseKind::Dynamic,
+                summary: "Dynamic policy behavior requires review.".to_string(),
+                evidence_ids: vec!["evidence_0001".to_string()],
+                input_names: vec!["user.role".to_string()],
+                branches: vec![PolicyBranch {
+                    condition: "policy runtime dispatch".to_string(),
+                    outcome: PolicyOutcome::ReviewRequired,
+                    reachable: true,
+                    evidence_ids: vec!["evidence_0001".to_string()],
+                    span: Some(span.clone()),
+                    confidence: Confidence::Low,
+                    notes: vec!["Runtime policy target is not statically known.".to_string()],
+                }],
+                span: Some(span.clone()),
+                confidence: Confidence::Low,
+                reviewer_questions: vec!["Can the dynamic policy path be confirmed?".to_string()],
+                uncertainty_reasons: vec!["Dynamic policy dispatch was detected.".to_string()],
+                extensions: {
+                    let mut extensions = ExtensionMap::new();
+                    extensions.insert(
+                        "authmap.policy".to_string(),
+                        json!({
+                            "mutation_ids": ["mutation_0001"],
+                            "link_ids": ["link_0001"]
+                        }),
+                    );
+                    extensions
+                },
             }],
             diagnostics: vec![Diagnostic {
                 category: DiagnosticCategory::Policy,

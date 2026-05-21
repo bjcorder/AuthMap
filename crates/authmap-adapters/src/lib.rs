@@ -4414,7 +4414,7 @@ app.include_router(router, dependencies=build_runtime_dependencies())
         ]);
         let output = ExpressAdapter.discover_routes(&parsed, &AdapterContext::default());
 
-        assert_eq!(output.routes.len(), 26);
+        assert_eq!(output.routes.len(), 29);
         assert!(
             output
                 .routes
@@ -4492,7 +4492,19 @@ app.include_router(router, dependencies=build_runtime_dependencies())
                 .as_ref()
                 .and_then(|handler| handler.span.as_ref())
                 .map(|span| span.line),
-            Some(44)
+            Some(48)
+        );
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/public/status")),
+            vec!["publicRoute"]
+        );
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/conflicting")),
+            vec!["publicRoute", "requireAuth"]
+        );
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/unreachable/admin")),
+            vec!["requireAuth"]
         );
 
         let admin_jobs = route(&output, "POST", "/admin/jobs");

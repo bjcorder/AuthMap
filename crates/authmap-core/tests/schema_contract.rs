@@ -3,9 +3,10 @@ use std::path::{Path, PathBuf};
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticCategory,
     DiagnosticSeverity, Evidence, EvidenceType, ExtensionMap, FIRST_PARTY_DIAGNOSTIC_CODES,
-    Framework, Mutation, MutationOperation, ReachabilityLink, Recoverability, RiskLevel, Route,
-    RouteParam, RouteProtection, RouteProtectionKind, SCHEMA_VERSION, ScanMetadata, ScanMode,
-    SourceEvidence, Span, SymbolRef, diagnostic_codes,
+    Framework, Mutation, MutationOperation, PolicyBranch, PolicyCase, PolicyCaseKind,
+    PolicyOutcome, ReachabilityLink, Recoverability, RiskLevel, Route, RouteParam, RouteProtection,
+    RouteProtectionKind, SCHEMA_VERSION, ScanMetadata, ScanMode, SourceEvidence, Span, SymbolRef,
+    diagnostic_codes,
 };
 use serde_json::{Value, json};
 
@@ -202,6 +203,65 @@ fn rust_document_serialization_validates_against_schema() {
     assert_eq!(document.schema_version, SCHEMA_VERSION);
     let serialized = serde_json::to_value(document).expect("document should serialize");
     assert_valid(&schema(), &serialized);
+}
+
+#[test]
+fn policy_cases_are_optional_schema_validated_ir() {
+    let schema = schema();
+    let document_without_cases = read_json("examples/route-inventory.authmap.json");
+    assert!(
+        document_without_cases.get("policy_cases").is_none(),
+        "policy_cases should be omitted when empty"
+    );
+    assert_valid(&schema, &document_without_cases);
+
+    let mut document = AuthMapDocument::empty(ScanMetadata::default());
+    document.routes.push(Route {
+        id: "route.admin".to_string(),
+        framework: Framework::Express,
+        method: "POST".to_string(),
+        path: "/admin/users".to_string(),
+        name: None,
+        tags: Vec::new(),
+        middleware: Vec::new(),
+        params: Vec::new(),
+        declared_protection: Vec::new(),
+        handler: None,
+        span: Some(span("src/routes/admin.ts", 8, 1)),
+        source_evidence: Vec::new(),
+        confidence: Confidence::High,
+        notes: Vec::new(),
+        extensions: ExtensionMap::new(),
+    });
+    document.policy_cases.push(PolicyCase {
+        id: "policy_case_0001".to_string(),
+        route_id: "route.admin".to_string(),
+        kind: PolicyCaseKind::EffectiveProtection,
+        summary: "Admin evidence protects this route.".to_string(),
+        evidence_ids: vec!["evidence.admin".to_string()],
+        input_names: vec!["user.role".to_string()],
+        branches: vec![PolicyBranch {
+            condition: "user.role == admin".to_string(),
+            outcome: PolicyOutcome::Allow,
+            reachable: true,
+            evidence_ids: vec!["evidence.admin".to_string()],
+            span: Some(span("src/routes/admin.ts", 9, 5)),
+            confidence: Confidence::High,
+            notes: Vec::new(),
+        }],
+        span: Some(span("src/routes/admin.ts", 9, 5)),
+        confidence: Confidence::High,
+        reviewer_questions: Vec::new(),
+        uncertainty_reasons: Vec::new(),
+        extensions: ExtensionMap::new(),
+    });
+
+    let serialized = serde_json::to_value(document).expect("document should serialize");
+    assert_valid(&schema, &serialized);
+    assert_eq!(
+        serialized["policy_cases"][0]["kind"],
+        json!("effective_protection")
+    );
 }
 
 #[test]

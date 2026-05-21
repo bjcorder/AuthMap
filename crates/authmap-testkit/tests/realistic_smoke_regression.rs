@@ -33,7 +33,7 @@ fn realistic_express_json_and_markdown_match_goldens() {
         &document,
         RealisticExpectations {
             routes: 15,
-            evidence: 23,
+            evidence: 25,
             mutations: 4,
             links: 10,
             diagnostic_codes: &[

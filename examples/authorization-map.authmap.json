@@ -408,6 +408,80 @@
       }
     }
   ],
+  "policy_cases": [
+    {
+      "id": "policy_case.account.delete",
+      "route_id": "route.accounts.delete",
+      "kind": "effective_protection",
+      "summary": "Ownership and tenant evidence support route protection.",
+      "evidence_ids": ["evidence.account.ownership", "evidence.account.tenant"],
+      "input_names": ["ownership", "tenant"],
+      "branches": [
+        {
+          "condition": "account owner and tenant checks are present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": ["evidence.account.ownership", "evidence.account.tenant"],
+          "span": {
+            "file": "src/policies/account_policy.py",
+            "line": 47,
+            "column": 9,
+            "byte_range": null
+          },
+          "confidence": "medium",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "src/policies/account_policy.py",
+        "line": 47,
+        "column": 9,
+        "byte_range": null
+      },
+      "confidence": "medium",
+      "reviewer_questions": [],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.policy": {
+          "mutation_ids": ["mutation.account.delete"],
+          "link_ids": ["link.account.mutation"]
+        }
+      }
+    },
+    {
+      "id": "policy_case.admin.dynamic",
+      "route_id": "route.admin.users.disable",
+      "kind": "dynamic",
+      "summary": "Dynamic policy behavior requires review.",
+      "evidence_ids": ["evidence.admin.dynamic"],
+      "input_names": ["policy.evaluate"],
+      "branches": [
+        {
+          "condition": "dynamic policy dispatch",
+          "outcome": "review_required",
+          "reachable": true,
+          "evidence_ids": ["evidence.admin.dynamic"],
+          "span": {
+            "file": "app/api/admin/users/[id]/route.ts",
+            "line": 16,
+            "column": 11,
+            "byte_range": null
+          },
+          "confidence": "low",
+          "notes": ["Dynamic dispatch requires reviewer interpretation."]
+        }
+      ],
+      "span": {
+        "file": "app/api/admin/users/[id]/route.ts",
+        "line": 16,
+        "column": 11,
+        "byte_range": null
+      },
+      "confidence": "low",
+      "reviewer_questions": ["Can the dynamic authorization path be confirmed?"],
+      "uncertainty_reasons": ["Dynamic authorization evidence requires review."]
+    }
+  ],
   "diagnostics": [],
   "extensions": {
     "authmap.sample": {
