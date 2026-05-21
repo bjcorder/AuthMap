@@ -177,6 +177,222 @@ pub fn render_routes_markdown(document: &AuthMapDocument) -> String {
     output
 }
 
+pub fn render_tenants_json(document: &AuthMapDocument) -> Result<String, ReportError> {
+    let index = ReportIndex::new(document);
+    let routes = tenant_relevant_routes(document, &index)
+        .into_iter()
+        .map(|route| {
+            let coverage = index.coverage_by_route.get(route.id.as_str());
+            let evidence = tenant_route_evidence(route.id.as_str(), &index)
+                .into_iter()
+                .map(|item| {
+                    json!({
+                        "id": item.id,
+                        "evidence_type": evidence_type_label(item.evidence_type),
+                        "mechanism": item.mechanism,
+                        "symbol": item.symbol,
+                        "location": item.span,
+                        "confidence": confidence_label(item.confidence),
+                        "notes": item.notes,
+                    })
+                })
+                .collect::<Vec<_>>();
+            let mutations = index
+                .mutations_by_route
+                .get(route.id.as_str())
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|mutation| {
+                    json!({
+                        "id": mutation.id,
+                        "operation": mutation_operation_label(mutation.operation),
+                        "library": mutation.library,
+                        "resource": mutation.resource,
+                        "location": mutation.span,
+                        "confidence": confidence_label(mutation.confidence),
+                        "notes": mutation.notes,
+                    })
+                })
+                .collect::<Vec<_>>();
+            json!({
+                "id": route.id,
+                "framework": framework_label(route.framework),
+                "method": route.method,
+                "path": route.path,
+                "handler": route.handler,
+                "location": route.span,
+                "coverage": coverage.map(|item| coverage_class_label(item.class)),
+                "risk": coverage.map(|item| risk_label(item.risk)),
+                "rationale": coverage.map_or_else(Vec::new, |item| item.rationale.clone()),
+                "reviewer_questions": coverage.map_or_else(Vec::new, |item| item.reviewer_questions.clone()),
+                "uncertainty_reasons": coverage.map_or_else(Vec::new, |item| item.uncertainty_reasons.clone()),
+                "tenant_review": tenant_review_value(coverage.copied()),
+                "evidence": evidence,
+                "mutations": mutations,
+                "links": index.links_by_route.get(route.id.as_str()).cloned().unwrap_or_default(),
+            })
+        })
+        .collect::<Vec<_>>();
+    let mut value = json!({
+        "report_type": "authmap.tenants",
+        "schema_version": SCHEMA_VERSION,
+        "metadata": document.metadata,
+        "summary": {
+            "routes": document.routes.len(),
+            "relevant_routes": routes.len(),
+            "review_required": document.coverage.iter().filter(|coverage| {
+                coverage.extensions.contains_key("authmap.tenant_review")
+                    || matches!(coverage.risk, RiskLevel::High | RiskLevel::ReviewRequired)
+            }).count(),
+            "diagnostics": document.diagnostics.len(),
+        },
+        "routes": routes,
+        "diagnostics": document.diagnostics,
+    });
+    redact_json_value(&mut value);
+    serde_json::to_string_pretty(&value).map_err(ReportError::Json)
+}
+
+pub fn render_tenants_markdown(document: &AuthMapDocument) -> String {
+    let index = ReportIndex::new(document);
+    let routes = tenant_relevant_routes(document, &index);
+    let mut output = String::new();
+    let _ = writeln!(output, "# AuthMap Tenant Review");
+    let _ = writeln!(output);
+    let _ = writeln!(output, "- Schema version: {}", SCHEMA_VERSION);
+    let _ = writeln!(output, "- Routes: {}", document.routes.len());
+    let _ = writeln!(output, "- Relevant routes: {}", routes.len());
+    let _ = writeln!(output, "- Diagnostics: {}", document.diagnostics.len());
+    let _ = writeln!(output);
+
+    if routes.is_empty() {
+        let _ = writeln!(
+            output,
+            "No tenant or ownership review items were identified."
+        );
+        return output;
+    }
+
+    for route in routes {
+        let coverage = index.coverage_by_route.get(route.id.as_str());
+        let _ = writeln!(
+            output,
+            "## {} `{}`",
+            escape_inline(&route.method),
+            escape_inline(&route.path)
+        );
+        let _ = writeln!(output);
+        let _ = writeln!(output, "- Route ID: {}", escape_inline(&route.id));
+        let _ = writeln!(output, "- Framework: {}", framework_label(route.framework));
+        if let Some(coverage) = coverage {
+            let _ = writeln!(
+                output,
+                "- Coverage: {} ({})",
+                coverage_class_label(coverage.class),
+                risk_label(coverage.risk)
+            );
+            if !coverage.rationale.is_empty() {
+                let _ = writeln!(
+                    output,
+                    "- Rationale: {}",
+                    coverage
+                        .rationale
+                        .iter()
+                        .map(|item| escape_inline(item))
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                );
+            }
+            render_named_markdown_list(
+                &mut output,
+                "Reviewer questions",
+                &coverage.reviewer_questions,
+            );
+            render_named_markdown_list(&mut output, "Uncertainty", &coverage.uncertainty_reasons);
+        }
+        let evidence = tenant_route_evidence(route.id.as_str(), &index);
+        if evidence.is_empty() {
+            let _ = writeln!(output, "- Tenant evidence: none");
+        } else {
+            let _ = writeln!(output, "- Tenant evidence:");
+            for item in evidence {
+                let _ = writeln!(
+                    output,
+                    "  - {} `{}` at {} ({})",
+                    evidence_type_label(item.evidence_type),
+                    escape_inline(&item.mechanism),
+                    format_optional_span(item.span.as_ref()),
+                    confidence_label(item.confidence)
+                );
+            }
+        }
+        let mutations = index
+            .mutations_by_route
+            .get(route.id.as_str())
+            .cloned()
+            .unwrap_or_default();
+        if mutations.is_empty() {
+            let _ = writeln!(output, "- Linked mutations: none");
+        } else {
+            let _ = writeln!(output, "- Linked mutations:");
+            for mutation in mutations {
+                let _ = writeln!(
+                    output,
+                    "  - {} {} `{}`",
+                    escape_inline(&mutation.id),
+                    mutation_operation_label(mutation.operation),
+                    escape_inline(mutation.resource.as_deref().unwrap_or("unknown resource"))
+                );
+            }
+        }
+        let _ = writeln!(output);
+    }
+
+    output
+}
+
+fn tenant_relevant_routes<'a>(
+    document: &'a AuthMapDocument,
+    index: &ReportIndex<'a>,
+) -> Vec<&'a authmap_core::Route> {
+    sorted_routes(document)
+        .into_iter()
+        .filter(|route| {
+            index
+                .coverage_by_route
+                .get(route.id.as_str())
+                .is_some_and(|coverage| coverage.extensions.contains_key("authmap.tenant_review"))
+                || tenant_route_evidence(route.id.as_str(), index)
+                    .iter()
+                    .any(|item| item.confidence != Confidence::Low)
+        })
+        .collect()
+}
+
+fn tenant_route_evidence<'a>(route_id: &str, index: &ReportIndex<'a>) -> Vec<&'a Evidence> {
+    index
+        .evidence_by_route
+        .get(route_id)
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|item| {
+            matches!(
+                item.evidence_type,
+                EvidenceType::TenantCheck | EvidenceType::OwnershipCheck
+            )
+        })
+        .collect()
+}
+
+fn tenant_review_value(coverage: Option<&Coverage>) -> Value {
+    coverage
+        .and_then(|coverage| coverage.extensions.get("authmap.tenant_review"))
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({ "review_required": false, "reasons": [] }))
+}
+
 fn route_params_table(route: &authmap_core::Route) -> String {
     if route.params.is_empty() {
         return "none".to_string();
@@ -3516,6 +3732,38 @@ mod tests {
     }
 
     #[test]
+    fn focused_tenant_markdown_groups_relevant_routes_and_questions() {
+        let document = document_with_tenant_review_data();
+
+        let markdown = render_tenants_markdown(&document);
+
+        assert!(markdown.contains("# AuthMap Tenant Review"));
+        assert!(markdown.contains("- Relevant routes: 1"));
+        assert!(markdown.contains("DELETE `/accounts/:id`"));
+        assert!(markdown.contains("Should this route require tenant or ownership scoping?"));
+        assert!(markdown.contains("tenant_check"));
+    }
+
+    #[test]
+    fn focused_tenant_json_reports_review_metadata_without_canonical_schema_claim() {
+        let document = document_with_tenant_review_data();
+
+        let json: Value =
+            serde_json::from_str(&render_tenants_json(&document).expect("JSON should render"))
+                .expect("tenant report should parse");
+
+        assert_eq!(json["report_type"], "authmap.tenants");
+        assert_eq!(json["schema_version"], "0.1.0");
+        assert_eq!(json["summary"]["relevant_routes"], 1);
+        assert_eq!(json["routes"][0]["id"], "route.accounts.delete");
+        assert_eq!(json["routes"][0]["tenant_review"]["review_required"], true);
+        assert_eq!(
+            json["routes"][0]["evidence"][0]["evidence_type"],
+            "tenant_check"
+        );
+    }
+
+    #[test]
     fn write_atomic_refuses_preexisting_temp_path() {
         let dir = std::env::temp_dir().join(format!(
             "authmap-report-test-{}",
@@ -3603,6 +3851,45 @@ mod tests {
             extensions: ExtensionMap::new(),
         });
         document.diagnostics.push(diagnostic());
+        document
+    }
+
+    fn document_with_tenant_review_data() -> AuthMapDocument {
+        let mut document = document_with_review_data();
+        document.evidence.push(Evidence {
+            id: "evidence.tenant".to_string(),
+            route_id: Some("route.accounts.delete".to_string()),
+            evidence_type: EvidenceType::TenantCheck,
+            mechanism: "query_scope".to_string(),
+            symbol: Some(SymbolRef {
+                name: "tenant_id".to_string(),
+                span: Some(Span {
+                    file: "src/app.py".to_string(),
+                    line: 2,
+                    column: 10,
+                    byte_range: None,
+                }),
+            }),
+            span: Some(Span {
+                file: "src/app.py".to_string(),
+                line: 2,
+                column: 10,
+                byte_range: None,
+            }),
+            confidence: Confidence::High,
+            notes: vec!["Query filter includes tenant scoping".to_string()],
+            extensions: ExtensionMap::new(),
+        });
+        document.coverage[0]
+            .reviewer_questions
+            .push("Should this route require tenant or ownership scoping?".to_string());
+        document.coverage[0].extensions.insert(
+            "authmap.tenant_review".to_string(),
+            serde_json::json!({
+                "review_required": true,
+                "reasons": ["missing_tenant_or_ownership_evidence"]
+            }),
+        );
         document
     }
 

@@ -136,7 +136,7 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0001"
+            "evidence_0002"
           ],
           "notes": []
         }
@@ -238,8 +238,8 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0002",
-            "evidence_0003"
+            "evidence_0003",
+            "evidence_0005"
           ],
           "notes": []
         },
@@ -270,8 +270,8 @@
           "inherited": true,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0002",
-            "evidence_0003"
+            "evidence_0003",
+            "evidence_0005"
           ],
           "notes": []
         }
@@ -362,9 +362,42 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0004"
+            "evidence_0006"
           ],
           "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "mutation_scope",
+          "symbol": {
+            "name": "owner",
+            "span": {
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 18,
+              "column": 9,
+              "byte_range": {
+                "start": 648,
+                "end": 733
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 18,
+            "column": 9,
+            "byte_range": {
+              "start": 648,
+              "end": 733
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0008"
+          ],
+          "notes": [
+            "Mutation input includes ownership scoping"
+          ]
         }
       ],
       "handler": {
@@ -467,10 +500,43 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0006",
-            "evidence_0007"
+            "evidence_0009",
+            "evidence_0010"
           ],
           "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "mutation_scope",
+          "symbol": {
+            "name": "owner",
+            "span": {
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 18,
+              "column": 9,
+              "byte_range": {
+                "start": 648,
+                "end": 733
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 18,
+            "column": 9,
+            "byte_range": {
+              "start": 648,
+              "end": 733
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0012"
+          ],
+          "notes": [
+            "Mutation input includes ownership scoping"
+          ]
         },
         {
           "kind": "inherited_guard",
@@ -499,8 +565,8 @@
           "inherited": true,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0006",
-            "evidence_0007"
+            "evidence_0009",
+            "evidence_0010"
           ],
           "notes": []
         }
@@ -588,7 +654,7 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0009"
+            "evidence_0014"
           ],
           "notes": []
         },
@@ -619,7 +685,7 @@
           "inherited": false,
           "confidence": "low",
           "evidence_ids": [
-            "evidence_0010"
+            "evidence_0015"
           ],
           "notes": [
             "Dynamic or indirect policy call requires review"
@@ -723,7 +789,7 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0012"
+            "evidence_0018"
           ],
           "notes": []
         },
@@ -754,7 +820,7 @@
           "inherited": true,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0011"
+            "evidence_0016"
           ],
           "notes": []
         },
@@ -785,7 +851,7 @@
           "inherited": false,
           "confidence": "low",
           "evidence_ids": [
-            "evidence_0013"
+            "evidence_0019"
           ],
           "notes": [
             "Dynamic or indirect policy call requires review"
@@ -875,7 +941,7 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0014"
+            "evidence_0021"
           ],
           "notes": []
         }
@@ -977,7 +1043,7 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0016"
+            "evidence_0024"
           ],
           "notes": []
         },
@@ -1008,7 +1074,7 @@
           "inherited": true,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0015"
+            "evidence_0022"
           ],
           "notes": []
         }
@@ -1099,8 +1165,8 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0017",
-            "evidence_0018"
+            "evidence_0025",
+            "evidence_0026"
           ],
           "notes": []
         },
@@ -1131,8 +1197,8 @@
           "inherited": true,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0017",
-            "evidence_0018"
+            "evidence_0025",
+            "evidence_0026"
           ],
           "notes": []
         }
@@ -1211,7 +1277,7 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0019"
+            "evidence_0027"
           ],
           "notes": []
         }
@@ -1304,8 +1370,8 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0020",
-            "evidence_0021"
+            "evidence_0028",
+            "evidence_0029"
           ],
           "notes": []
         },
@@ -1336,8 +1402,8 @@
           "inherited": true,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0020",
-            "evidence_0021"
+            "evidence_0028",
+            "evidence_0029"
           ],
           "notes": []
         }
@@ -1416,7 +1482,7 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0022"
+            "evidence_0030"
           ],
           "notes": []
         }
@@ -1518,9 +1584,42 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0024"
+            "evidence_0033"
           ],
           "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "mutation_scope",
+          "symbol": {
+            "name": "tenant",
+            "span": {
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 51,
+              "column": 14,
+              "byte_range": {
+                "start": 1721,
+                "end": 1750
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 51,
+            "column": 14,
+            "byte_range": {
+              "start": 1721,
+              "end": 1750
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0034"
+          ],
+          "notes": [
+            "Mutation input includes tenant scoping"
+          ]
         },
         {
           "kind": "inherited_guard",
@@ -1549,7 +1648,7 @@
           "inherited": true,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0023"
+            "evidence_0031"
           ],
           "notes": []
         }
@@ -1637,9 +1736,42 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0025"
+            "evidence_0036"
           ],
           "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "mutation_scope",
+          "symbol": {
+            "name": "tenant",
+            "span": {
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 51,
+              "column": 14,
+              "byte_range": {
+                "start": 1721,
+                "end": 1750
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 51,
+            "column": 14,
+            "byte_range": {
+              "start": 1721,
+              "end": 1750
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0037"
+          ],
+          "notes": [
+            "Mutation input includes tenant scoping"
+          ]
         }
       ],
       "handler": {
@@ -1674,6 +1806,37 @@
     {
       "id": "evidence_0001",
       "route_id": "route_0002",
+      "evidence_type": "tenant_check",
+      "mechanism": "route_param_scope_signal",
+      "symbol": {
+        "name": "accountId",
+        "span": {
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 13,
+          "column": 1,
+          "byte_range": {
+            "start": 409,
+            "end": 543
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 13,
+        "column": 1,
+        "byte_range": {
+          "start": 409,
+          "end": 543
+        }
+      },
+      "confidence": "low",
+      "notes": [
+        "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+      ]
+    },
+    {
+      "id": "evidence_0002",
+      "route_id": "route_0002",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
       "symbol": {
@@ -1695,35 +1858,6 @@
         "byte_range": {
           "start": 435,
           "end": 446
-        }
-      },
-      "confidence": "high",
-      "notes": []
-    },
-    {
-      "id": "evidence_0002",
-      "route_id": "route_0003",
-      "evidence_type": "authn",
-      "mechanism": "authn_guard",
-      "symbol": {
-        "name": "requireAuth",
-        "span": {
-          "file": "tests/fixtures/realistic/express/app.ts",
-          "line": 42,
-          "column": 17,
-          "byte_range": {
-            "start": 1157,
-            "end": 1168
-          }
-        }
-      },
-      "span": {
-        "file": "tests/fixtures/realistic/express/app.ts",
-        "line": 42,
-        "column": 17,
-        "byte_range": {
-          "start": 1157,
-          "end": 1168
         }
       },
       "confidence": "high",
@@ -1737,6 +1871,66 @@
       "symbol": {
         "name": "requireAuth",
         "span": {
+          "file": "tests/fixtures/realistic/express/app.ts",
+          "line": 42,
+          "column": 17,
+          "byte_range": {
+            "start": 1157,
+            "end": 1168
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 42,
+        "column": 17,
+        "byte_range": {
+          "start": 1157,
+          "end": 1168
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0004",
+      "route_id": "route_0003",
+      "evidence_type": "tenant_check",
+      "mechanism": "route_param_scope_signal",
+      "symbol": {
+        "name": "accountId",
+        "span": {
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 13,
+          "column": 1,
+          "byte_range": {
+            "start": 409,
+            "end": 543
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 13,
+        "column": 1,
+        "byte_range": {
+          "start": 409,
+          "end": 543
+        }
+      },
+      "confidence": "low",
+      "notes": [
+        "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+      ]
+    },
+    {
+      "id": "evidence_0005",
+      "route_id": "route_0003",
+      "evidence_type": "authn",
+      "mechanism": "authn_guard",
+      "symbol": {
+        "name": "requireAuth",
+        "span": {
           "file": "tests/fixtures/realistic/express/routes/accounts.ts",
           "line": 13,
           "column": 27,
@@ -1759,7 +1953,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0004",
+      "id": "evidence_0006",
       "route_id": "route_0004",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -1782,64 +1976,6 @@
         "byte_range": {
           "start": 563,
           "end": 574
-        }
-      },
-      "confidence": "high",
-      "notes": []
-    },
-    {
-      "id": "evidence_0005",
-      "route_id": "route_0004",
-      "evidence_type": "audit_log",
-      "mechanism": "audit_log",
-      "symbol": {
-        "name": "audit",
-        "span": {
-          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
-          "line": 17,
-          "column": 31,
-          "byte_range": {
-            "start": 576,
-            "end": 581
-          }
-        }
-      },
-      "span": {
-        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
-        "line": 17,
-        "column": 31,
-        "byte_range": {
-          "start": 576,
-          "end": 581
-        }
-      },
-      "confidence": "high",
-      "notes": []
-    },
-    {
-      "id": "evidence_0006",
-      "route_id": "route_0005",
-      "evidence_type": "authn",
-      "mechanism": "authn_guard",
-      "symbol": {
-        "name": "requireAuth",
-        "span": {
-          "file": "tests/fixtures/realistic/express/app.ts",
-          "line": 42,
-          "column": 17,
-          "byte_range": {
-            "start": 1157,
-            "end": 1168
-          }
-        }
-      },
-      "span": {
-        "file": "tests/fixtures/realistic/express/app.ts",
-        "line": 42,
-        "column": 17,
-        "byte_range": {
-          "start": 1157,
-          "end": 1168
         }
       },
       "confidence": "high",
@@ -1847,6 +1983,95 @@
     },
     {
       "id": "evidence_0007",
+      "route_id": "route_0004",
+      "evidence_type": "audit_log",
+      "mechanism": "audit_log",
+      "symbol": {
+        "name": "audit",
+        "span": {
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 17,
+          "column": 31,
+          "byte_range": {
+            "start": 576,
+            "end": 581
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 17,
+        "column": 31,
+        "byte_range": {
+          "start": 576,
+          "end": 581
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0008",
+      "route_id": "route_0004",
+      "evidence_type": "ownership_check",
+      "mechanism": "mutation_scope",
+      "symbol": {
+        "name": "owner",
+        "span": {
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 18,
+          "column": 9,
+          "byte_range": {
+            "start": 648,
+            "end": 733
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 18,
+        "column": 9,
+        "byte_range": {
+          "start": 648,
+          "end": 733
+        }
+      },
+      "confidence": "high",
+      "notes": [
+        "Mutation input includes ownership scoping"
+      ]
+    },
+    {
+      "id": "evidence_0009",
+      "route_id": "route_0005",
+      "evidence_type": "authn",
+      "mechanism": "authn_guard",
+      "symbol": {
+        "name": "requireAuth",
+        "span": {
+          "file": "tests/fixtures/realistic/express/app.ts",
+          "line": 42,
+          "column": 17,
+          "byte_range": {
+            "start": 1157,
+            "end": 1168
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 42,
+        "column": 17,
+        "byte_range": {
+          "start": 1157,
+          "end": 1168
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0010",
       "route_id": "route_0005",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -1875,7 +2100,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0008",
+      "id": "evidence_0011",
       "route_id": "route_0005",
       "evidence_type": "audit_log",
       "mechanism": "audit_log",
@@ -1904,7 +2129,69 @@
       "notes": []
     },
     {
-      "id": "evidence_0009",
+      "id": "evidence_0012",
+      "route_id": "route_0005",
+      "evidence_type": "ownership_check",
+      "mechanism": "mutation_scope",
+      "symbol": {
+        "name": "owner",
+        "span": {
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 18,
+          "column": 9,
+          "byte_range": {
+            "start": 648,
+            "end": 733
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 18,
+        "column": 9,
+        "byte_range": {
+          "start": 648,
+          "end": 733
+        }
+      },
+      "confidence": "high",
+      "notes": [
+        "Mutation input includes ownership scoping"
+      ]
+    },
+    {
+      "id": "evidence_0013",
+      "route_id": "route_0006",
+      "evidence_type": "tenant_check",
+      "mechanism": "route_param_scope_signal",
+      "symbol": {
+        "name": "accountId",
+        "span": {
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 24,
+          "column": 1,
+          "byte_range": {
+            "start": 771,
+            "end": 1086
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 24,
+        "column": 1,
+        "byte_range": {
+          "start": 771,
+          "end": 1086
+        }
+      },
+      "confidence": "low",
+      "notes": [
+        "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+      ]
+    },
+    {
+      "id": "evidence_0014",
       "route_id": "route_0006",
       "evidence_type": "permission_check",
       "mechanism": "permission_guard",
@@ -1933,7 +2220,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0010",
+      "id": "evidence_0015",
       "route_id": "route_0006",
       "evidence_type": "unknown_dynamic_check",
       "mechanism": "handler_call",
@@ -1964,7 +2251,7 @@
       ]
     },
     {
-      "id": "evidence_0011",
+      "id": "evidence_0016",
       "route_id": "route_0007",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -1993,7 +2280,38 @@
       "notes": []
     },
     {
-      "id": "evidence_0012",
+      "id": "evidence_0017",
+      "route_id": "route_0007",
+      "evidence_type": "tenant_check",
+      "mechanism": "route_param_scope_signal",
+      "symbol": {
+        "name": "accountId",
+        "span": {
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 24,
+          "column": 1,
+          "byte_range": {
+            "start": 771,
+            "end": 1086
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 24,
+        "column": 1,
+        "byte_range": {
+          "start": 771,
+          "end": 1086
+        }
+      },
+      "confidence": "low",
+      "notes": [
+        "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+      ]
+    },
+    {
+      "id": "evidence_0018",
       "route_id": "route_0007",
       "evidence_type": "permission_check",
       "mechanism": "permission_guard",
@@ -2022,7 +2340,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0013",
+      "id": "evidence_0019",
       "route_id": "route_0007",
       "evidence_type": "unknown_dynamic_check",
       "mechanism": "handler_call",
@@ -2053,7 +2371,38 @@
       ]
     },
     {
-      "id": "evidence_0014",
+      "id": "evidence_0020",
+      "route_id": "route_0008",
+      "evidence_type": "tenant_check",
+      "mechanism": "route_param_scope_signal",
+      "symbol": {
+        "name": "accountId",
+        "span": {
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 36,
+          "column": 1,
+          "byte_range": {
+            "start": 1089,
+            "end": 1259
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 36,
+        "column": 1,
+        "byte_range": {
+          "start": 1089,
+          "end": 1259
+        }
+      },
+      "confidence": "low",
+      "notes": [
+        "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+      ]
+    },
+    {
+      "id": "evidence_0021",
       "route_id": "route_0008",
       "evidence_type": "admin_check",
       "mechanism": "admin_guard",
@@ -2082,7 +2431,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0015",
+      "id": "evidence_0022",
       "route_id": "route_0009",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -2111,7 +2460,38 @@
       "notes": []
     },
     {
-      "id": "evidence_0016",
+      "id": "evidence_0023",
+      "route_id": "route_0009",
+      "evidence_type": "tenant_check",
+      "mechanism": "route_param_scope_signal",
+      "symbol": {
+        "name": "accountId",
+        "span": {
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 36,
+          "column": 1,
+          "byte_range": {
+            "start": 1089,
+            "end": 1259
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 36,
+        "column": 1,
+        "byte_range": {
+          "start": 1089,
+          "end": 1259
+        }
+      },
+      "confidence": "low",
+      "notes": [
+        "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+      ]
+    },
+    {
+      "id": "evidence_0024",
       "route_id": "route_0009",
       "evidence_type": "admin_check",
       "mechanism": "admin_guard",
@@ -2140,7 +2520,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0017",
+      "id": "evidence_0025",
       "route_id": "route_0010",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -2169,7 +2549,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0018",
+      "id": "evidence_0026",
       "route_id": "route_0010",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -2198,7 +2578,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0019",
+      "id": "evidence_0027",
       "route_id": "route_0011",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -2227,7 +2607,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0020",
+      "id": "evidence_0028",
       "route_id": "route_0012",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -2256,7 +2636,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0021",
+      "id": "evidence_0029",
       "route_id": "route_0012",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -2285,7 +2665,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0022",
+      "id": "evidence_0030",
       "route_id": "route_0013",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -2314,7 +2694,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0023",
+      "id": "evidence_0031",
       "route_id": "route_0014",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -2343,7 +2723,38 @@
       "notes": []
     },
     {
-      "id": "evidence_0024",
+      "id": "evidence_0032",
+      "route_id": "route_0014",
+      "evidence_type": "tenant_check",
+      "mechanism": "route_param_scope_signal",
+      "symbol": {
+        "name": "tenantId",
+        "span": {
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 50,
+          "column": 1,
+          "byte_range": {
+            "start": 1610,
+            "end": 1757
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 50,
+        "column": 1,
+        "byte_range": {
+          "start": 1610,
+          "end": 1757
+        }
+      },
+      "confidence": "low",
+      "notes": [
+        "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+      ]
+    },
+    {
+      "id": "evidence_0033",
       "route_id": "route_0014",
       "evidence_type": "tenant_check",
       "mechanism": "tenant_guard",
@@ -2372,7 +2783,69 @@
       "notes": []
     },
     {
-      "id": "evidence_0025",
+      "id": "evidence_0034",
+      "route_id": "route_0014",
+      "evidence_type": "tenant_check",
+      "mechanism": "mutation_scope",
+      "symbol": {
+        "name": "tenant",
+        "span": {
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 51,
+          "column": 14,
+          "byte_range": {
+            "start": 1721,
+            "end": 1750
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 51,
+        "column": 14,
+        "byte_range": {
+          "start": 1721,
+          "end": 1750
+        }
+      },
+      "confidence": "high",
+      "notes": [
+        "Mutation input includes tenant scoping"
+      ]
+    },
+    {
+      "id": "evidence_0035",
+      "route_id": "route_0015",
+      "evidence_type": "tenant_check",
+      "mechanism": "route_param_scope_signal",
+      "symbol": {
+        "name": "tenantId",
+        "span": {
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 50,
+          "column": 1,
+          "byte_range": {
+            "start": 1610,
+            "end": 1757
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 50,
+        "column": 1,
+        "byte_range": {
+          "start": 1610,
+          "end": 1757
+        }
+      },
+      "confidence": "low",
+      "notes": [
+        "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+      ]
+    },
+    {
+      "id": "evidence_0036",
       "route_id": "route_0015",
       "evidence_type": "tenant_check",
       "mechanism": "tenant_guard",
@@ -2399,6 +2872,37 @@
       },
       "confidence": "high",
       "notes": []
+    },
+    {
+      "id": "evidence_0037",
+      "route_id": "route_0015",
+      "evidence_type": "tenant_check",
+      "mechanism": "mutation_scope",
+      "symbol": {
+        "name": "tenant",
+        "span": {
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 51,
+          "column": 14,
+          "byte_range": {
+            "start": 1721,
+            "end": 1750
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 51,
+        "column": 14,
+        "byte_range": {
+          "start": 1721,
+          "end": 1750
+        }
+      },
+      "confidence": "high",
+      "notes": [
+        "Mutation input includes tenant scoping"
+      ]
     }
   ],
   "mutations": [
@@ -2629,18 +3133,22 @@
       "risk": "review_required",
       "rationale": [
         "1 strong authorization evidence item(s) support authn_only coverage.",
-        "Sensitive route modifier(s): account_path, path_param."
+        "Sensitive route modifier(s): account_path, path_param.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal."
       ],
       "reviewer_questions": [
-        "Should this route require ownership or permission checks?"
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?"
       ],
       "uncertainty_reasons": [
+        "Low-confidence authorization evidence was detected.",
         "Route inventory confidence is not high."
       ],
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0001"
+            "evidence_0001",
+            "evidence_0002"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -2651,7 +3159,20 @@
             "account_path",
             "path_param"
           ],
-          "weak_evidence_ids": []
+          "weak_evidence_ids": [
+            "evidence_0001"
+          ]
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence",
+            "only_weak_tenant_or_ownership_signal"
+          ],
+          "review_required": true,
+          "weak_evidence_ids": [
+            "evidence_0001"
+          ]
         }
       }
     },
@@ -2661,20 +3182,24 @@
       "risk": "review_required",
       "rationale": [
         "2 strong authorization evidence item(s) support authn_only coverage.",
-        "Sensitive route modifier(s): account_path, path_param."
+        "Sensitive route modifier(s): account_path, path_param.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal."
       ],
       "reviewer_questions": [
         "Is duplicated guard evidence intentional or redundant?",
-        "Should this route require ownership or permission checks?"
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?"
       ],
       "uncertainty_reasons": [
-        "Duplicated policy evidence may be safe but should be reviewed."
+        "Duplicated policy evidence may be safe but should be reviewed.",
+        "Low-confidence authorization evidence was detected."
       ],
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0002",
-            "evidence_0003"
+            "evidence_0003",
+            "evidence_0004",
+            "evidence_0005"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -2686,16 +3211,29 @@
             "account_path",
             "path_param"
           ],
-          "weak_evidence_ids": []
+          "weak_evidence_ids": [
+            "evidence_0004"
+          ]
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence",
+            "only_weak_tenant_or_ownership_signal"
+          ],
+          "review_required": true,
+          "weak_evidence_ids": [
+            "evidence_0004"
+          ]
         }
       }
     },
     {
       "route_id": "route_0004",
-      "class": "authn_only",
-      "risk": "review_required",
+      "class": "ownership_guarded",
+      "risk": "low",
       "rationale": [
-        "1 strong authorization evidence item(s) support authn_only coverage.",
+        "2 strong authorization evidence item(s) support ownership_guarded coverage.",
         "Sensitive route modifier(s): linked_mutation, unsafe_method.",
         "Linked data mutation(s) increase review sensitivity."
       ],
@@ -2709,8 +3247,9 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0004",
-            "evidence_0005"
+            "evidence_0006",
+            "evidence_0007",
+            "evidence_0008"
           ],
           "link_ids": [
             "link_0001"
@@ -2732,10 +3271,10 @@
     },
     {
       "route_id": "route_0005",
-      "class": "authn_only",
-      "risk": "review_required",
+      "class": "ownership_guarded",
+      "risk": "low",
       "rationale": [
-        "2 strong authorization evidence item(s) support authn_only coverage.",
+        "3 strong authorization evidence item(s) support ownership_guarded coverage.",
         "Sensitive route modifier(s): linked_mutation, unsafe_method.",
         "Linked data mutation(s) increase review sensitivity."
       ],
@@ -2750,9 +3289,10 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0006",
-            "evidence_0007",
-            "evidence_0008"
+            "evidence_0009",
+            "evidence_0010",
+            "evidence_0011",
+            "evidence_0012"
           ],
           "link_ids": [
             "link_0002"
@@ -2780,12 +3320,14 @@
       "rationale": [
         "1 strong authorization evidence item(s) support permission_guarded coverage.",
         "Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.",
-        "Linked data mutation(s) increase review sensitivity."
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal, route_param_mutation_without_scope."
       ],
       "reviewer_questions": [
         "Can the dynamic authorization path be confirmed?",
         "Should linked data mutations have resource-specific authorization evidence?",
         "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?",
         "Should this state-changing route require more than authentication?"
       ],
       "uncertainty_reasons": [
@@ -2796,8 +3338,9 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0009",
-            "evidence_0010"
+            "evidence_0013",
+            "evidence_0014",
+            "evidence_0015"
           ],
           "link_ids": [
             "link_0003"
@@ -2817,7 +3360,20 @@
             "unsafe_method"
           ],
           "weak_evidence_ids": [
-            "evidence_0010"
+            "evidence_0013",
+            "evidence_0015"
+          ]
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence",
+            "only_weak_tenant_or_ownership_signal",
+            "route_param_mutation_without_scope"
+          ],
+          "review_required": true,
+          "weak_evidence_ids": [
+            "evidence_0013"
           ]
         }
       }
@@ -2829,12 +3385,14 @@
       "rationale": [
         "2 strong authorization evidence item(s) support permission_guarded coverage.",
         "Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.",
-        "Linked data mutation(s) increase review sensitivity."
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal, route_param_mutation_without_scope."
       ],
       "reviewer_questions": [
         "Can the dynamic authorization path be confirmed?",
         "Should linked data mutations have resource-specific authorization evidence?",
         "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?",
         "Should this state-changing route require more than authentication?"
       ],
       "uncertainty_reasons": [
@@ -2844,9 +3402,10 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0011",
-            "evidence_0012",
-            "evidence_0013"
+            "evidence_0016",
+            "evidence_0017",
+            "evidence_0018",
+            "evidence_0019"
           ],
           "link_ids": [
             "link_0004"
@@ -2866,7 +3425,20 @@
             "unsafe_method"
           ],
           "weak_evidence_ids": [
-            "evidence_0013"
+            "evidence_0017",
+            "evidence_0019"
+          ]
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence",
+            "only_weak_tenant_or_ownership_signal",
+            "route_param_mutation_without_scope"
+          ],
+          "review_required": true,
+          "weak_evidence_ids": [
+            "evidence_0017"
           ]
         }
       }
@@ -2878,20 +3450,24 @@
       "rationale": [
         "1 strong authorization evidence item(s) support admin_guarded coverage.",
         "Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.",
-        "Linked data mutation(s) increase review sensitivity."
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal, route_param_mutation_without_scope."
       ],
       "reviewer_questions": [
         "Should linked data mutations have resource-specific authorization evidence?",
         "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?",
         "Should this state-changing route require more than authentication?"
       ],
       "uncertainty_reasons": [
+        "Low-confidence authorization evidence was detected.",
         "Route inventory confidence is not high."
       ],
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0014"
+            "evidence_0020",
+            "evidence_0021"
           ],
           "link_ids": [
             "link_0005"
@@ -2909,7 +3485,21 @@
             "path_param",
             "unsafe_method"
           ],
-          "weak_evidence_ids": []
+          "weak_evidence_ids": [
+            "evidence_0020"
+          ]
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence",
+            "only_weak_tenant_or_ownership_signal",
+            "route_param_mutation_without_scope"
+          ],
+          "review_required": true,
+          "weak_evidence_ids": [
+            "evidence_0020"
+          ]
         }
       }
     },
@@ -2920,19 +3510,24 @@
       "rationale": [
         "2 strong authorization evidence item(s) support admin_guarded coverage.",
         "Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.",
-        "Linked data mutation(s) increase review sensitivity."
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal, route_param_mutation_without_scope."
       ],
       "reviewer_questions": [
         "Should linked data mutations have resource-specific authorization evidence?",
         "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?",
         "Should this state-changing route require more than authentication?"
       ],
-      "uncertainty_reasons": [],
+      "uncertainty_reasons": [
+        "Low-confidence authorization evidence was detected."
+      ],
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0015",
-            "evidence_0016"
+            "evidence_0022",
+            "evidence_0023",
+            "evidence_0024"
           ],
           "link_ids": [
             "link_0006"
@@ -2950,7 +3545,21 @@
             "path_param",
             "unsafe_method"
           ],
-          "weak_evidence_ids": []
+          "weak_evidence_ids": [
+            "evidence_0023"
+          ]
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence",
+            "only_weak_tenant_or_ownership_signal",
+            "route_param_mutation_without_scope"
+          ],
+          "review_required": true,
+          "weak_evidence_ids": [
+            "evidence_0023"
+          ]
         }
       }
     },
@@ -2961,11 +3570,13 @@
       "rationale": [
         "2 strong authorization evidence item(s) support authn_only coverage.",
         "Sensitive route modifier(s): linked_mutation, unsafe_method.",
-        "Linked data mutation(s) increase review sensitivity."
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence."
       ],
       "reviewer_questions": [
         "Is duplicated guard evidence intentional or redundant?",
         "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require tenant or ownership scoping?",
         "Should this state-changing route require more than authentication?"
       ],
       "uncertainty_reasons": [
@@ -2974,8 +3585,8 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0017",
-            "evidence_0018"
+            "evidence_0025",
+            "evidence_0026"
           ],
           "link_ids": [
             "link_0007"
@@ -2993,6 +3604,14 @@
             "unsafe_method"
           ],
           "weak_evidence_ids": []
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence"
+          ],
+          "review_required": true,
+          "weak_evidence_ids": []
         }
       }
     },
@@ -3003,10 +3622,12 @@
       "rationale": [
         "1 strong authorization evidence item(s) support authn_only coverage.",
         "Sensitive route modifier(s): linked_mutation, unsafe_method.",
-        "Linked data mutation(s) increase review sensitivity."
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence."
       ],
       "reviewer_questions": [
         "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require tenant or ownership scoping?",
         "Should this state-changing route require more than authentication?"
       ],
       "uncertainty_reasons": [
@@ -3015,7 +3636,7 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0019"
+            "evidence_0027"
           ],
           "link_ids": [
             "link_0008"
@@ -3031,6 +3652,14 @@
             "linked_mutation",
             "unsafe_method"
           ],
+          "weak_evidence_ids": []
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence"
+          ],
+          "review_required": true,
           "weak_evidence_ids": []
         }
       }
@@ -3053,8 +3682,8 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0020",
-            "evidence_0021"
+            "evidence_0028",
+            "evidence_0029"
           ],
           "link_ids": [
             "link_0009"
@@ -3088,7 +3717,7 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0022"
+            "evidence_0030"
           ],
           "link_ids": [
             "link_0010"
@@ -3109,19 +3738,23 @@
       "class": "tenant_guarded",
       "risk": "low",
       "rationale": [
-        "2 strong authorization evidence item(s) support tenant_guarded coverage.",
+        "3 strong authorization evidence item(s) support tenant_guarded coverage.",
         "Sensitive route modifier(s): path_param, tenant_path."
       ],
       "reviewer_questions": [
         "Should this route require ownership or permission checks?",
         "Should this route require tenant isolation checks?"
       ],
-      "uncertainty_reasons": [],
+      "uncertainty_reasons": [
+        "Low-confidence authorization evidence was detected."
+      ],
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0023",
-            "evidence_0024"
+            "evidence_0031",
+            "evidence_0032",
+            "evidence_0033",
+            "evidence_0034"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -3132,7 +3765,9 @@
             "path_param",
             "tenant_path"
           ],
-          "weak_evidence_ids": []
+          "weak_evidence_ids": [
+            "evidence_0032"
+          ]
         }
       }
     },
@@ -3141,7 +3776,7 @@
       "class": "tenant_guarded",
       "risk": "low",
       "rationale": [
-        "1 strong authorization evidence item(s) support tenant_guarded coverage.",
+        "2 strong authorization evidence item(s) support tenant_guarded coverage.",
         "Sensitive route modifier(s): path_param, tenant_path."
       ],
       "reviewer_questions": [
@@ -3149,12 +3784,15 @@
         "Should this route require tenant isolation checks?"
       ],
       "uncertainty_reasons": [
+        "Low-confidence authorization evidence was detected.",
         "Route inventory confidence is not high."
       ],
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0025"
+            "evidence_0035",
+            "evidence_0036",
+            "evidence_0037"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -3165,7 +3803,9 @@
             "path_param",
             "tenant_path"
           ],
-          "weak_evidence_ids": []
+          "weak_evidence_ids": [
+            "evidence_0035"
+          ]
         }
       }
     }
@@ -3177,7 +3817,7 @@
       "kind": "effective_protection",
       "summary": "1 evidence support(s) route protection: authn.",
       "evidence_ids": [
-        "evidence_0001"
+        "evidence_0002"
       ],
       "input_names": [
         "identity"
@@ -3188,7 +3828,7 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0001"
+            "evidence_0002"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/routes/accounts.ts",
@@ -3222,8 +3862,8 @@
       "kind": "effective_protection",
       "summary": "2 evidence support(s) route protection: authn.",
       "evidence_ids": [
-        "evidence_0002",
-        "evidence_0003"
+        "evidence_0003",
+        "evidence_0005"
       ],
       "input_names": [
         "identity"
@@ -3234,8 +3874,8 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0002",
-            "evidence_0003"
+            "evidence_0003",
+            "evidence_0005"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/app.ts",
@@ -3269,8 +3909,8 @@
       "kind": "duplicate",
       "summary": "Duplicate policy evidence `requireAuth` appears on the same route.",
       "evidence_ids": [
-        "evidence_0002",
-        "evidence_0003"
+        "evidence_0003",
+        "evidence_0005"
       ],
       "input_names": [
         "identity"
@@ -3281,8 +3921,8 @@
           "outcome": "review_required",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0002",
-            "evidence_0003"
+            "evidence_0003",
+            "evidence_0005"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/app.ts",
@@ -3318,13 +3958,15 @@
       "id": "policy_case_0004",
       "route_id": "route_0004",
       "kind": "effective_protection",
-      "summary": "2 evidence support(s) route protection: audit_log, authn.",
+      "summary": "3 evidence support(s) route protection: audit_log, authn, ownership_check.",
       "evidence_ids": [
-        "evidence_0004",
-        "evidence_0005"
+        "evidence_0006",
+        "evidence_0007",
+        "evidence_0008"
       ],
       "input_names": [
-        "identity"
+        "identity",
+        "ownership"
       ],
       "branches": [
         {
@@ -3332,8 +3974,9 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0004",
-            "evidence_0005"
+            "evidence_0006",
+            "evidence_0007",
+            "evidence_0008"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/routes/accounts.ts",
@@ -3425,14 +4068,16 @@
       "id": "policy_case_0006",
       "route_id": "route_0005",
       "kind": "effective_protection",
-      "summary": "3 evidence support(s) route protection: audit_log, authn.",
+      "summary": "4 evidence support(s) route protection: audit_log, authn, ownership_check.",
       "evidence_ids": [
-        "evidence_0006",
-        "evidence_0007",
-        "evidence_0008"
+        "evidence_0009",
+        "evidence_0010",
+        "evidence_0011",
+        "evidence_0012"
       ],
       "input_names": [
-        "identity"
+        "identity",
+        "ownership"
       ],
       "branches": [
         {
@@ -3440,9 +4085,10 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0006",
-            "evidence_0007",
-            "evidence_0008"
+            "evidence_0009",
+            "evidence_0010",
+            "evidence_0011",
+            "evidence_0012"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/app.ts",
@@ -3536,8 +4182,8 @@
       "kind": "duplicate",
       "summary": "Duplicate policy evidence `requireAuth` appears on the same route.",
       "evidence_ids": [
-        "evidence_0006",
-        "evidence_0007"
+        "evidence_0009",
+        "evidence_0010"
       ],
       "input_names": [
         "identity"
@@ -3548,8 +4194,8 @@
           "outcome": "review_required",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0006",
-            "evidence_0007"
+            "evidence_0009",
+            "evidence_0010"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/app.ts",
@@ -3587,7 +4233,7 @@
       "kind": "effective_protection",
       "summary": "1 evidence support(s) route protection: permission_check.",
       "evidence_ids": [
-        "evidence_0009"
+        "evidence_0014"
       ],
       "input_names": [
         "permission"
@@ -3598,7 +4244,7 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0009"
+            "evidence_0014"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/routes/accounts.ts",
@@ -3692,7 +4338,7 @@
       "kind": "dynamic",
       "summary": "Dynamic policy behavior requires review.",
       "evidence_ids": [
-        "evidence_0010"
+        "evidence_0015"
       ],
       "input_names": [
         "dynamicPolicyCheck"
@@ -3703,7 +4349,7 @@
           "outcome": "review_required",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0010"
+            "evidence_0015"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/routes/accounts.ts",
@@ -3743,8 +4389,8 @@
       "kind": "effective_protection",
       "summary": "2 evidence support(s) route protection: authn, permission_check.",
       "evidence_ids": [
-        "evidence_0011",
-        "evidence_0012"
+        "evidence_0016",
+        "evidence_0018"
       ],
       "input_names": [
         "identity",
@@ -3756,8 +4402,8 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0011",
-            "evidence_0012"
+            "evidence_0016",
+            "evidence_0018"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/app.ts",
@@ -3851,7 +4497,7 @@
       "kind": "dynamic",
       "summary": "Dynamic policy behavior requires review.",
       "evidence_ids": [
-        "evidence_0013"
+        "evidence_0019"
       ],
       "input_names": [
         "dynamicPolicyCheck"
@@ -3862,7 +4508,7 @@
           "outcome": "review_required",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0013"
+            "evidence_0019"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/routes/accounts.ts",
@@ -3902,7 +4548,7 @@
       "kind": "effective_protection",
       "summary": "1 evidence support(s) route protection: admin_check.",
       "evidence_ids": [
-        "evidence_0014"
+        "evidence_0021"
       ],
       "input_names": [
         "admin"
@@ -3913,7 +4559,7 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0014"
+            "evidence_0021"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/routes/accounts.ts",
@@ -4007,8 +4653,8 @@
       "kind": "effective_protection",
       "summary": "2 evidence support(s) route protection: admin_check, authn.",
       "evidence_ids": [
-        "evidence_0015",
-        "evidence_0016"
+        "evidence_0022",
+        "evidence_0024"
       ],
       "input_names": [
         "admin",
@@ -4020,8 +4666,8 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0015",
-            "evidence_0016"
+            "evidence_0022",
+            "evidence_0024"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/app.ts",
@@ -4115,8 +4761,8 @@
       "kind": "effective_protection",
       "summary": "2 evidence support(s) route protection: authn.",
       "evidence_ids": [
-        "evidence_0017",
-        "evidence_0018"
+        "evidence_0025",
+        "evidence_0026"
       ],
       "input_names": [
         "identity"
@@ -4127,8 +4773,8 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0017",
-            "evidence_0018"
+            "evidence_0025",
+            "evidence_0026"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/app.ts",
@@ -4222,8 +4868,8 @@
       "kind": "duplicate",
       "summary": "Duplicate policy evidence `requireAuth` appears on the same route.",
       "evidence_ids": [
-        "evidence_0017",
-        "evidence_0018"
+        "evidence_0025",
+        "evidence_0026"
       ],
       "input_names": [
         "identity"
@@ -4234,8 +4880,8 @@
           "outcome": "review_required",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0017",
-            "evidence_0018"
+            "evidence_0025",
+            "evidence_0026"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/app.ts",
@@ -4273,7 +4919,7 @@
       "kind": "effective_protection",
       "summary": "1 evidence support(s) route protection: authn.",
       "evidence_ids": [
-        "evidence_0019"
+        "evidence_0027"
       ],
       "input_names": [
         "identity"
@@ -4284,7 +4930,7 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0019"
+            "evidence_0027"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/routes/accounts.ts",
@@ -4378,8 +5024,8 @@
       "kind": "effective_protection",
       "summary": "2 evidence support(s) route protection: authn.",
       "evidence_ids": [
-        "evidence_0020",
-        "evidence_0021"
+        "evidence_0028",
+        "evidence_0029"
       ],
       "input_names": [
         "identity"
@@ -4390,8 +5036,8 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0020",
-            "evidence_0021"
+            "evidence_0028",
+            "evidence_0029"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/app.ts",
@@ -4425,8 +5071,8 @@
       "kind": "duplicate",
       "summary": "Duplicate policy evidence `requireAuth` appears on the same route.",
       "evidence_ids": [
-        "evidence_0020",
-        "evidence_0021"
+        "evidence_0028",
+        "evidence_0029"
       ],
       "input_names": [
         "identity"
@@ -4437,8 +5083,8 @@
           "outcome": "review_required",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0020",
-            "evidence_0021"
+            "evidence_0028",
+            "evidence_0029"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/app.ts",
@@ -4476,7 +5122,7 @@
       "kind": "effective_protection",
       "summary": "1 evidence support(s) route protection: authn.",
       "evidence_ids": [
-        "evidence_0022"
+        "evidence_0030"
       ],
       "input_names": [
         "identity"
@@ -4487,7 +5133,7 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0022"
+            "evidence_0030"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/routes/accounts.ts",
@@ -4519,10 +5165,11 @@
       "id": "policy_case_0027",
       "route_id": "route_0014",
       "kind": "effective_protection",
-      "summary": "2 evidence support(s) route protection: authn, tenant_check.",
+      "summary": "3 evidence support(s) route protection: authn, tenant_check.",
       "evidence_ids": [
-        "evidence_0023",
-        "evidence_0024"
+        "evidence_0031",
+        "evidence_0033",
+        "evidence_0034"
       ],
       "input_names": [
         "identity",
@@ -4534,8 +5181,9 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0023",
-            "evidence_0024"
+            "evidence_0031",
+            "evidence_0033",
+            "evidence_0034"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/app.ts",
@@ -4567,9 +5215,10 @@
       "id": "policy_case_0028",
       "route_id": "route_0015",
       "kind": "effective_protection",
-      "summary": "1 evidence support(s) route protection: tenant_check.",
+      "summary": "2 evidence support(s) route protection: tenant_check.",
       "evidence_ids": [
-        "evidence_0025"
+        "evidence_0036",
+        "evidence_0037"
       ],
       "input_names": [
         "tenant"
@@ -4580,7 +5229,8 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0025"
+            "evidence_0036",
+            "evidence_0037"
           ],
           "span": {
             "file": "tests/fixtures/realistic/express/routes/accounts.ts",

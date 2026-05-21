@@ -82,6 +82,12 @@ extension key `authmap.coverage`. The extension can contain `evidence_ids`,
 `weak_evidence_ids`, `mutation_ids`, `link_ids`, `policy_case_ids`, and
 `sensitivity_reasons`.
 
+Tenant isolation review metadata can appear in
+`coverage.extensions["authmap.tenant_review"]`. It is advisory metadata for
+focused tenant reports and can include `review_required`, `reasons`,
+`evidence_ids`, and `weak_evidence_ids`; it does not change the canonical schema
+version.
+
 Policy decision cases are optional static summaries, not runtime proofs. When
 present, `policy_cases[]` entries cite route and evidence IDs, summarize
 effective protection or review-required policy behavior, record observed inputs

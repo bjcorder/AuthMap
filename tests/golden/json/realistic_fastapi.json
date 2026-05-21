@@ -101,7 +101,7 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0001"
+            "evidence_0002"
           ],
           "notes": []
         }
@@ -167,9 +167,42 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0002"
+            "evidence_0003"
           ],
           "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "mutation_scope",
+          "symbol": {
+            "name": "owner_id",
+            "span": {
+              "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+              "line": 18,
+              "column": 5,
+              "byte_range": {
+                "start": 551,
+                "end": 604
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+            "line": 18,
+            "column": 5,
+            "byte_range": {
+              "start": 551,
+              "end": 604
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0004"
+          ],
+          "notes": [
+            "Mutation input includes ownership scoping"
+          ]
         }
       ],
       "handler": {
@@ -242,7 +275,7 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0003"
+            "evidence_0006"
           ],
           "notes": []
         },
@@ -273,7 +306,7 @@
           "inherited": false,
           "confidence": "low",
           "evidence_ids": [
-            "evidence_0004"
+            "evidence_0007"
           ],
           "notes": [
             "Dynamic or indirect policy call requires review"
@@ -350,7 +383,7 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0005"
+            "evidence_0009"
           ],
           "notes": []
         }
@@ -416,9 +449,43 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0006"
+            "evidence_0010"
           ],
           "notes": []
+        },
+        {
+          "kind": "route_guard",
+          "mechanism": "mutation_scope",
+          "symbol": {
+            "name": "owner_id",
+            "span": {
+              "file": "tests/fixtures/realistic/fastapi/app/services/accounts.py",
+              "line": 11,
+              "column": 5,
+              "byte_range": {
+                "start": 168,
+                "end": 220
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/realistic/fastapi/app/services/accounts.py",
+            "line": 11,
+            "column": 5,
+            "byte_range": {
+              "start": 168,
+              "end": 220
+            }
+          },
+          "inherited": false,
+          "confidence": "medium",
+          "evidence_ids": [
+            "evidence_0011"
+          ],
+          "notes": [
+            "Mutation input includes ownership scoping",
+            "One-hop service call `create_account` reaches `create_account`"
+          ]
         }
       ],
       "handler": {
@@ -482,7 +549,7 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0007"
+            "evidence_0012"
           ],
           "notes": []
         }
@@ -581,7 +648,7 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0008"
+            "evidence_0013"
           ],
           "notes": []
         }
@@ -647,7 +714,7 @@
           "inherited": false,
           "confidence": "high",
           "evidence_ids": [
-            "evidence_0009"
+            "evidence_0014"
           ],
           "notes": []
         }
@@ -685,6 +752,37 @@
     {
       "id": "evidence_0001",
       "route_id": "route_0001",
+      "evidence_type": "tenant_check",
+      "mechanism": "route_param_scope_signal",
+      "symbol": {
+        "name": "account_id",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 11,
+          "column": 2,
+          "byte_range": {
+            "start": 315,
+            "end": 342
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 11,
+        "column": 2,
+        "byte_range": {
+          "start": 315,
+          "end": 342
+        }
+      },
+      "confidence": "low",
+      "notes": [
+        "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+      ]
+    },
+    {
+      "id": "evidence_0002",
+      "route_id": "route_0001",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
       "symbol": {
@@ -712,7 +810,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0002",
+      "id": "evidence_0003",
       "route_id": "route_0002",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -741,7 +839,69 @@
       "notes": []
     },
     {
-      "id": "evidence_0003",
+      "id": "evidence_0004",
+      "route_id": "route_0002",
+      "evidence_type": "ownership_check",
+      "mechanism": "mutation_scope",
+      "symbol": {
+        "name": "owner_id",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 18,
+          "column": 5,
+          "byte_range": {
+            "start": 551,
+            "end": 604
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 18,
+        "column": 5,
+        "byte_range": {
+          "start": 551,
+          "end": 604
+        }
+      },
+      "confidence": "high",
+      "notes": [
+        "Mutation input includes ownership scoping"
+      ]
+    },
+    {
+      "id": "evidence_0005",
+      "route_id": "route_0003",
+      "evidence_type": "tenant_check",
+      "mechanism": "route_param_scope_signal",
+      "symbol": {
+        "name": "account_id",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 24,
+          "column": 2,
+          "byte_range": {
+            "start": 683,
+            "end": 712
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 24,
+        "column": 2,
+        "byte_range": {
+          "start": 683,
+          "end": 712
+        }
+      },
+      "confidence": "low",
+      "notes": [
+        "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+      ]
+    },
+    {
+      "id": "evidence_0006",
       "route_id": "route_0003",
       "evidence_type": "permission_check",
       "mechanism": "permission_guard",
@@ -770,7 +930,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0004",
+      "id": "evidence_0007",
       "route_id": "route_0003",
       "evidence_type": "unknown_dynamic_check",
       "mechanism": "handler_call",
@@ -801,7 +961,38 @@
       ]
     },
     {
-      "id": "evidence_0005",
+      "id": "evidence_0008",
+      "route_id": "route_0004",
+      "evidence_type": "tenant_check",
+      "mechanism": "route_param_scope_signal",
+      "symbol": {
+        "name": "account_id",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+          "line": 31,
+          "column": 2,
+          "byte_range": {
+            "start": 949,
+            "end": 979
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
+        "line": 31,
+        "column": 2,
+        "byte_range": {
+          "start": 949,
+          "end": 979
+        }
+      },
+      "confidence": "low",
+      "notes": [
+        "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+      ]
+    },
+    {
+      "id": "evidence_0009",
       "route_id": "route_0004",
       "evidence_type": "admin_check",
       "mechanism": "admin_guard",
@@ -830,7 +1021,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0006",
+      "id": "evidence_0010",
       "route_id": "route_0005",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -859,7 +1050,39 @@
       "notes": []
     },
     {
-      "id": "evidence_0007",
+      "id": "evidence_0011",
+      "route_id": "route_0005",
+      "evidence_type": "ownership_check",
+      "mechanism": "mutation_scope",
+      "symbol": {
+        "name": "owner_id",
+        "span": {
+          "file": "tests/fixtures/realistic/fastapi/app/services/accounts.py",
+          "line": 11,
+          "column": 5,
+          "byte_range": {
+            "start": 168,
+            "end": 220
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/realistic/fastapi/app/services/accounts.py",
+        "line": 11,
+        "column": 5,
+        "byte_range": {
+          "start": 168,
+          "end": 220
+        }
+      },
+      "confidence": "medium",
+      "notes": [
+        "Mutation input includes ownership scoping",
+        "One-hop service call `create_account` reaches `create_account`"
+      ]
+    },
+    {
+      "id": "evidence_0012",
       "route_id": "route_0006",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -888,7 +1111,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0008",
+      "id": "evidence_0013",
       "route_id": "route_0008",
       "evidence_type": "admin_check",
       "mechanism": "admin_guard",
@@ -917,7 +1140,7 @@
       "notes": []
     },
     {
-      "id": "evidence_0009",
+      "id": "evidence_0014",
       "route_id": "route_0009",
       "evidence_type": "authn",
       "mechanism": "authn_guard",
@@ -1090,16 +1313,21 @@
       "risk": "review_required",
       "rationale": [
         "1 strong authorization evidence item(s) support authn_only coverage.",
-        "Sensitive route modifier(s): account_path, path_param."
+        "Sensitive route modifier(s): account_path, path_param.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal."
       ],
       "reviewer_questions": [
-        "Should this route require ownership or permission checks?"
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?"
       ],
-      "uncertainty_reasons": [],
+      "uncertainty_reasons": [
+        "Low-confidence authorization evidence was detected."
+      ],
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0001"
+            "evidence_0001",
+            "evidence_0002"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -1110,16 +1338,29 @@
             "account_path",
             "path_param"
           ],
-          "weak_evidence_ids": []
+          "weak_evidence_ids": [
+            "evidence_0001"
+          ]
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence",
+            "only_weak_tenant_or_ownership_signal"
+          ],
+          "review_required": true,
+          "weak_evidence_ids": [
+            "evidence_0001"
+          ]
         }
       }
     },
     {
       "route_id": "route_0002",
-      "class": "authn_only",
-      "risk": "review_required",
+      "class": "ownership_guarded",
+      "risk": "low",
       "rationale": [
-        "1 strong authorization evidence item(s) support authn_only coverage.",
+        "2 strong authorization evidence item(s) support ownership_guarded coverage.",
         "Sensitive route modifier(s): account_path, linked_mutation, unsafe_method.",
         "Linked data mutation(s) increase review sensitivity."
       ],
@@ -1132,7 +1373,8 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0002"
+            "evidence_0003",
+            "evidence_0004"
           ],
           "link_ids": [
             "link_0001"
@@ -1160,12 +1402,14 @@
       "rationale": [
         "1 strong authorization evidence item(s) support permission_guarded coverage.",
         "Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.",
-        "Linked data mutation(s) increase review sensitivity."
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal, route_param_mutation_without_scope."
       ],
       "reviewer_questions": [
         "Can the dynamic authorization path be confirmed?",
         "Should linked data mutations have resource-specific authorization evidence?",
         "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?",
         "Should this state-changing route require more than authentication?"
       ],
       "uncertainty_reasons": [
@@ -1175,8 +1419,9 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0003",
-            "evidence_0004"
+            "evidence_0005",
+            "evidence_0006",
+            "evidence_0007"
           ],
           "link_ids": [
             "link_0002"
@@ -1196,7 +1441,20 @@
             "unsafe_method"
           ],
           "weak_evidence_ids": [
-            "evidence_0004"
+            "evidence_0005",
+            "evidence_0007"
+          ]
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence",
+            "only_weak_tenant_or_ownership_signal",
+            "route_param_mutation_without_scope"
+          ],
+          "review_required": true,
+          "weak_evidence_ids": [
+            "evidence_0005"
           ]
         }
       }
@@ -1208,18 +1466,23 @@
       "rationale": [
         "1 strong authorization evidence item(s) support admin_guarded coverage.",
         "Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.",
-        "Linked data mutation(s) increase review sensitivity."
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal, route_param_mutation_without_scope."
       ],
       "reviewer_questions": [
         "Should linked data mutations have resource-specific authorization evidence?",
         "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?",
         "Should this state-changing route require more than authentication?"
       ],
-      "uncertainty_reasons": [],
+      "uncertainty_reasons": [
+        "Low-confidence authorization evidence was detected."
+      ],
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0005"
+            "evidence_0008",
+            "evidence_0009"
           ],
           "link_ids": [
             "link_0003"
@@ -1237,16 +1500,30 @@
             "path_param",
             "unsafe_method"
           ],
-          "weak_evidence_ids": []
+          "weak_evidence_ids": [
+            "evidence_0008"
+          ]
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence",
+            "only_weak_tenant_or_ownership_signal",
+            "route_param_mutation_without_scope"
+          ],
+          "review_required": true,
+          "weak_evidence_ids": [
+            "evidence_0008"
+          ]
         }
       }
     },
     {
       "route_id": "route_0005",
-      "class": "authn_only",
-      "risk": "review_required",
+      "class": "ownership_guarded",
+      "risk": "low",
       "rationale": [
-        "1 strong authorization evidence item(s) support authn_only coverage.",
+        "2 strong authorization evidence item(s) support ownership_guarded coverage.",
         "Sensitive route modifier(s): account_path, linked_mutation, unsafe_method.",
         "Linked data mutation(s) increase review sensitivity."
       ],
@@ -1259,7 +1536,8 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0006"
+            "evidence_0010",
+            "evidence_0011"
           ],
           "link_ids": [
             "link_0004"
@@ -1296,7 +1574,7 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0007"
+            "evidence_0012"
           ],
           "link_ids": [
             "link_0005"
@@ -1347,7 +1625,7 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0008"
+            "evidence_0013"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -1375,7 +1653,7 @@
       "extensions": {
         "authmap.coverage": {
           "evidence_ids": [
-            "evidence_0009"
+            "evidence_0014"
           ],
           "link_ids": [],
           "mutation_ids": [],
@@ -1395,7 +1673,7 @@
       "kind": "effective_protection",
       "summary": "1 evidence support(s) route protection: authn.",
       "evidence_ids": [
-        "evidence_0001"
+        "evidence_0002"
       ],
       "input_names": [
         "identity"
@@ -1406,7 +1684,7 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0001"
+            "evidence_0002"
           ],
           "span": {
             "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
@@ -1438,12 +1716,14 @@
       "id": "policy_case_0002",
       "route_id": "route_0002",
       "kind": "effective_protection",
-      "summary": "1 evidence support(s) route protection: authn.",
+      "summary": "2 evidence support(s) route protection: authn, ownership_check.",
       "evidence_ids": [
-        "evidence_0002"
+        "evidence_0003",
+        "evidence_0004"
       ],
       "input_names": [
-        "identity"
+        "identity",
+        "ownership"
       ],
       "branches": [
         {
@@ -1451,7 +1731,8 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0002"
+            "evidence_0003",
+            "evidence_0004"
           ],
           "span": {
             "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
@@ -1545,7 +1826,7 @@
       "kind": "effective_protection",
       "summary": "1 evidence support(s) route protection: permission_check.",
       "evidence_ids": [
-        "evidence_0003"
+        "evidence_0006"
       ],
       "input_names": [
         "permission"
@@ -1556,7 +1837,7 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0003"
+            "evidence_0006"
           ],
           "span": {
             "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
@@ -1650,7 +1931,7 @@
       "kind": "dynamic",
       "summary": "Dynamic policy behavior requires review.",
       "evidence_ids": [
-        "evidence_0004"
+        "evidence_0007"
       ],
       "input_names": [
         "dynamic_policy_check"
@@ -1661,7 +1942,7 @@
           "outcome": "review_required",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0004"
+            "evidence_0007"
           ],
           "span": {
             "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
@@ -1701,7 +1982,7 @@
       "kind": "effective_protection",
       "summary": "1 evidence support(s) route protection: admin_check.",
       "evidence_ids": [
-        "evidence_0005"
+        "evidence_0009"
       ],
       "input_names": [
         "admin"
@@ -1712,7 +1993,7 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0005"
+            "evidence_0009"
           ],
           "span": {
             "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
@@ -1804,12 +2085,14 @@
       "id": "policy_case_0009",
       "route_id": "route_0005",
       "kind": "effective_protection",
-      "summary": "1 evidence support(s) route protection: authn.",
+      "summary": "2 evidence support(s) route protection: authn, ownership_check.",
       "evidence_ids": [
-        "evidence_0006"
+        "evidence_0010",
+        "evidence_0011"
       ],
       "input_names": [
-        "identity"
+        "identity",
+        "ownership"
       ],
       "branches": [
         {
@@ -1817,7 +2100,8 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0006"
+            "evidence_0010",
+            "evidence_0011"
           ],
           "span": {
             "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
@@ -1828,7 +2112,7 @@
               "end": 1170
             }
           },
-          "confidence": "high",
+          "confidence": "medium",
           "notes": []
         }
       ],
@@ -1841,7 +2125,7 @@
           "end": 1170
         }
       },
-      "confidence": "high",
+      "confidence": "medium",
       "reviewer_questions": [],
       "uncertainty_reasons": [],
       "extensions": {
@@ -1911,7 +2195,7 @@
       "kind": "effective_protection",
       "summary": "1 evidence support(s) route protection: authn.",
       "evidence_ids": [
-        "evidence_0007"
+        "evidence_0012"
       ],
       "input_names": [
         "identity"
@@ -1922,7 +2206,7 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0007"
+            "evidence_0012"
           ],
           "span": {
             "file": "tests/fixtures/realistic/fastapi/app/routers/accounts.py",
@@ -1956,7 +2240,7 @@
       "kind": "effective_protection",
       "summary": "1 evidence support(s) route protection: admin_check.",
       "evidence_ids": [
-        "evidence_0008"
+        "evidence_0013"
       ],
       "input_names": [
         "admin"
@@ -1967,7 +2251,7 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0008"
+            "evidence_0013"
           ],
           "span": {
             "file": "tests/fixtures/realistic/fastapi/main.py",
@@ -2001,7 +2285,7 @@
       "kind": "effective_protection",
       "summary": "1 evidence support(s) route protection: authn.",
       "evidence_ids": [
-        "evidence_0009"
+        "evidence_0014"
       ],
       "input_names": [
         "identity"
@@ -2012,7 +2296,7 @@
           "outcome": "allow",
           "reachable": true,
           "evidence_ids": [
-            "evidence_0009"
+            "evidence_0014"
           ],
           "span": {
             "file": "tests/fixtures/realistic/fastapi/main.py",

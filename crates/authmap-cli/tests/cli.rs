@@ -505,6 +505,88 @@ app.get("/accounts/:id", requireUser, getAccount);
 }
 
 #[test]
+fn tenants_help_works() {
+    let output = authmap(&["tenants", "--help"]);
+
+    assert_exit(&output, 0);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--format"));
+    assert!(stdout.contains("--output"));
+    assert!(stdout.contains("--config"));
+    assert!(stdout.contains("--mode"));
+    assert!(stdout.contains("--max-files"));
+    assert!(stdout.contains("--max-file-size-bytes"));
+    assert!(stdout.contains("--max-total-bytes"));
+    assert!(stdout.contains("--max-runtime-ms"));
+}
+
+#[test]
+fn tenants_reports_empty_projects() {
+    let temp = TestDir::new("tenants-empty");
+
+    let output = authmap(&[
+        "tenants",
+        temp.path().to_str().expect("path should be UTF-8"),
+        "--format",
+        "markdown",
+    ]);
+
+    assert_exit(&output, 0);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("# AuthMap Tenant Review"));
+    assert!(stdout.contains("- Relevant routes: 0"));
+    assert!(stdout.contains("No tenant or ownership review items were identified."));
+}
+
+#[test]
+fn tenants_json_reports_tenant_review_findings() {
+    let temp = TestDir::new("tenants-json");
+    write_file(
+        &temp.path().join("app.ts"),
+        r#"
+import express from "express";
+
+const app = express();
+
+function requireUser(req, res, next) {
+  next();
+}
+
+async function updateProject(req, res) {
+  await prisma.project.update({
+    where: { id: req.params.projectId },
+    data: { name: req.body.name },
+  });
+  res.sendStatus(204);
+}
+
+app.patch("/orgs/:orgId/projects/:projectId", requireUser, updateProject);
+"#,
+    );
+
+    let output = authmap(&[
+        "tenants",
+        temp.path().to_str().expect("path should be UTF-8"),
+        "--format",
+        "json",
+    ]);
+
+    assert_exit(&output, 0);
+    let report: Value =
+        serde_json::from_slice(&output.stdout).expect("tenants output should be JSON");
+    assert_eq!(report["report_type"], "authmap.tenants");
+    assert_eq!(report["summary"]["relevant_routes"], 1);
+    assert_eq!(
+        report["routes"][0]["path"],
+        "/orgs/:orgId/projects/:projectId"
+    );
+    assert_eq!(
+        report["routes"][0]["tenant_review"]["review_required"],
+        true
+    );
+}
+
+#[test]
 fn rules_suggest_help_shows_limit_overrides() {
     let output = authmap(&["rules", "suggest", "--help"]);
 

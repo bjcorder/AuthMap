@@ -9,7 +9,8 @@ use authmap_core::{AuthMapDocument, SCHEMA_VERSION, ScanMode, diagnostic_codes};
 use authmap_report::{
     JsonReporter, MarkdownReporter, Reporter, SarifReporter, render_drift_json,
     render_drift_markdown, render_explain, render_routes_json, render_routes_markdown,
-    render_rule_suggestions_json, render_rule_suggestions_markdown, write_atomic,
+    render_rule_suggestions_json, render_rule_suggestions_markdown, render_tenants_json,
+    render_tenants_markdown, write_atomic,
 };
 use clap::{Parser, Subcommand, ValueEnum};
 use thiserror::Error;
@@ -57,6 +58,26 @@ enum Command {
         max_runtime_ms: Option<u64>,
     },
     Routes {
+        #[arg(default_value = ".")]
+        target: PathBuf,
+        #[arg(long, value_enum, default_value_t = RoutesOutputFormat::Markdown)]
+        format: RoutesOutputFormat,
+        #[arg(long)]
+        output: Option<PathBuf>,
+        #[arg(long)]
+        config: Option<PathBuf>,
+        #[arg(long, value_enum)]
+        mode: Option<ScanModeArg>,
+        #[arg(long)]
+        max_files: Option<usize>,
+        #[arg(long)]
+        max_file_size_bytes: Option<u64>,
+        #[arg(long)]
+        max_total_bytes: Option<u64>,
+        #[arg(long)]
+        max_runtime_ms: Option<u64>,
+    },
+    Tenants {
         #[arg(default_value = ".")]
         target: PathBuf,
         #[arg(long, value_enum, default_value_t = RoutesOutputFormat::Markdown)]
@@ -277,6 +298,27 @@ fn run() -> Result<ExitCode, CliError> {
             max_total_bytes,
             max_runtime_ms,
         }),
+        Command::Tenants {
+            target,
+            format,
+            output,
+            config,
+            mode,
+            max_files,
+            max_file_size_bytes,
+            max_total_bytes,
+            max_runtime_ms,
+        } => run_tenants(RoutesArgs {
+            target,
+            format,
+            output,
+            config,
+            mode,
+            max_files,
+            max_file_size_bytes,
+            max_total_bytes,
+            max_runtime_ms,
+        }),
         Command::Diff {
             range,
             base,
@@ -433,6 +475,39 @@ fn run_routes(args: RoutesArgs) -> Result<ExitCode, CliError> {
     let rendered = match args.format {
         RoutesOutputFormat::Markdown => render_routes_markdown(&document),
         RoutesOutputFormat::Json => render_routes_json(&document).map_err(CliError::Report)?,
+    };
+
+    if let Some(output) = args.output {
+        write_atomic(&output, &rendered).map_err(CliError::Report)?;
+    } else {
+        println!("{rendered}");
+    }
+    if document.has_enforce_blocking_diagnostics() {
+        Ok(ExitCode::from(20))
+    } else {
+        Ok(ExitCode::SUCCESS)
+    }
+}
+
+fn run_tenants(args: RoutesArgs) -> Result<ExitCode, CliError> {
+    let (config_path, mut config) = load_config(args.config).map_err(CliError::Config)?;
+    if let Some(mode) = args.mode {
+        config.mode = mode.into();
+    }
+    apply_limit_overrides(
+        &mut config,
+        LimitOverrides {
+            max_files: args.max_files,
+            max_file_size_bytes: args.max_file_size_bytes,
+            max_total_bytes: args.max_total_bytes,
+            max_runtime_ms: args.max_runtime_ms,
+        },
+    )?;
+    let plan = ScanPlan::new(vec![args.target], config_path, config);
+    let document = run_scan(&plan).map_err(CliError::Scan)?;
+    let rendered = match args.format {
+        RoutesOutputFormat::Markdown => render_tenants_markdown(&document),
+        RoutesOutputFormat::Json => render_tenants_json(&document).map_err(CliError::Report)?,
     };
 
     if let Some(output) = args.output {

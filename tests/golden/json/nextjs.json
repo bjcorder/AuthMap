@@ -2076,15 +2076,16 @@
     {
       "route_id": "route_0002",
       "class": "unauthenticated",
-      "risk": "high",
+      "risk": "review_required",
       "rationale": [
         "No authorization evidence was detected.",
         "Sensitive route modifier(s): linked_mutation, unsafe_method.",
         "Linked data mutation(s) increase review sensitivity.",
-        "No strong authorization evidence was found for a high-sensitivity route."
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence."
       ],
       "reviewer_questions": [
         "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require tenant or ownership scoping?",
         "Should this state-changing route require more than authentication?"
       ],
       "uncertainty_reasons": [],
@@ -2104,6 +2105,14 @@
             "linked_mutation",
             "unsafe_method"
           ],
+          "weak_evidence_ids": []
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence"
+          ],
+          "review_required": true,
           "weak_evidence_ids": []
         }
       }
@@ -2142,10 +2151,12 @@
       "rationale": [
         "1 strong authorization evidence item(s) support authn_only coverage.",
         "Sensitive route modifier(s): linked_mutation, unsafe_method.",
-        "Linked data mutation(s) increase review sensitivity."
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, route_param_mutation_without_scope."
       ],
       "reviewer_questions": [
         "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require tenant or ownership scoping?",
         "Should this state-changing route require more than authentication?"
       ],
       "uncertainty_reasons": [
@@ -2170,6 +2181,15 @@
             "linked_mutation",
             "unsafe_method"
           ],
+          "weak_evidence_ids": []
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence",
+            "route_param_mutation_without_scope"
+          ],
+          "review_required": true,
           "weak_evidence_ids": []
         }
       }
@@ -2208,10 +2228,12 @@
       "rationale": [
         "1 strong authorization evidence item(s) support authn_only coverage.",
         "Sensitive route modifier(s): linked_mutation, unsafe_method.",
-        "Linked data mutation(s) increase review sensitivity."
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence."
       ],
       "reviewer_questions": [
         "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require tenant or ownership scoping?",
         "Should this state-changing route require more than authentication?"
       ],
       "uncertainty_reasons": [
@@ -2237,6 +2259,14 @@
             "unsafe_method"
           ],
           "weak_evidence_ids": []
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence"
+          ],
+          "review_required": true,
+          "weak_evidence_ids": []
         }
       }
     },
@@ -2247,10 +2277,12 @@
       "rationale": [
         "1 strong authorization evidence item(s) support authn_only coverage.",
         "Sensitive route modifier(s): linked_mutation, unsafe_method.",
-        "Linked data mutation(s) increase review sensitivity."
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence."
       ],
       "reviewer_questions": [
         "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require tenant or ownership scoping?",
         "Should this state-changing route require more than authentication?"
       ],
       "uncertainty_reasons": [],
@@ -2273,6 +2305,14 @@
             "linked_mutation",
             "unsafe_method"
           ],
+          "weak_evidence_ids": []
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence"
+          ],
+          "review_required": true,
           "weak_evidence_ids": []
         }
       }
@@ -2395,15 +2435,16 @@
     {
       "route_id": "route_0013",
       "class": "unauthenticated",
-      "risk": "high",
+      "risk": "review_required",
       "rationale": [
         "No authorization evidence was detected.",
         "Sensitive route modifier(s): linked_mutation, unsafe_method.",
         "Linked data mutation(s) increase review sensitivity.",
-        "No strong authorization evidence was found for a high-sensitivity route."
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence."
       ],
       "reviewer_questions": [
         "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require tenant or ownership scoping?",
         "Should this state-changing route require more than authentication?"
       ],
       "uncertainty_reasons": [],
@@ -2423,6 +2464,14 @@
             "linked_mutation",
             "unsafe_method"
           ],
+          "weak_evidence_ids": []
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence"
+          ],
+          "review_required": true,
           "weak_evidence_ids": []
         }
       }
@@ -2473,16 +2522,17 @@
     {
       "route_id": "route_0016",
       "class": "unauthenticated",
-      "risk": "high",
+      "risk": "review_required",
       "rationale": [
         "No authorization evidence was detected.",
         "Sensitive route modifier(s): linked_mutation, unsafe_method, user_path.",
         "Linked data mutation(s) increase review sensitivity.",
-        "No strong authorization evidence was found for a high-sensitivity route."
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, route_param_mutation_without_scope."
       ],
       "reviewer_questions": [
         "Should linked data mutations have resource-specific authorization evidence?",
         "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?",
         "Should this state-changing route require more than authentication?"
       ],
       "uncertainty_reasons": [],
@@ -2504,6 +2554,15 @@
             "user_path"
           ],
           "weak_evidence_ids": []
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence",
+            "route_param_mutation_without_scope"
+          ],
+          "review_required": true,
+          "weak_evidence_ids": []
         }
       }
     },
@@ -2514,10 +2573,12 @@
       "rationale": [
         "1 strong authorization evidence item(s) support authn_only coverage.",
         "Sensitive route modifier(s): linked_mutation, unsafe_method.",
-        "Linked data mutation(s) increase review sensitivity."
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence."
       ],
       "reviewer_questions": [
         "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require tenant or ownership scoping?",
         "Should this state-changing route require more than authentication?"
       ],
       "uncertainty_reasons": [
@@ -2542,6 +2603,14 @@
             "linked_mutation",
             "unsafe_method"
           ],
+          "weak_evidence_ids": []
+        },
+        "authmap.tenant_review": {
+          "evidence_ids": [],
+          "reasons": [
+            "missing_tenant_or_ownership_evidence"
+          ],
+          "review_required": true,
           "weak_evidence_ids": []
         }
       }

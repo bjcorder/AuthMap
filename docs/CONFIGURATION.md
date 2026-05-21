@@ -117,6 +117,11 @@ authorization:
         contains: [permission]
       notes:
         - configured by project
+    - name: workspace tenant guard
+      evidence_type: tenant_check
+      mechanism: workspace_guard
+      match:
+        exact: [ensureWorkspaceAccess]
 ```
 
 Supported `evidence_type` values are the canonical AuthMap evidence types:
@@ -178,6 +183,18 @@ routes into `medium` or, when combined with unsafe methods or linked mutations,
 coverage on sensitive routes becomes `review_required`.
 
 AuthMap reports these as review prompts, not vulnerability findings.
+
+## Tenant Review Configuration
+
+`authmap tenants` uses the same `authorization.rules` and `sensitivity` sections
+as `authmap scan`. Add project-specific tenant or ownership helper names as
+`tenant_check` or `ownership_check` authorization rules when local naming does
+not match AuthMap's built-in guard heuristics.
+
+Sensitivity labels can raise review priority for tenant-relevant route families
+or resources, but they do not prove tenant isolation. The focused tenant report
+describes missing or weak tenant/ownership evidence as review-required questions
+rather than confirmed vulnerabilities.
 
 ## Command Helpers
 

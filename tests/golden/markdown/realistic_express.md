@@ -9,7 +9,7 @@
 - Targets: tests/fixtures/realistic/express
 - Source files: 3
 - Routes: 15
-- Evidence entries: 25
+- Evidence entries: 37
 - Mutations: 4
 - Policy cases: 28
 - Diagnostics: 4
@@ -21,8 +21,7 @@
 | --- | --- | --- |
 | [route_0002](#route-route_0002) | GET /:accountId | confidence is medium; Express mount prefix is dynamic and was not included in the route path; risk is review_required |
 | [route_0003](#route-route_0003) | GET /api/:accountId | risk is review_required |
-| [route_0004](#route-route_0004) | POST / | confidence is medium; Express mount prefix is dynamic and was not included in the route path; risk is review_required |
-| [route_0005](#route-route_0005) | POST /api | risk is review_required |
+| [route_0004](#route-route_0004) | POST / | confidence is medium; Express mount prefix is dynamic and was not included in the route path |
 | [route_0006](#route-route_0006) | PATCH /:accountId | confidence is medium; Express mount prefix is dynamic and was not included in the route path; risk is review_required |
 | [route_0007](#route-route_0007) | PATCH /api/:accountId | risk is review_required |
 | [route_0008](#route-route_0008) | DELETE /:accountId | confidence is medium; Express mount prefix is dynamic and was not included in the route path; risk is review_required |
@@ -44,8 +43,8 @@
 | [route_0001](#route-route_0001) | express | GET | /health | \`&lt;inline_handler&gt;\` (tests/fixtures/realistic/express/app.ts:38:20) | none | high | unauthenticated | low |
 | [route_0002](#route-route_0002) | express | GET | /:accountId | \`&lt;inline_handler&gt;\` (tests/fixtures/realistic/express/routes/accounts.ts:13:40) | \`requireAuth\` (tests/fixtures/realistic/express/routes/accounts.ts:13:27) | medium | authn_only | review_required |
 | [route_0003](#route-route_0003) | express | GET | /api/:accountId | \`&lt;inline_handler&gt;\` (tests/fixtures/realistic/express/routes/accounts.ts:13:40) | \`requireAuth\` (tests/fixtures/realistic/express/app.ts:42:17), \`requireAuth\` (tests/fixtures/realistic/express/routes/accounts.ts:13:27) | high | authn_only | review_required |
-| [route_0004](#route-route_0004) | express | POST | / | \`&lt;inline_handler&gt;\` (tests/fixtures/realistic/express/routes/accounts.ts:17:38) | \`requireAuth\` (tests/fixtures/realistic/express/routes/accounts.ts:17:18), \`audit\` (tests/fixtures/realistic/express/routes/accounts.ts:17:31) | medium | authn_only | review_required |
-| [route_0005](#route-route_0005) | express | POST | /api | \`&lt;inline_handler&gt;\` (tests/fixtures/realistic/express/routes/accounts.ts:17:38) | \`requireAuth\` (tests/fixtures/realistic/express/app.ts:42:17), \`requireAuth\` (tests/fixtures/realistic/express/routes/accounts.ts:17:18), \`audit\` (tests/fixtures/realistic/express/routes/accounts.ts:17:31) | high | authn_only | review_required |
+| [route_0004](#route-route_0004) | express | POST | / | \`&lt;inline_handler&gt;\` (tests/fixtures/realistic/express/routes/accounts.ts:17:38) | \`requireAuth\` (tests/fixtures/realistic/express/routes/accounts.ts:17:18), \`audit\` (tests/fixtures/realistic/express/routes/accounts.ts:17:31) | medium | ownership_guarded | low |
+| [route_0005](#route-route_0005) | express | POST | /api | \`&lt;inline_handler&gt;\` (tests/fixtures/realistic/express/routes/accounts.ts:17:38) | \`requireAuth\` (tests/fixtures/realistic/express/app.ts:42:17), \`requireAuth\` (tests/fixtures/realistic/express/routes/accounts.ts:17:18), \`audit\` (tests/fixtures/realistic/express/routes/accounts.ts:17:31) | high | ownership_guarded | low |
 | [route_0006](#route-route_0006) | express | PATCH | /:accountId | \`&lt;inline_handler&gt;\` (tests/fixtures/realistic/express/routes/accounts.ts:27:3) | \`requirePermission\` (tests/fixtures/realistic/express/routes/accounts.ts:26:3) | medium | permission_guarded | review_required |
 | [route_0007](#route-route_0007) | express | PATCH | /api/:accountId | \`&lt;inline_handler&gt;\` (tests/fixtures/realistic/express/routes/accounts.ts:27:3) | \`requireAuth\` (tests/fixtures/realistic/express/app.ts:42:17), \`requirePermission\` (tests/fixtures/realistic/express/routes/accounts.ts:26:3) | high | permission_guarded | review_required |
 | [route_0008](#route-route_0008) | express | DELETE | /:accountId | \`&lt;inline_handler&gt;\` (tests/fixtures/realistic/express/routes/accounts.ts:36:44) | \`requireAdmin\` (tests/fixtures/realistic/express/routes/accounts.ts:36:30) | medium | admin_guarded | review_required |
@@ -92,22 +91,27 @@
 - Declared protection: requireAuth
 - Confidence: medium
 - Coverage: authn_only (review_required)
-- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): account_path, path_param.
-- Coverage support: evidence: evidence_0001; policy cases: policy_case_0001; sensitivity: account_path, path_param
+- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): account_path, path_param.; Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal.
+- Coverage support: evidence: evidence_0001, evidence_0002; weak evidence: evidence_0001; policy cases: policy_case_0001; sensitivity: account_path, path_param
 - Reviewer questions:
   - Should this route require ownership or permission checks?
+  - Should this route require tenant or ownership scoping?
 - Coverage uncertainty:
+  - Low-confidence authorization evidence was detected.
   - Route inventory confidence is not high.
 - PolicyLens:
   - policy_case_0001: effective_protection at tests/fixtures/realistic/express/routes/accounts.ts:13:27 (high)
     - Summary: 1 evidence support(s) route protection: authn.
     - Cites coverage: route_0002
-    - Cites evidence: evidence_0001
+    - Cites evidence: evidence_0002
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
 - Uncertainty notes:
   - Express mount prefix is dynamic and was not included in the route path
 - Auth evidence:
+  - tenant_check `route_param_scope_signal` at tests/fixtures/realistic/express/routes/accounts.ts:13:1 (low)
+    - Symbol: `accountId` (tests/fixtures/realistic/express/routes/accounts.ts:13:1)
+    - Note: Route parameter name suggests tenant or ownership context but is not proof of scoping
   - authn `authn_guard` at tests/fixtures/realistic/express/routes/accounts.ts:13:27 (high)
     - Symbol: `requireAuth` (tests/fixtures/realistic/express/routes/accounts.ts:13:27)
 - Data mutations: none
@@ -123,24 +127,26 @@
 - Declared protection: requireAuth, requireAuth
 - Confidence: high
 - Coverage: authn_only (review_required)
-- Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): account_path, path_param.
-- Coverage support: evidence: evidence_0002, evidence_0003; policy cases: policy_case_0002, policy_case_0003; sensitivity: account_path, path_param
+- Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): account_path, path_param.; Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal.
+- Coverage support: evidence: evidence_0003, evidence_0004, evidence_0005; weak evidence: evidence_0004; policy cases: policy_case_0002, policy_case_0003; sensitivity: account_path, path_param
 - Reviewer questions:
   - Is duplicated guard evidence intentional or redundant?
   - Should this route require ownership or permission checks?
+  - Should this route require tenant or ownership scoping?
 - Coverage uncertainty:
   - Duplicated policy evidence may be safe but should be reviewed.
+  - Low-confidence authorization evidence was detected.
 - PolicyLens:
   - policy_case_0002: effective_protection at tests/fixtures/realistic/express/app.ts:42:17 (high)
     - Summary: 2 evidence support(s) route protection: authn.
     - Cites coverage: route_0003
-    - Cites evidence: evidence_0002, evidence_0003
+    - Cites evidence: evidence_0003, evidence_0005
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
   - policy_case_0003: duplicate at tests/fixtures/realistic/express/app.ts:42:17 (medium)
     - Summary: Duplicate policy evidence \`requireAuth\` appears on the same route.
     - Cites coverage: route_0003
-    - Cites evidence: evidence_0002, evidence_0003
+    - Cites evidence: evidence_0003, evidence_0005
     - Inputs: identity
     - Branch: duplicate requireAuth evidence -> review_required (reachable)
     - Question: Is duplicated guard evidence intentional or redundant?
@@ -148,6 +154,9 @@
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/realistic/express/app.ts:42:17 (high)
     - Symbol: `requireAuth` (tests/fixtures/realistic/express/app.ts:42:17)
+  - tenant_check `route_param_scope_signal` at tests/fixtures/realistic/express/routes/accounts.ts:13:1 (low)
+    - Symbol: `accountId` (tests/fixtures/realistic/express/routes/accounts.ts:13:1)
+    - Note: Route parameter name suggests tenant or ownership context but is not proof of scoping
   - authn `authn_guard` at tests/fixtures/realistic/express/routes/accounts.ts:13:27 (high)
     - Symbol: `requireAuth` (tests/fixtures/realistic/express/routes/accounts.ts:13:27)
 - Data mutations: none
@@ -159,11 +168,11 @@
 - Handler: `&lt;inline_handler&gt;` (tests/fixtures/realistic/express/routes/accounts.ts:17:38)
 - Route location: tests/fixtures/realistic/express/routes/accounts.ts:17:1
 - Middleware: `requireAuth` (tests/fixtures/realistic/express/routes/accounts.ts:17:18), `audit` (tests/fixtures/realistic/express/routes/accounts.ts:17:31)
-- Declared protection: requireAuth
+- Declared protection: requireAuth, owner
 - Confidence: medium
-- Coverage: authn_only (review_required)
-- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0004, evidence_0005; mutations: mutation_0001; links: link_0001; policy cases: policy_case_0004, policy_case_0005; sensitivity: linked_mutation, unsafe_method
+- Coverage: ownership_guarded (low)
+- Coverage rationale: 2 strong authorization evidence item(s) support ownership_guarded coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
+- Coverage support: evidence: evidence_0006, evidence_0007, evidence_0008; mutations: mutation_0001; links: link_0001; policy cases: policy_case_0004, policy_case_0005; sensitivity: linked_mutation, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this state-changing route require more than authentication?
@@ -171,11 +180,11 @@
   - Route inventory confidence is not high.
 - PolicyLens:
   - policy_case_0004: effective_protection at tests/fixtures/realistic/express/routes/accounts.ts:17:18 (high)
-    - Summary: 2 evidence support(s) route protection: audit_log, authn.
+    - Summary: 3 evidence support(s) route protection: audit_log, authn, ownership_check.
     - Cites coverage: route_0004
-    - Cites evidence: evidence_0004, evidence_0005
+    - Cites evidence: evidence_0006, evidence_0007, evidence_0008
     - Cites mutations: mutation_0001
-    - Inputs: identity
+    - Inputs: identity, ownership
     - Branch: static authorization evidence present -> allow (reachable)
   - policy_case_0005: linked_mutation_protection at tests/fixtures/realistic/express/routes/accounts.ts:17:1 (high)
     - Summary: Route reaches linked mutation(s): mutation_0001 (account).
@@ -192,6 +201,9 @@
     - Symbol: `requireAuth` (tests/fixtures/realistic/express/routes/accounts.ts:17:18)
   - audit_log `audit_log` at tests/fixtures/realistic/express/routes/accounts.ts:17:31 (high)
     - Symbol: `audit` (tests/fixtures/realistic/express/routes/accounts.ts:17:31)
+  - ownership_check `mutation_scope` at tests/fixtures/realistic/express/routes/accounts.ts:18:9 (high)
+    - Symbol: `owner` (tests/fixtures/realistic/express/routes/accounts.ts:18:9)
+    - Note: Mutation input includes ownership scoping
 - Data mutations:
   - create `account` via `prisma` at tests/fixtures/realistic/express/routes/accounts.ts:18:9 (high)
 
@@ -202,11 +214,11 @@
 - Handler: `&lt;inline_handler&gt;` (tests/fixtures/realistic/express/routes/accounts.ts:17:38)
 - Route location: tests/fixtures/realistic/express/routes/accounts.ts:17:1
 - Middleware: `requireAuth` (tests/fixtures/realistic/express/app.ts:42:17), `requireAuth` (tests/fixtures/realistic/express/routes/accounts.ts:17:18), `audit` (tests/fixtures/realistic/express/routes/accounts.ts:17:31)
-- Declared protection: requireAuth, requireAuth
+- Declared protection: requireAuth, owner, requireAuth
 - Confidence: high
-- Coverage: authn_only (review_required)
-- Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0006, evidence_0007, evidence_0008; mutations: mutation_0001; links: link_0002; policy cases: policy_case_0006, policy_case_0007, policy_case_0008; sensitivity: linked_mutation, unsafe_method
+- Coverage: ownership_guarded (low)
+- Coverage rationale: 3 strong authorization evidence item(s) support ownership_guarded coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
+- Coverage support: evidence: evidence_0009, evidence_0010, evidence_0011, evidence_0012; mutations: mutation_0001; links: link_0002; policy cases: policy_case_0006, policy_case_0007, policy_case_0008; sensitivity: linked_mutation, unsafe_method
 - Reviewer questions:
   - Is duplicated guard evidence intentional or redundant?
   - Should linked data mutations have resource-specific authorization evidence?
@@ -215,11 +227,11 @@
   - Duplicated policy evidence may be safe but should be reviewed.
 - PolicyLens:
   - policy_case_0006: effective_protection at tests/fixtures/realistic/express/app.ts:42:17 (high)
-    - Summary: 3 evidence support(s) route protection: audit_log, authn.
+    - Summary: 4 evidence support(s) route protection: audit_log, authn, ownership_check.
     - Cites coverage: route_0005
-    - Cites evidence: evidence_0006, evidence_0007, evidence_0008
+    - Cites evidence: evidence_0009, evidence_0010, evidence_0011, evidence_0012
     - Cites mutations: mutation_0001
-    - Inputs: identity
+    - Inputs: identity, ownership
     - Branch: static authorization evidence present -> allow (reachable)
   - policy_case_0007: linked_mutation_protection at tests/fixtures/realistic/express/routes/accounts.ts:17:1 (high)
     - Summary: Route reaches linked mutation(s): mutation_0001 (account).
@@ -232,7 +244,7 @@
   - policy_case_0008: duplicate at tests/fixtures/realistic/express/app.ts:42:17 (medium)
     - Summary: Duplicate policy evidence \`requireAuth\` appears on the same route.
     - Cites coverage: route_0005
-    - Cites evidence: evidence_0006, evidence_0007
+    - Cites evidence: evidence_0009, evidence_0010
     - Inputs: identity
     - Branch: duplicate requireAuth evidence -> review_required (reachable)
     - Question: Is duplicated guard evidence intentional or redundant?
@@ -244,6 +256,9 @@
     - Symbol: `requireAuth` (tests/fixtures/realistic/express/routes/accounts.ts:17:18)
   - audit_log `audit_log` at tests/fixtures/realistic/express/routes/accounts.ts:17:31 (high)
     - Symbol: `audit` (tests/fixtures/realistic/express/routes/accounts.ts:17:31)
+  - ownership_check `mutation_scope` at tests/fixtures/realistic/express/routes/accounts.ts:18:9 (high)
+    - Symbol: `owner` (tests/fixtures/realistic/express/routes/accounts.ts:18:9)
+    - Note: Mutation input includes ownership scoping
 - Data mutations:
   - create `account` via `prisma` at tests/fixtures/realistic/express/routes/accounts.ts:18:9 (high)
 
@@ -258,12 +273,13 @@
 - Declared protection: requirePermission, dynamicPolicyCheck
 - Confidence: medium
 - Coverage: permission_guarded (review_required)
-- Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0009, evidence_0010; weak evidence: evidence_0010; mutations: mutation_0003; links: link_0003; policy cases: policy_case_0009, policy_case_0010, policy_case_0011; sensitivity: account_path, linked_mutation, path_param, unsafe_method
+- Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal, route_param_mutation_without_scope.
+- Coverage support: evidence: evidence_0013, evidence_0014, evidence_0015; weak evidence: evidence_0013, evidence_0015; mutations: mutation_0003; links: link_0003; policy cases: policy_case_0009, policy_case_0010, policy_case_0011; sensitivity: account_path, linked_mutation, path_param, unsafe_method
 - Reviewer questions:
   - Can the dynamic authorization path be confirmed?
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Dynamic authorization evidence requires review.
@@ -273,7 +289,7 @@
   - policy_case_0009: effective_protection at tests/fixtures/realistic/express/routes/accounts.ts:26:3 (high)
     - Summary: 1 evidence support(s) route protection: permission_check.
     - Cites coverage: route_0006
-    - Cites evidence: evidence_0009
+    - Cites evidence: evidence_0014
     - Cites mutations: mutation_0003
     - Inputs: permission
     - Branch: static authorization evidence present -> allow (reachable)
@@ -288,7 +304,7 @@
   - policy_case_0011: dynamic at tests/fixtures/realistic/express/routes/accounts.ts:28:10 (low)
     - Summary: Dynamic policy behavior requires review.
     - Cites coverage: route_0006
-    - Cites evidence: evidence_0010
+    - Cites evidence: evidence_0015
     - Inputs: dynamicPolicyCheck
     - Branch: dynamic policy dispatch -> review_required (reachable)
     - Question: Can the dynamic authorization path be confirmed?
@@ -296,6 +312,9 @@
 - Uncertainty notes:
   - Express mount prefix is dynamic and was not included in the route path
 - Auth evidence:
+  - tenant_check `route_param_scope_signal` at tests/fixtures/realistic/express/routes/accounts.ts:24:1 (low)
+    - Symbol: `accountId` (tests/fixtures/realistic/express/routes/accounts.ts:24:1)
+    - Note: Route parameter name suggests tenant or ownership context but is not proof of scoping
   - permission_check `permission_guard` at tests/fixtures/realistic/express/routes/accounts.ts:26:3 (high)
     - Symbol: `requirePermission` (tests/fixtures/realistic/express/routes/accounts.ts:26:3)
   - unknown_dynamic_check `handler_call` at tests/fixtures/realistic/express/routes/accounts.ts:28:10 (low)
@@ -315,12 +334,13 @@
 - Declared protection: requirePermission, requireAuth, dynamicPolicyCheck
 - Confidence: high
 - Coverage: permission_guarded (review_required)
-- Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0011, evidence_0012, evidence_0013; weak evidence: evidence_0013; mutations: mutation_0003; links: link_0004; policy cases: policy_case_0012, policy_case_0013, policy_case_0014; sensitivity: account_path, linked_mutation, path_param, unsafe_method
+- Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal, route_param_mutation_without_scope.
+- Coverage support: evidence: evidence_0016, evidence_0017, evidence_0018, evidence_0019; weak evidence: evidence_0017, evidence_0019; mutations: mutation_0003; links: link_0004; policy cases: policy_case_0012, policy_case_0013, policy_case_0014; sensitivity: account_path, linked_mutation, path_param, unsafe_method
 - Reviewer questions:
   - Can the dynamic authorization path be confirmed?
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Dynamic authorization evidence requires review.
@@ -329,7 +349,7 @@
   - policy_case_0012: effective_protection at tests/fixtures/realistic/express/app.ts:42:17 (high)
     - Summary: 2 evidence support(s) route protection: authn, permission_check.
     - Cites coverage: route_0007
-    - Cites evidence: evidence_0011, evidence_0012
+    - Cites evidence: evidence_0016, evidence_0018
     - Cites mutations: mutation_0003
     - Inputs: identity, permission
     - Branch: static authorization evidence present -> allow (reachable)
@@ -344,7 +364,7 @@
   - policy_case_0014: dynamic at tests/fixtures/realistic/express/routes/accounts.ts:28:10 (low)
     - Summary: Dynamic policy behavior requires review.
     - Cites coverage: route_0007
-    - Cites evidence: evidence_0013
+    - Cites evidence: evidence_0019
     - Inputs: dynamicPolicyCheck
     - Branch: dynamic policy dispatch -> review_required (reachable)
     - Question: Can the dynamic authorization path be confirmed?
@@ -352,6 +372,9 @@
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/realistic/express/app.ts:42:17 (high)
     - Symbol: `requireAuth` (tests/fixtures/realistic/express/app.ts:42:17)
+  - tenant_check `route_param_scope_signal` at tests/fixtures/realistic/express/routes/accounts.ts:24:1 (low)
+    - Symbol: `accountId` (tests/fixtures/realistic/express/routes/accounts.ts:24:1)
+    - Note: Route parameter name suggests tenant or ownership context but is not proof of scoping
   - permission_check `permission_guard` at tests/fixtures/realistic/express/routes/accounts.ts:26:3 (high)
     - Symbol: `requirePermission` (tests/fixtures/realistic/express/routes/accounts.ts:26:3)
   - unknown_dynamic_check `handler_call` at tests/fixtures/realistic/express/routes/accounts.ts:28:10 (low)
@@ -371,19 +394,21 @@
 - Declared protection: requireAdmin
 - Confidence: medium
 - Coverage: admin_guarded (review_required)
-- Coverage rationale: 1 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0014; mutations: mutation_0004; links: link_0005; policy cases: policy_case_0015, policy_case_0016; sensitivity: account_path, linked_mutation, path_param, unsafe_method
+- Coverage rationale: 1 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal, route_param_mutation_without_scope.
+- Coverage support: evidence: evidence_0020, evidence_0021; weak evidence: evidence_0020; mutations: mutation_0004; links: link_0005; policy cases: policy_case_0015, policy_case_0016; sensitivity: account_path, linked_mutation, path_param, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
+  - Low-confidence authorization evidence was detected.
   - Route inventory confidence is not high.
 - PolicyLens:
   - policy_case_0015: effective_protection at tests/fixtures/realistic/express/routes/accounts.ts:36:30 (high)
     - Summary: 1 evidence support(s) route protection: admin_check.
     - Cites coverage: route_0008
-    - Cites evidence: evidence_0014
+    - Cites evidence: evidence_0021
     - Cites mutations: mutation_0004
     - Inputs: admin
     - Branch: static authorization evidence present -> allow (reachable)
@@ -398,6 +423,9 @@
 - Uncertainty notes:
   - Express mount prefix is dynamic and was not included in the route path
 - Auth evidence:
+  - tenant_check `route_param_scope_signal` at tests/fixtures/realistic/express/routes/accounts.ts:36:1 (low)
+    - Symbol: `accountId` (tests/fixtures/realistic/express/routes/accounts.ts:36:1)
+    - Note: Route parameter name suggests tenant or ownership context but is not proof of scoping
   - admin_check `admin_guard` at tests/fixtures/realistic/express/routes/accounts.ts:36:30 (high)
     - Symbol: `requireAdmin` (tests/fixtures/realistic/express/routes/accounts.ts:36:30)
 - Data mutations:
@@ -414,17 +442,20 @@
 - Declared protection: requireAdmin, requireAuth
 - Confidence: high
 - Coverage: admin_guarded (review_required)
-- Coverage rationale: 2 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0015, evidence_0016; mutations: mutation_0004; links: link_0006; policy cases: policy_case_0017, policy_case_0018; sensitivity: account_path, linked_mutation, path_param, unsafe_method
+- Coverage rationale: 2 strong authorization evidence item(s) support admin_guarded coverage.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal, route_param_mutation_without_scope.
+- Coverage support: evidence: evidence_0022, evidence_0023, evidence_0024; weak evidence: evidence_0023; mutations: mutation_0004; links: link_0006; policy cases: policy_case_0017, policy_case_0018; sensitivity: account_path, linked_mutation, path_param, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
+- Coverage uncertainty:
+  - Low-confidence authorization evidence was detected.
 - PolicyLens:
   - policy_case_0017: effective_protection at tests/fixtures/realistic/express/app.ts:42:17 (high)
     - Summary: 2 evidence support(s) route protection: admin_check, authn.
     - Cites coverage: route_0009
-    - Cites evidence: evidence_0015, evidence_0016
+    - Cites evidence: evidence_0022, evidence_0024
     - Cites mutations: mutation_0004
     - Inputs: admin, identity
     - Branch: static authorization evidence present -> allow (reachable)
@@ -439,6 +470,9 @@
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/realistic/express/app.ts:42:17 (high)
     - Symbol: `requireAuth` (tests/fixtures/realistic/express/app.ts:42:17)
+  - tenant_check `route_param_scope_signal` at tests/fixtures/realistic/express/routes/accounts.ts:36:1 (low)
+    - Symbol: `accountId` (tests/fixtures/realistic/express/routes/accounts.ts:36:1)
+    - Note: Route parameter name suggests tenant or ownership context but is not proof of scoping
   - admin_check `admin_guard` at tests/fixtures/realistic/express/routes/accounts.ts:36:30 (high)
     - Symbol: `requireAdmin` (tests/fixtures/realistic/express/routes/accounts.ts:36:30)
 - Data mutations:
@@ -454,11 +488,12 @@
 - Declared protection: requireAuth, requireAuth
 - Confidence: high
 - Coverage: authn_only (review_required)
-- Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0017, evidence_0018; mutations: mutation_0002; links: link_0007; policy cases: policy_case_0019, policy_case_0020, policy_case_0021; sensitivity: linked_mutation, unsafe_method
+- Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence.
+- Coverage support: evidence: evidence_0025, evidence_0026; mutations: mutation_0002; links: link_0007; policy cases: policy_case_0019, policy_case_0020, policy_case_0021; sensitivity: linked_mutation, unsafe_method
 - Reviewer questions:
   - Is duplicated guard evidence intentional or redundant?
   - Should linked data mutations have resource-specific authorization evidence?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Duplicated policy evidence may be safe but should be reviewed.
@@ -466,7 +501,7 @@
   - policy_case_0019: effective_protection at tests/fixtures/realistic/express/app.ts:42:17 (high)
     - Summary: 2 evidence support(s) route protection: authn.
     - Cites coverage: route_0010
-    - Cites evidence: evidence_0017, evidence_0018
+    - Cites evidence: evidence_0025, evidence_0026
     - Cites mutations: mutation_0002
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
@@ -481,7 +516,7 @@
   - policy_case_0021: duplicate at tests/fixtures/realistic/express/app.ts:42:17 (medium)
     - Summary: Duplicate policy evidence \`requireAuth\` appears on the same route.
     - Cites coverage: route_0010
-    - Cites evidence: evidence_0017, evidence_0018
+    - Cites evidence: evidence_0025, evidence_0026
     - Inputs: identity
     - Branch: duplicate requireAuth evidence -> review_required (reachable)
     - Question: Is duplicated guard evidence intentional or redundant?
@@ -504,10 +539,11 @@
 - Declared protection: requireAuth
 - Confidence: medium
 - Coverage: authn_only (review_required)
-- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0019; mutations: mutation_0002; links: link_0008; policy cases: policy_case_0022, policy_case_0023; sensitivity: linked_mutation, unsafe_method
+- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence.
+- Coverage support: evidence: evidence_0027; mutations: mutation_0002; links: link_0008; policy cases: policy_case_0022, policy_case_0023; sensitivity: linked_mutation, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Route inventory confidence is not high.
@@ -515,7 +551,7 @@
   - policy_case_0022: effective_protection at tests/fixtures/realistic/express/routes/accounts.ts:41:25 (high)
     - Summary: 1 evidence support(s) route protection: authn.
     - Cites coverage: route_0011
-    - Cites evidence: evidence_0019
+    - Cites evidence: evidence_0027
     - Cites mutations: mutation_0002
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
@@ -546,7 +582,7 @@
 - Confidence: high
 - Coverage: authn_only (review_required)
 - Coverage rationale: 2 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): unsafe_method.
-- Coverage support: evidence: evidence_0020, evidence_0021; links: link_0009; policy cases: policy_case_0024, policy_case_0025; sensitivity: unsafe_method
+- Coverage support: evidence: evidence_0028, evidence_0029; links: link_0009; policy cases: policy_case_0024, policy_case_0025; sensitivity: unsafe_method
 - Reviewer questions:
   - Is duplicated guard evidence intentional or redundant?
   - Should this state-changing route require more than authentication?
@@ -556,13 +592,13 @@
   - policy_case_0024: effective_protection at tests/fixtures/realistic/express/app.ts:42:17 (high)
     - Summary: 2 evidence support(s) route protection: authn.
     - Cites coverage: route_0012
-    - Cites evidence: evidence_0020, evidence_0021
+    - Cites evidence: evidence_0028, evidence_0029
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
   - policy_case_0025: duplicate at tests/fixtures/realistic/express/app.ts:42:17 (medium)
     - Summary: Duplicate policy evidence \`requireAuth\` appears on the same route.
     - Cites coverage: route_0012
-    - Cites evidence: evidence_0020, evidence_0021
+    - Cites evidence: evidence_0028, evidence_0029
     - Inputs: identity
     - Branch: duplicate requireAuth evidence -> review_required (reachable)
     - Question: Is duplicated guard evidence intentional or redundant?
@@ -585,7 +621,7 @@
 - Confidence: medium
 - Coverage: authn_only (review_required)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): unsafe_method.
-- Coverage support: evidence: evidence_0022; links: link_0010; policy cases: policy_case_0026; sensitivity: unsafe_method
+- Coverage support: evidence: evidence_0030; links: link_0010; policy cases: policy_case_0026; sensitivity: unsafe_method
 - Reviewer questions:
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
@@ -594,7 +630,7 @@
   - policy_case_0026: effective_protection at tests/fixtures/realistic/express/routes/accounts.ts:46:33 (high)
     - Summary: 1 evidence support(s) route protection: authn.
     - Cites coverage: route_0013
-    - Cites evidence: evidence_0022
+    - Cites evidence: evidence_0030
     - Inputs: identity
     - Branch: static authorization evidence present -> allow (reachable)
 - Uncertainty notes:
@@ -612,26 +648,34 @@
 - Route location: tests/fixtures/realistic/express/routes/accounts.ts:50:1
 - Middleware: `requireAuth` (tests/fixtures/realistic/express/app.ts:42:17), `requireTenant` (tests/fixtures/realistic/express/routes/accounts.ts:50:33)
 - Params: tenantId (high)
-- Declared protection: requireTenant, requireAuth
+- Declared protection: requireTenant, tenant, requireAuth
 - Confidence: high
 - Coverage: tenant_guarded (low)
-- Coverage rationale: 2 strong authorization evidence item(s) support tenant_guarded coverage.; Sensitive route modifier(s): path_param, tenant_path.
-- Coverage support: evidence: evidence_0023, evidence_0024; policy cases: policy_case_0027; sensitivity: path_param, tenant_path
+- Coverage rationale: 3 strong authorization evidence item(s) support tenant_guarded coverage.; Sensitive route modifier(s): path_param, tenant_path.
+- Coverage support: evidence: evidence_0031, evidence_0032, evidence_0033, evidence_0034; weak evidence: evidence_0032; policy cases: policy_case_0027; sensitivity: path_param, tenant_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this route require tenant isolation checks?
+- Coverage uncertainty:
+  - Low-confidence authorization evidence was detected.
 - PolicyLens:
   - policy_case_0027: effective_protection at tests/fixtures/realistic/express/app.ts:42:17 (high)
-    - Summary: 2 evidence support(s) route protection: authn, tenant_check.
+    - Summary: 3 evidence support(s) route protection: authn, tenant_check.
     - Cites coverage: route_0014
-    - Cites evidence: evidence_0023, evidence_0024
+    - Cites evidence: evidence_0031, evidence_0033, evidence_0034
     - Inputs: identity, tenant
     - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/realistic/express/app.ts:42:17 (high)
     - Symbol: `requireAuth` (tests/fixtures/realistic/express/app.ts:42:17)
+  - tenant_check `route_param_scope_signal` at tests/fixtures/realistic/express/routes/accounts.ts:50:1 (low)
+    - Symbol: `tenantId` (tests/fixtures/realistic/express/routes/accounts.ts:50:1)
+    - Note: Route parameter name suggests tenant or ownership context but is not proof of scoping
   - tenant_check `tenant_guard` at tests/fixtures/realistic/express/routes/accounts.ts:50:33 (high)
     - Symbol: `requireTenant` (tests/fixtures/realistic/express/routes/accounts.ts:50:33)
+  - tenant_check `mutation_scope` at tests/fixtures/realistic/express/routes/accounts.ts:51:14 (high)
+    - Symbol: `tenant` (tests/fixtures/realistic/express/routes/accounts.ts:51:14)
+    - Note: Mutation input includes tenant scoping
 - Data mutations: none
 
 <a id="route-route_0015"></a>
@@ -642,28 +686,35 @@
 - Route location: tests/fixtures/realistic/express/routes/accounts.ts:50:1
 - Middleware: `requireTenant` (tests/fixtures/realistic/express/routes/accounts.ts:50:33)
 - Params: tenantId (high)
-- Declared protection: requireTenant
+- Declared protection: requireTenant, tenant
 - Confidence: medium
 - Coverage: tenant_guarded (low)
-- Coverage rationale: 1 strong authorization evidence item(s) support tenant_guarded coverage.; Sensitive route modifier(s): path_param, tenant_path.
-- Coverage support: evidence: evidence_0025; policy cases: policy_case_0028; sensitivity: path_param, tenant_path
+- Coverage rationale: 2 strong authorization evidence item(s) support tenant_guarded coverage.; Sensitive route modifier(s): path_param, tenant_path.
+- Coverage support: evidence: evidence_0035, evidence_0036, evidence_0037; weak evidence: evidence_0035; policy cases: policy_case_0028; sensitivity: path_param, tenant_path
 - Reviewer questions:
   - Should this route require ownership or permission checks?
   - Should this route require tenant isolation checks?
 - Coverage uncertainty:
+  - Low-confidence authorization evidence was detected.
   - Route inventory confidence is not high.
 - PolicyLens:
   - policy_case_0028: effective_protection at tests/fixtures/realistic/express/routes/accounts.ts:50:33 (high)
-    - Summary: 1 evidence support(s) route protection: tenant_check.
+    - Summary: 2 evidence support(s) route protection: tenant_check.
     - Cites coverage: route_0015
-    - Cites evidence: evidence_0025
+    - Cites evidence: evidence_0036, evidence_0037
     - Inputs: tenant
     - Branch: static authorization evidence present -> allow (reachable)
 - Uncertainty notes:
   - Express mount prefix is dynamic and was not included in the route path
 - Auth evidence:
+  - tenant_check `route_param_scope_signal` at tests/fixtures/realistic/express/routes/accounts.ts:50:1 (low)
+    - Symbol: `tenantId` (tests/fixtures/realistic/express/routes/accounts.ts:50:1)
+    - Note: Route parameter name suggests tenant or ownership context but is not proof of scoping
   - tenant_check `tenant_guard` at tests/fixtures/realistic/express/routes/accounts.ts:50:33 (high)
     - Symbol: `requireTenant` (tests/fixtures/realistic/express/routes/accounts.ts:50:33)
+  - tenant_check `mutation_scope` at tests/fixtures/realistic/express/routes/accounts.ts:51:14 (high)
+    - Symbol: `tenant` (tests/fixtures/realistic/express/routes/accounts.ts:51:14)
+    - Note: Mutation input includes tenant scoping
 - Data mutations: none
 
 ## Diagnostics

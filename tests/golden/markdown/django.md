@@ -21,14 +21,14 @@
 | --- | --- | --- |
 | [route_0003](#route-route_0003) | DELETE /accounts/api/users/{uuid} | risk is high |
 | [route_0006](#route-route_0006) | PATCH /accounts/api/users/{uuid} | risk is high |
-| [route_0007](#route-route_0007) | POST /accounts/api/users | risk is high |
-| [route_0008](#route-route_0008) | POST /accounts/api/users/{uuid}/disable | risk is high |
+| [route_0007](#route-route_0007) | POST /accounts/api/users | risk is review_required |
+| [route_0008](#route-route_0008) | POST /accounts/api/users/{uuid}/disable | risk is review_required |
 | [route_0009](#route-route_0009) | PUT /accounts/api/users/{uuid} | risk is high |
 | [route_0013](#route-route_0013) | POST /accounts/api/custom-model/recalculate | confidence is medium; DRF action url_path is dynamic; emitted method name as path; risk is high |
 | [route_0023](#route-route_0023) | POST /accounts/api/mixin-backed | risk is high |
 | [route_0024](#route-route_0024) | GET &lt;dynamic&gt; | confidence is medium; DRF router prefix is dynamic and was emitted as &lt;dynamic&gt;; DRF router basename is dynamic |
-| [route_0027](#route-route_0027) | POST /accounts/readonly-api/audit/refresh | risk is high |
-| [route_0028](#route-route_0028) | ANY /accounts | risk is high |
+| [route_0027](#route-route_0027) | POST /accounts/readonly-api/audit/refresh | risk is review_required |
+| [route_0028](#route-route_0028) | ANY /accounts | risk is review_required |
 | [route_0029](#route-route_0029) | ANY /accounts/users/&lt;int:pk&gt;/ | risk is review_required; coverage is unknown_or_dynamic |
 | [route_0030](#route-route_0030) | ANY &lt;dynamic&gt; | confidence is medium; Django URL path is dynamic and was emitted as &lt;dynamic&gt;; risk is high |
 | [route_0031](#route-route_0031) | ANY /accounts/generated | confidence is medium; Route emitted from statically matched generated URL helper |
@@ -53,8 +53,8 @@
 | [route_0004](#route-route_0004) | django_rest_framework | GET | /accounts/api/users | \`UserViewSet.list\` (tests/fixtures/django/accounts/views.py:67:9) | none | high | permission_guarded | low |
 | [route_0005](#route-route_0005) | django_rest_framework | GET | /accounts/api/users/{uuid} | \`UserViewSet.retrieve\` (tests/fixtures/django/accounts/views.py:64:7) | none | high | unauthenticated | medium |
 | [route_0006](#route-route_0006) | django_rest_framework | PATCH | /accounts/api/users/{uuid} | \`UserViewSet.partial_update\` (tests/fixtures/django/accounts/views.py:64:7) | none | high | unauthenticated | high |
-| [route_0007](#route-route_0007) | django_rest_framework | POST | /accounts/api/users | \`UserViewSet.create\` (tests/fixtures/django/accounts/views.py:71:9) | none | high | unauthenticated | high |
-| [route_0008](#route-route_0008) | django_rest_framework | POST | /accounts/api/users/{uuid}/disable | \`UserViewSet.disable\` (tests/fixtures/django/accounts/views.py:75:9) | none | high | unauthenticated | high |
+| [route_0007](#route-route_0007) | django_rest_framework | POST | /accounts/api/users | \`UserViewSet.create\` (tests/fixtures/django/accounts/views.py:71:9) | none | high | unauthenticated | review_required |
+| [route_0008](#route-route_0008) | django_rest_framework | POST | /accounts/api/users/{uuid}/disable | \`UserViewSet.disable\` (tests/fixtures/django/accounts/views.py:75:9) | none | high | unauthenticated | review_required |
 | [route_0009](#route-route_0009) | django_rest_framework | PUT | /accounts/api/users/{uuid} | \`UserViewSet.update\` (tests/fixtures/django/accounts/views.py:64:7) | none | high | unauthenticated | high |
 | [route_0010](#route-route_0010) | django_rest_framework | GET | /accounts/api/readonly | \`ReadOnlyAccountViewSet.list\` (tests/fixtures/django/accounts/views.py:79:7) | none | high | unauthenticated | medium |
 | [route_0011](#route-route_0011) | django_rest_framework | GET | /accounts/api/readonly/{pk} | \`ReadOnlyAccountViewSet.retrieve\` (tests/fixtures/django/accounts/views.py:79:7) | none | high | unauthenticated | medium |
@@ -73,8 +73,8 @@
 | [route_0024](#route-route_0024) | django_rest_framework | GET | &lt;dynamic&gt; | \`DynamicViewSet.list\` (tests/fixtures/django/accounts/views.py:107:9) | none | medium | unauthenticated | low |
 | [route_0025](#route-route_0025) | django_rest_framework | GET | /accounts/readonly-api/audit | \`ReadOnlyAuditViewSet.list\` (tests/fixtures/django/accounts/views.py:87:7) | none | high | unauthenticated | medium |
 | [route_0026](#route-route_0026) | django_rest_framework | GET | /accounts/readonly-api/audit/{pk} | \`ReadOnlyAuditViewSet.retrieve\` (tests/fixtures/django/accounts/views.py:87:7) | none | high | unauthenticated | medium |
-| [route_0027](#route-route_0027) | django_rest_framework | POST | /accounts/readonly-api/audit/refresh | \`ReadOnlyAuditViewSet.refresh\` (tests/fixtures/django/accounts/views.py:89:9) | none | high | unauthenticated | high |
-| [route_0028](#route-route_0028) | django | ANY | /accounts | \`index\` (tests/fixtures/django/accounts/views.py:33:5) | none | high | unauthenticated | high |
+| [route_0027](#route-route_0027) | django_rest_framework | POST | /accounts/readonly-api/audit/refresh | \`ReadOnlyAuditViewSet.refresh\` (tests/fixtures/django/accounts/views.py:89:9) | none | high | unauthenticated | review_required |
+| [route_0028](#route-route_0028) | django | ANY | /accounts | \`index\` (tests/fixtures/django/accounts/views.py:33:5) | none | high | unauthenticated | review_required |
 | [route_0029](#route-route_0029) | django | ANY | /accounts/users/&lt;int:pk&gt;/ | \`AccountDetailView\` (tests/fixtures/django/accounts/views.py:41:7) | none | high | unknown_or_dynamic | review_required |
 | [route_0030](#route-route_0030) | django | ANY | &lt;dynamic&gt; | \`dynamic_view\` (tests/fixtures/django/accounts/views.py:37:5) | none | medium | unauthenticated | high |
 | [route_0031](#route-route_0031) | django | ANY | /accounts/generated | \`GeneratedAccountListView\` (tests/fixtures/django/accounts/views.py:55:7) | none | medium | permission_guarded | low |
@@ -234,12 +234,13 @@
 - Route location: tests/fixtures/django/accounts/urls.py:7:1
 - Middleware: none
 - Confidence: high
-- Coverage: unauthenticated (high)
-- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, linked_mutation, unsafe_method, user_path.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage: unauthenticated (review_required)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, linked_mutation, unsafe_method, user_path.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence.
 - Coverage support: mutations: mutation_0004; links: link_0001; policy cases: policy_case_0004; sensitivity: account_path, linked_mutation, unsafe_method, user_path
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
 - PolicyLens:
   - policy_case_0004: linked_mutation_protection at tests/fixtures/django/accounts/urls.py:7:1 (high)
@@ -263,12 +264,13 @@
 - Middleware: none
 - Params: uuid (high)
 - Confidence: high
-- Coverage: unauthenticated (high)
-- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method, user_path.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage: unauthenticated (review_required)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method, user_path.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence, route_param_mutation_without_scope.
 - Coverage support: mutations: mutation_0005; links: link_0002; policy cases: policy_case_0005; sensitivity: account_path, linked_mutation, path_param, unsafe_method, user_path
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
 - PolicyLens:
   - policy_case_0005: linked_mutation_protection at tests/fixtures/django/accounts/urls.py:7:1 (high)
@@ -724,12 +726,13 @@
 - Route location: tests/fixtures/django/accounts/urls.py:17:1
 - Middleware: none
 - Confidence: high
-- Coverage: unauthenticated (high)
-- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage: unauthenticated (review_required)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence.
 - Coverage support: mutations: mutation_0007; links: link_0003; policy cases: policy_case_0014; sensitivity: account_path, linked_mutation, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
 - PolicyLens:
   - policy_case_0014: linked_mutation_protection at tests/fixtures/django/accounts/urls.py:17:1 (high)
@@ -752,12 +755,13 @@
 - Route location: tests/fixtures/django/accounts/urls.py:20:5
 - Middleware: none
 - Confidence: high
-- Coverage: unauthenticated (high)
-- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, any_method, linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage: unauthenticated (review_required)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): account_path, any_method, linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence.
 - Coverage support: mutations: mutation_0001; links: link_0004; policy cases: policy_case_0015; sensitivity: account_path, any_method, linked_mutation, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
 - PolicyLens:
   - policy_case_0015: linked_mutation_protection at tests/fixtures/django/accounts/urls.py:20:5 (medium)
@@ -783,12 +787,13 @@
 - Declared protection: AccountDetailView
 - Confidence: high
 - Coverage: unknown_or_dynamic (review_required)
-- Coverage rationale: 1 weak or dynamic authorization evidence item(s) were detected.; Sensitive route modifier(s): account_path, any_method, linked_mutation, path_param, unsafe_method, user_path.; Linked data mutation(s) increase review sensitivity.
+- Coverage rationale: 1 weak or dynamic authorization evidence item(s) were detected.; Sensitive route modifier(s): account_path, any_method, linked_mutation, path_param, unsafe_method, user_path.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence, route_param_mutation_without_scope.
 - Coverage support: evidence: evidence_0024; weak evidence: evidence_0024; mutations: mutation_0002, mutation_0003; links: link_0005, link_0006, link_0007; policy cases: policy_case_0016, policy_case_0017; sensitivity: account_path, any_method, linked_mutation, path_param, unsafe_method, user_path
 - Reviewer questions:
   - Can the dynamic authorization path be confirmed?
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Dynamic authorization evidence requires review.
