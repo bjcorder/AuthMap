@@ -1555,6 +1555,7 @@ fn drift_kind_label(kind: DriftChangeKind) -> &'static str {
         DriftChangeKind::CoverageChanged => "coverage_changed",
         DriftChangeKind::NewLinkedMutation => "new_linked_mutation",
         DriftChangeKind::PolicyChanged => "policy_changed",
+        DriftChangeKind::ControlSourceChanged => "control_source_changed",
     }
 }
 

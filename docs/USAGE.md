@@ -358,7 +358,10 @@ authmap controls --base authmap.baseline.json --head authmap.json --format json
 `authmap controls` reports guard, route-guard, permission, tenant, ownership,
 admin, audit, and policy-helper drift that AuthMap can connect to routes,
 evidence, policies, or review context. It is not a generic SAST or
-infrastructure control scanner.
+infrastructure control scanner. Map-file controls use AuthMap facts and
+`source_files` metadata from the supplied documents. Git-range controls rescan
+the committed refs through the same archive flow as `authmap diff`; unrelated
+file churn is filtered out unless the path is authorization-relevant.
 
 ## GitHub Actions
 

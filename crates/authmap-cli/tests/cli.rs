@@ -521,6 +521,22 @@ fn tenants_help_works() {
 }
 
 #[test]
+fn controls_help_works() {
+    let output = authmap(&["controls", "--help"]);
+
+    assert_exit(&output, 0);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--base"));
+    assert!(stdout.contains("--head"));
+    assert!(stdout.contains("--format"));
+    assert!(stdout.contains("--output"));
+    assert!(stdout.contains("--config"));
+    assert!(stdout.contains("--mode"));
+    assert!(stdout.contains("--target"));
+    assert!(stdout.contains("--fail-on"));
+}
+
+#[test]
 fn tenants_reports_empty_projects() {
     let temp = TestDir::new("tenants-empty");
 
@@ -1320,6 +1336,119 @@ fn controls_map_files_emit_dedicated_control_report() {
     assert!(markdown.contains("# AuthMap Controls Report"));
     assert!(markdown.contains("route_guard"));
     assert!(markdown.contains("removed_evidence"));
+}
+
+#[test]
+fn controls_reports_empty_no_change_diff() {
+    let temp = TestDir::new("controls-no-change");
+    let base_path = temp.path().join("base.json");
+    let head_path = temp.path().join("head.json");
+    write_file(&base_path, explain_document_json());
+    write_file(&head_path, explain_document_json());
+
+    let output = authmap(&[
+        "controls",
+        "--base",
+        base_path.to_str().expect("path should be UTF-8"),
+        "--head",
+        head_path.to_str().expect("path should be UTF-8"),
+        "--format",
+        "json",
+    ]);
+
+    assert_exit(&output, 0);
+    let report: Value = serde_json::from_slice(&output.stdout).expect("controls JSON should parse");
+    assert_eq!(report["report_type"], "authmap.controls");
+    assert_eq!(report["summary"]["total_findings"], 0);
+    assert_eq!(
+        report["findings"]
+            .as_array()
+            .expect("findings should be array")
+            .len(),
+        0
+    );
+
+    let output = authmap(&[
+        "controls",
+        "--base",
+        base_path.to_str().expect("path should be UTF-8"),
+        "--head",
+        head_path.to_str().expect("path should be UTF-8"),
+        "--format",
+        "markdown",
+    ]);
+    assert_exit(&output, 0);
+    assert!(
+        String::from_utf8_lossy(&output.stdout)
+            .contains("No authorization-control drift was detected.")
+    );
+}
+
+#[test]
+fn controls_git_range_reports_auth_relevant_source_drift_without_unrelated_churn() {
+    if Command::new("git").arg("--version").output().is_err() {
+        return;
+    }
+
+    let temp = TestDir::new("controls-git-range");
+    write_file(
+        &temp.path().join("app.py"),
+        r#"
+from fastapi import FastAPI, Depends
+from security.guards import require_user
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts(user=Depends(require_user)):
+    return []
+"#,
+    );
+    write_file(
+        &temp.path().join("security/guards.py"),
+        "def require_user():\n    return {'id': 'user_1'}\n",
+    );
+    write_file(&temp.path().join("ui/theme.py"), "COLOR = 'blue'\n");
+    init_git_repo(temp.path());
+    git_commit_all(temp.path(), "base");
+
+    write_file(
+        &temp.path().join("security/guards.py"),
+        "def require_user():\n    return {'id': 'user_1', 'changed': True}\n",
+    );
+    write_file(&temp.path().join("ui/theme.py"), "COLOR = 'green'\n");
+    git_commit_all(temp.path(), "head");
+
+    let output = authmap_in_dir(
+        &[
+            "controls",
+            "HEAD~1...HEAD",
+            "--target",
+            ".",
+            "--format",
+            "json",
+        ],
+        temp.path(),
+    );
+
+    assert_exit(&output, 0);
+    let report: Value = serde_json::from_slice(&output.stdout).expect("controls JSON should parse");
+    assert_eq!(report["report_type"], "authmap.controls");
+    assert!(
+        report["findings"]
+            .as_array()
+            .expect("findings should be array")
+            .iter()
+            .any(|finding| finding["control_type"] == "guard"
+                && finding["location"]["file"] == "security/guards.py")
+    );
+    assert!(
+        !report["findings"]
+            .as_array()
+            .expect("findings should be array")
+            .iter()
+            .any(|finding| finding["location"]["file"] == "ui/theme.py")
+    );
 }
 
 #[test]

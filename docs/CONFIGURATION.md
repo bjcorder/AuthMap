@@ -80,10 +80,18 @@ committed refs via `git archive` and require both `git` and `tar` on `PATH`.
 
 Semantic drift categories include added routes, removed routes, handler
 changes, evidence changes, removed authorization evidence, coverage changes,
-new linked mutations, and policy decision changes. Controls reports narrow
-those changes to guard, route-guard, permission, tenant, ownership, admin,
-audit, and policy-helper drift. Indirect or dynamic patterns are reported as
-review-required uncertainty, not confirmed vulnerabilities.
+new linked mutations, and policy decision changes. Newly linked mutations are
+treated as review-required drift only when the route is sensitive, weakly
+guarded, or missing evidence; otherwise they remain note-level context.
+
+Controls reports narrow drift to authorization-relevant controls: guards,
+route guards, permission or role maps, tenant and ownership helpers, admin
+gates, audit controls, policy helpers, and auth-relevant CORS or security-header
+context. Direct authorization drift comes from changed AuthMap route/evidence,
+coverage, mutation, or policy facts. Contextual control drift comes from changed
+AuthMap `source_files` metadata for auth-relevant file paths and is reported
+with conservative confidence and reviewer questions. Unrelated source churn is
+suppressed.
 
 `drift.fail_on` controls which drift categories return exit code `20` in
 enforce mode. Advisory mode never fails because of drift. The default enforce

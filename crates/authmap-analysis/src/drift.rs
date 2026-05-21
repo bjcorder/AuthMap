@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use authmap_config::DriftFailCategory;
 use authmap_core::{
     AuthMapDocument, Coverage, CoverageClass, Diagnostic, Evidence, Framework, Mutation,
-    PolicyCase, ReachabilityLink, RiskLevel, SCHEMA_VERSION, ScanMode, Span,
+    PolicyCase, ReachabilityLink, RiskLevel, SCHEMA_VERSION, ScanMode, SourceFile, Span,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -121,6 +121,7 @@ pub enum DriftChangeKind {
     CoverageChanged,
     NewLinkedMutation,
     PolicyChanged,
+    ControlSourceChanged,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -314,6 +315,7 @@ pub fn analyze_controls_with_config(
         .iter()
         .filter_map(control_finding_from_change)
         .collect::<Vec<_>>();
+    findings.extend(source_file_control_findings(base, head));
     for (index, finding) in findings.iter_mut().enumerate() {
         finding.id = format!("control_{:04}", index + 1);
     }
@@ -583,12 +585,13 @@ fn compare_route_pair(
     let base_mutations = mutation_signatures(base_route, base_index);
     let head_mutations = mutation_signatures(head_route, head_index);
     for mutation in head_mutations.difference(&base_mutations) {
-        let fail_category = Some(DriftFailCategory::NewLinkedMutation);
+        let review_required = linked_mutation_requires_review(head_route, head_index);
+        let fail_category = review_required.then_some(DriftFailCategory::NewLinkedMutation);
         let blocking = is_blocking(mode, fail_category, fail_on);
         changes.push(DriftChange {
             id: String::new(),
             kind: DriftChangeKind::NewLinkedMutation,
-            severity: severity_for(blocking, true),
+            severity: severity_for(blocking, review_required),
             route_key: route_key.clone(),
             base_route_id: Some(base_route.id.clone()),
             head_route_id: Some(head_route.id.clone()),
@@ -747,6 +750,7 @@ fn summarize_changes(changes: &[DriftChange]) -> DriftSummary {
             DriftChangeKind::CoverageChanged => summary.coverage_changes += 1,
             DriftChangeKind::NewLinkedMutation => summary.new_linked_mutations += 1,
             DriftChangeKind::PolicyChanged => summary.policy_changes += 1,
+            DriftChangeKind::ControlSourceChanged => {}
         }
         if change.enforcement_blocking {
             summary.blocking_changes += 1;
@@ -771,6 +775,19 @@ fn severity_for(blocking: bool, review_required: bool) -> DriftChangeSeverity {
     } else {
         DriftChangeSeverity::Note
     }
+}
+
+fn linked_mutation_requires_review(route: &authmap_core::Route, index: &DriftIndex<'_>) -> bool {
+    if evidence_ids(route, index).is_empty() || !weak_evidence_ids(route, index).is_empty() {
+        return true;
+    }
+    index
+        .coverage_by_route
+        .get(route.id.as_str())
+        .is_some_and(|coverage| {
+            matches!(coverage.risk, RiskLevel::High | RiskLevel::ReviewRequired)
+                || !coverage_support_strings(coverage, "sensitivity_reasons").is_empty()
+        })
 }
 
 fn compare_coverage(base: &Coverage, head: &Coverage) -> DriftComparison {
@@ -970,6 +987,10 @@ fn sorted_strings(items: impl Iterator<Item = String>) -> Vec<String> {
     values
 }
 
+fn contains_any(value: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| value.contains(needle))
+}
+
 fn evidence_signature(evidence: &Evidence) -> String {
     format!(
         "{}:{}:{}",
@@ -1075,6 +1096,230 @@ fn control_finding_from_change(change: &DriftChange) -> Option<ControlFinding> {
     })
 }
 
+fn source_file_control_findings(
+    base: &AuthMapDocument,
+    head: &AuthMapDocument,
+) -> Vec<ControlFinding> {
+    let base_sources = base
+        .source_files
+        .iter()
+        .map(|source| (normalized_document_path(base, &source.path), source))
+        .collect::<BTreeMap<_, _>>();
+    let head_sources = head
+        .source_files
+        .iter()
+        .map(|source| (normalized_document_path(head, &source.path), source))
+        .collect::<BTreeMap<_, _>>();
+    let paths = base_sources
+        .keys()
+        .chain(head_sources.keys())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+
+    paths.into_iter()
+        .filter_map(|path| {
+            let base_source = base_sources.get(&path).copied();
+            let head_source = head_sources.get(&path).copied();
+            let source = head_source.or(base_source)?;
+            let control_type = control_kind_from_source_path(&path)?;
+            if !source_file_changed(base_source, head_source) {
+                return None;
+            }
+            let evidence_ids = evidence_ids_for_file(head, &path);
+            let route_ids = route_ids_for_file(head, &path);
+            let policy_ids = policy_case_ids_for_file(head, &path);
+            let mut reviewer_questions = vec![format!(
+                "Review authorization-control changes in {path}."
+            )];
+            if evidence_ids.is_empty() && route_ids.is_empty() && policy_ids.is_empty() {
+                reviewer_questions.push(
+                    "AuthMap could not tie this control file change to a specific route; review the changed control in context."
+                        .to_string(),
+                );
+            }
+            Some(ControlFinding {
+                id: String::new(),
+                control_type,
+                source_change_id: format!("source:{path}"),
+                source_change_kind: DriftChangeKind::ControlSourceChanged,
+                severity: DriftChangeSeverity::Warning,
+                route_key: first_route_key_for_file(head, &path)
+                    .unwrap_or_else(|| format!("source:{path}")),
+                base_route_id: route_ids.first().cloned(),
+                head_route_id: route_ids.first().cloned(),
+                message: format!(
+                    "Authorization-control source changed: {path} ({})",
+                    control_drift_kind_label(control_type)
+                ),
+                confidence: source_control_confidence(source, &evidence_ids, &route_ids),
+                location: Some(Span {
+                    file: path,
+                    line: 1,
+                    column: 1,
+                    byte_range: None,
+                }),
+                evidence_ids,
+                weak_evidence_ids: Vec::new(),
+                mutation_ids: Vec::new(),
+                link_ids: Vec::new(),
+                reviewer_questions,
+                fail_category: None,
+                enforcement_blocking: false,
+            })
+        })
+        .collect()
+}
+
+fn source_file_changed(base: Option<&SourceFile>, head: Option<&SourceFile>) -> bool {
+    match (base, head) {
+        (Some(base), Some(head)) => {
+            base.sha256 != head.sha256 || base.size_bytes != head.size_bytes
+        }
+        (None, Some(_)) | (Some(_), None) => true,
+        (None, None) => false,
+    }
+}
+
+fn normalized_document_path(document: &AuthMapDocument, path: &str) -> String {
+    let normalized = path.replace('\\', "/");
+    for root in &document.metadata.target_roots {
+        let root = root.replace('\\', "/");
+        let root = root.trim_end_matches("/.");
+        if let Some(stripped) = normalized.strip_prefix(root)
+            && let Some(relative) = stripped.strip_prefix('/')
+        {
+            return relative.trim_start_matches("./").to_string();
+        }
+    }
+    normalized.trim_start_matches("./").to_string()
+}
+
+fn control_kind_from_source_path(path: &str) -> Option<ControlDriftKind> {
+    let lower = path.replace('\\', "/").to_ascii_lowercase();
+    if contains_any(&lower, &["cors", "header", "headers", "security_headers"]) {
+        return Some(ControlDriftKind::AuthRelevantHeader);
+    }
+    if contains_any(
+        &lower,
+        &[
+            "permission",
+            "permissions",
+            "role_map",
+            "roles",
+            "rbac",
+            "acl",
+        ],
+    ) {
+        return Some(ControlDriftKind::PermissionMap);
+    }
+    if contains_any(
+        &lower,
+        &[
+            "tenant",
+            "tenancy",
+            "organization",
+            "organisation",
+            "org_scope",
+        ],
+    ) {
+        return Some(ControlDriftKind::TenantHelper);
+    }
+    if contains_any(&lower, &["owner", "ownership"]) {
+        return Some(ControlDriftKind::OwnershipHelper);
+    }
+    if contains_any(&lower, &["admin", "superuser", "staff"]) {
+        return Some(ControlDriftKind::AdminGate);
+    }
+    if contains_any(&lower, &["audit", "audit_log"]) {
+        return Some(ControlDriftKind::AuditControl);
+    }
+    if contains_any(&lower, &["policy", "policies", "authorize", "authorise"]) {
+        return Some(ControlDriftKind::PolicyHelper);
+    }
+    if contains_any(
+        &lower,
+        &["auth", "guard", "guards", "middleware", "security"],
+    ) {
+        return Some(ControlDriftKind::Guard);
+    }
+    None
+}
+
+fn source_control_confidence(
+    source: &SourceFile,
+    evidence_ids: &[String],
+    route_ids: &[String],
+) -> authmap_core::Confidence {
+    if !evidence_ids.is_empty() {
+        authmap_core::Confidence::High
+    } else if !route_ids.is_empty() || source.sha256.is_some() {
+        authmap_core::Confidence::Medium
+    } else {
+        authmap_core::Confidence::Low
+    }
+}
+
+fn evidence_ids_for_file(document: &AuthMapDocument, path: &str) -> Vec<String> {
+    sorted_strings(document.evidence.iter().filter_map(|evidence| {
+        evidence
+            .span
+            .as_ref()
+            .or_else(|| {
+                evidence
+                    .symbol
+                    .as_ref()
+                    .and_then(|symbol| symbol.span.as_ref())
+            })
+            .filter(|span| normalized_document_path(document, &span.file) == path)
+            .map(|_| evidence.id.clone())
+    }))
+}
+
+fn route_ids_for_file(document: &AuthMapDocument, path: &str) -> Vec<String> {
+    sorted_strings(document.routes.iter().filter_map(|route| {
+        route
+            .span
+            .as_ref()
+            .or_else(|| {
+                route
+                    .handler
+                    .as_ref()
+                    .and_then(|handler| handler.span.as_ref())
+            })
+            .filter(|span| normalized_document_path(document, &span.file) == path)
+            .map(|_| route.id.clone())
+    }))
+}
+
+fn policy_case_ids_for_file(document: &AuthMapDocument, path: &str) -> Vec<String> {
+    sorted_strings(document.policy_cases.iter().filter_map(|case| {
+        case.span
+            .as_ref()
+            .or_else(|| case.branches.iter().find_map(|branch| branch.span.as_ref()))
+            .filter(|span| normalized_document_path(document, &span.file) == path)
+            .map(|_| case.id.clone())
+    }))
+}
+
+fn first_route_key_for_file(document: &AuthMapDocument, path: &str) -> Option<String> {
+    document
+        .routes
+        .iter()
+        .find(|route| {
+            route
+                .span
+                .as_ref()
+                .or_else(|| {
+                    route
+                        .handler
+                        .as_ref()
+                        .and_then(|handler| handler.span.as_ref())
+                })
+                .is_some_and(|span| normalized_document_path(document, &span.file) == path)
+        })
+        .map(stable_route_key)
+}
+
 fn control_kind_from_evidence_value(value: &Value) -> Option<ControlDriftKind> {
     match value.get("evidence_type").and_then(Value::as_str)? {
         "permission_check" => Some(ControlDriftKind::PermissionMap),
@@ -1084,6 +1329,20 @@ fn control_kind_from_evidence_value(value: &Value) -> Option<ControlDriftKind> {
         "audit_log" => Some(ControlDriftKind::AuditControl),
         "authn" | "role_check" | "unknown_dynamic_check" => Some(ControlDriftKind::Guard),
         _ => None,
+    }
+}
+
+fn control_drift_kind_label(kind: ControlDriftKind) -> &'static str {
+    match kind {
+        ControlDriftKind::Guard => "guard",
+        ControlDriftKind::RouteGuard => "route_guard",
+        ControlDriftKind::PermissionMap => "permission_map",
+        ControlDriftKind::TenantHelper => "tenant_helper",
+        ControlDriftKind::OwnershipHelper => "ownership_helper",
+        ControlDriftKind::AdminGate => "admin_gate",
+        ControlDriftKind::AuditControl => "audit_control",
+        ControlDriftKind::PolicyHelper => "policy_helper",
+        ControlDriftKind::AuthRelevantHeader => "auth_relevant_header",
     }
 }
 
@@ -1247,8 +1506,9 @@ fn mutation_operation_label(operation: authmap_core::MutationOperation) -> &'sta
 mod tests {
     use super::*;
     use authmap_core::{
-        Confidence, EvidenceType, MutationOperation, PolicyBranch, PolicyCase, PolicyCaseKind,
-        PolicyOutcome, ReachabilityLink, Route, ScanMetadata, SymbolRef,
+        Confidence, EvidenceType, Language, MutationOperation, PolicyBranch, PolicyCase,
+        PolicyCaseKind, PolicyOutcome, ReachabilityLink, Route, ScanMetadata, SourceFile,
+        SymbolRef,
     };
 
     #[test]
@@ -1527,6 +1787,199 @@ mod tests {
         }));
     }
 
+    #[test]
+    fn semantic_diff_classifies_new_linked_mutations_by_route_risk_and_evidence() {
+        let mut base = AuthMapDocument::empty(ScanMetadata::default());
+        base.routes = vec![
+            route("route_safe", "GET", "/profile", "profile"),
+            route("route_risky", "POST", "/accounts/{id}", "update_account"),
+        ];
+        base.evidence = vec![
+            evidence(
+                "evidence_safe",
+                "route_safe",
+                EvidenceType::PermissionCheck,
+                "can_view_profile",
+            ),
+            evidence(
+                "evidence_risky",
+                "route_risky",
+                EvidenceType::Authn,
+                "require_user",
+            ),
+        ];
+        base.coverage = vec![
+            coverage(
+                "route_safe",
+                CoverageClass::PermissionGuarded,
+                RiskLevel::Low,
+            ),
+            coverage(
+                "route_risky",
+                CoverageClass::AuthnOnly,
+                RiskLevel::ReviewRequired,
+            ),
+        ];
+
+        let mut head = base.clone();
+        head.mutations = vec![
+            mutation("mutation_safe", "ProfileView"),
+            mutation("mutation_risky", "Account"),
+        ];
+        head.links = vec![
+            mutation_link("link_safe", "route_safe", "mutation_safe"),
+            mutation_link("link_risky", "route_risky", "mutation_risky"),
+        ];
+
+        let report = analyze_drift(
+            &base,
+            &head,
+            ScanMode::Enforce,
+            &[DriftFailCategory::NewLinkedMutation],
+            "base",
+            "head",
+        );
+
+        let safe = report
+            .changes
+            .iter()
+            .find(|change| {
+                change.kind == DriftChangeKind::NewLinkedMutation
+                    && change.route_key.contains("/profile")
+            })
+            .expect("non-sensitive linked mutation should be reported");
+        assert_eq!(safe.severity, DriftChangeSeverity::Note);
+        assert_eq!(safe.fail_category, None);
+        assert!(!safe.enforcement_blocking);
+
+        let risky = report
+            .changes
+            .iter()
+            .find(|change| {
+                change.kind == DriftChangeKind::NewLinkedMutation
+                    && change.route_key.contains("/accounts/{id}")
+            })
+            .expect("sensitive linked mutation should be reported");
+        assert_eq!(risky.severity, DriftChangeSeverity::Error);
+        assert_eq!(
+            risky.fail_category,
+            Some(DriftFailCategory::NewLinkedMutation)
+        );
+        assert!(risky.enforcement_blocking);
+    }
+
+    #[test]
+    fn controls_report_classifies_source_file_control_drift_and_suppresses_unrelated_churn() {
+        let mut base = AuthMapDocument::empty(ScanMetadata::default());
+        base.source_files = vec![
+            source_file("src/security/guards.ts", "base-guard"),
+            source_file("src/config/permissions.ts", "base-permissions"),
+            source_file("src/tenant/scope.ts", "base-tenant"),
+            source_file("src/admin/gates.ts", "base-admin"),
+            source_file("src/middleware/security_headers.ts", "base-headers"),
+            source_file("src/ui/theme.ts", "base-theme"),
+        ];
+        base.routes = vec![
+            route_with_span(
+                "route_guard",
+                "GET",
+                "/accounts",
+                "list_accounts",
+                "src/security/guards.ts",
+            ),
+            route_with_span(
+                "route_admin",
+                "POST",
+                "/admin/accounts",
+                "create_account",
+                "src/admin/gates.ts",
+            ),
+        ];
+        base.evidence = vec![
+            evidence_with_span(
+                "evidence_guard",
+                "route_guard",
+                EvidenceType::PermissionCheck,
+                "require_permission",
+                "src/security/guards.ts",
+            ),
+            evidence_with_span(
+                "evidence_admin",
+                "route_admin",
+                EvidenceType::AdminCheck,
+                "require_admin",
+                "src/admin/gates.ts",
+            ),
+        ];
+        base.coverage = vec![
+            coverage(
+                "route_guard",
+                CoverageClass::PermissionGuarded,
+                RiskLevel::Low,
+            ),
+            coverage("route_admin", CoverageClass::AdminGuarded, RiskLevel::Low),
+        ];
+
+        let mut head = base.clone();
+        for source in &mut head.source_files {
+            source.sha256 = Some(format!("head-{}", source.path));
+        }
+
+        let report = analyze_controls_with_config(
+            &base,
+            &head,
+            ScanMode::Advisory,
+            &[],
+            "base",
+            "head",
+            DriftConfigMetadata::none(),
+        );
+
+        assert!(report.findings.iter().any(|finding| {
+            finding.control_type == ControlDriftKind::Guard
+                && finding
+                    .location
+                    .as_ref()
+                    .is_some_and(|span| span.file == "src/security/guards.ts")
+                && finding.evidence_ids == vec!["evidence_guard"]
+        }));
+        assert!(report.findings.iter().any(|finding| {
+            finding.control_type == ControlDriftKind::PermissionMap
+                && finding
+                    .location
+                    .as_ref()
+                    .is_some_and(|span| span.file == "src/config/permissions.ts")
+        }));
+        assert!(report.findings.iter().any(|finding| {
+            finding.control_type == ControlDriftKind::TenantHelper
+                && finding
+                    .location
+                    .as_ref()
+                    .is_some_and(|span| span.file == "src/tenant/scope.ts")
+        }));
+        assert!(report.findings.iter().any(|finding| {
+            finding.control_type == ControlDriftKind::AdminGate
+                && finding
+                    .location
+                    .as_ref()
+                    .is_some_and(|span| span.file == "src/admin/gates.ts")
+                && finding.evidence_ids == vec!["evidence_admin"]
+        }));
+        assert!(report.findings.iter().any(|finding| {
+            finding.control_type == ControlDriftKind::AuthRelevantHeader
+                && finding
+                    .location
+                    .as_ref()
+                    .is_some_and(|span| span.file == "src/middleware/security_headers.ts")
+        }));
+        assert!(!report.findings.iter().any(|finding| {
+            finding
+                .location
+                .as_ref()
+                .is_some_and(|span| span.file == "src/ui/theme.ts")
+        }));
+    }
+
     fn route(id: &str, method: &str, path: &str, handler: &str) -> Route {
         Route {
             id: id.to_string(),
@@ -1550,6 +2003,17 @@ mod tests {
         }
     }
 
+    fn route_with_span(id: &str, method: &str, path: &str, handler: &str, file: &str) -> Route {
+        Route {
+            handler: Some(SymbolRef {
+                name: handler.to_string(),
+                span: Some(span(file, 5, 1)),
+            }),
+            span: Some(span(file, 4, 1)),
+            ..route(id, method, path, handler)
+        }
+    }
+
     fn evidence(
         id: &str,
         route_id: &str,
@@ -1566,6 +2030,68 @@ mod tests {
             confidence: Confidence::High,
             notes: Vec::new(),
             extensions: Default::default(),
+        }
+    }
+
+    fn evidence_with_span(
+        id: &str,
+        route_id: &str,
+        evidence_type: EvidenceType,
+        mechanism: &str,
+        file: &str,
+    ) -> Evidence {
+        Evidence {
+            symbol: Some(SymbolRef {
+                name: mechanism.to_string(),
+                span: Some(span(file, 7, 3)),
+            }),
+            span: Some(span(file, 7, 3)),
+            ..evidence(id, route_id, evidence_type, mechanism)
+        }
+    }
+
+    fn mutation(id: &str, resource: &str) -> Mutation {
+        Mutation {
+            id: id.to_string(),
+            operation: MutationOperation::Update,
+            library: Some("sqlalchemy".to_string()),
+            resource: Some(resource.to_string()),
+            span: None,
+            confidence: Confidence::High,
+            notes: Vec::new(),
+            extensions: Default::default(),
+        }
+    }
+
+    fn mutation_link(id: &str, route_id: &str, mutation_id: &str) -> ReachabilityLink {
+        ReachabilityLink {
+            id: id.to_string(),
+            route_id: route_id.to_string(),
+            mutation_id: Some(mutation_id.to_string()),
+            evidence_id: None,
+            confidence: Confidence::High,
+            notes: Vec::new(),
+            extensions: Default::default(),
+        }
+    }
+
+    fn source_file(path: &str, sha256: &str) -> SourceFile {
+        SourceFile {
+            path: path.to_string(),
+            language: Language::TypeScript,
+            size_bytes: 128,
+            sha256: Some(sha256.to_string()),
+            project_hints: Vec::new(),
+            skipped: None,
+        }
+    }
+
+    fn span(file: &str, line: u32, column: u32) -> Span {
+        Span {
+            file: file.to_string(),
+            line,
+            column,
+            byte_range: None,
         }
     }
 
