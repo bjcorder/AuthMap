@@ -40,8 +40,8 @@ validate_git_ref_input() {
 
   [[ -n "$value" ]] || die "$name must not be empty"
   case "$value" in
-    -*|*$'\n'*|*$'\r'*|*$'\t'*)
-      die "$name must be a git ref, tag, or commit SHA without control characters or leading '-'"
+    -*|*:*|*+*|*$'\n'*|*$'\r'*|*$'\t'*)
+      die "$name must be a git ref, tag, or commit SHA without refspec metacharacters, control characters, or leading '-'"
       ;;
   esac
   if printf '%s' "$value" | LC_ALL=C grep -q '[[:cntrl:][:space:]]'; then
@@ -192,10 +192,14 @@ fi
 
 baseline_input="$(trim "${INPUT_BASELINE:-}")"
 baseline_path=""
+baseline_uses_trusted_ref="false"
 if [[ -n "$baseline_input" ]]; then
   baseline_input="$(validate_relative_path "baseline" "$baseline_input" false)" || exit $?
   baseline_ref_input="$(trim "${INPUT_BASELINE_REF:-}")"
   pr_base_sha="$(trim "${AUTHMAP_PR_BASE_SHA:-}")"
+  if [[ -n "$baseline_ref_input" || -n "$pr_base_sha" ]]; then
+    baseline_uses_trusted_ref="true"
+  fi
   baseline_path="$(resolve_baseline_path "$baseline_input" "$baseline_ref_input" "$pr_base_sha")" || exit $?
 fi
 
@@ -316,6 +320,8 @@ if [[ -n "$baseline_path" && ( "$final_status" -eq 0 || "$final_status" -eq 20 )
     fi
     if [[ -n "$fail_on_input" ]]; then
       cmd+=(--fail-on "$fail_on_input")
+    elif [[ "$baseline_uses_trusted_ref" == "true" ]]; then
+      cmd+=(--fail-on "added_high_risk_route,auth_downgrade,new_linked_mutation")
     fi
 
     echo "Running AuthMap ${diff_format} drift report"

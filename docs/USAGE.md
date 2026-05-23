@@ -348,6 +348,21 @@ authmap diff main...HEAD --target . --format json --output authmap.diff.json
 Git range diffs use `git archive` into temporary directories. They do not
 include uncommitted working-tree changes.
 
+Review authorization-control drift with the same inputs:
+
+```sh
+authmap controls main...HEAD --target . --format markdown
+authmap controls --base authmap.baseline.json --head authmap.json --format json
+```
+
+`authmap controls` reports guard, route-guard, permission, tenant, ownership,
+admin, audit, and policy-helper drift that AuthMap can connect to routes,
+evidence, policies, or review context. It is not a generic SAST or
+infrastructure control scanner. Map-file controls use AuthMap facts and
+`source_files` metadata from the supplied documents. Git-range controls rescan
+the committed refs through the same archive flow as `authmap diff`; unrelated
+file churn is filtered out unless the path is authorization-relevant.
+
 ## GitHub Actions
 
 Use the composite action for pull request review:

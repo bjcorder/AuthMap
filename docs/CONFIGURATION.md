@@ -60,21 +60,38 @@ for typical CI runners; lower them for constrained environments.
 ## Drift Policy
 
 `authmap diff` compares two AuthMap JSON documents or two committed git refs and
-reports authorization drift. Baselines are ordinary schema-compatible AuthMap
-JSON documents:
+reports authorization drift. `authmap controls` accepts the same inputs and
+renders the authorization-control subset as a focused controls report.
+Baselines are ordinary schema-compatible AuthMap JSON documents:
 
 ```sh
 authmap baseline create . --output authmap.baseline.json
 authmap scan . --format json --output authmap.json
 authmap diff --base authmap.baseline.json --head authmap.json --format markdown
 authmap diff main...HEAD --target . --format json --output authmap.diff.json
+authmap controls main...HEAD --target . --format markdown
 ```
 
 Diff reports use their own report contract, not the canonical AuthMap map
 schema. JSON output has `report_type: "authmap.diff"` with deterministic
-summary and change IDs; Markdown output is intended for reviewer summaries. Git
-range diffs scan committed refs via `git archive` and require both `git` and
-`tar` on `PATH`.
+summary and change IDs; controls JSON uses `report_type: "authmap.controls"`.
+Markdown output is intended for reviewer summaries. Git range diffs scan
+committed refs via `git archive` and require both `git` and `tar` on `PATH`.
+
+Semantic drift categories include added routes, removed routes, handler
+changes, evidence changes, removed authorization evidence, coverage changes,
+new linked mutations, and policy decision changes. Newly linked mutations are
+treated as review-required drift only when the route is sensitive, weakly
+guarded, or missing evidence; otherwise they remain note-level context.
+
+Controls reports narrow drift to authorization-relevant controls: guards,
+route guards, permission or role maps, tenant and ownership helpers, admin
+gates, audit controls, policy helpers, and auth-relevant CORS or security-header
+context. Direct authorization drift comes from changed AuthMap route/evidence,
+coverage, mutation, or policy facts. Contextual control drift comes from changed
+AuthMap `source_files` metadata for auth-relevant file paths and is reported
+with conservative confidence and reviewer questions. Unrelated source churn is
+suppressed.
 
 `drift.fail_on` controls which drift categories return exit code `20` in
 enforce mode. Advisory mode never fails because of drift. The default enforce
@@ -87,13 +104,17 @@ Supported categories are:
 - `added_review_required_route`
 - `auth_downgrade`
 - `new_linked_mutation`
+- `removed_authorization_evidence`
+- `policy_decision_change`
 
 For one-off reviews, the diff command can override config with
-`--fail-on a,b,c`:
+`--fail-on a,b,c`. The controls command uses the same policy:
 
 ```sh
 authmap diff --base authmap.baseline.json --head authmap.json \
   --mode enforce --fail-on added_high_risk_route,auth_downgrade
+authmap controls main...HEAD --mode enforce \
+  --fail-on removed_authorization_evidence,policy_decision_change
 ```
 
 Git range diffs use `git archive` to scan committed refs in temporary

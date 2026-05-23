@@ -521,6 +521,22 @@ fn tenants_help_works() {
 }
 
 #[test]
+fn controls_help_works() {
+    let output = authmap(&["controls", "--help"]);
+
+    assert_exit(&output, 0);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--base"));
+    assert!(stdout.contains("--head"));
+    assert!(stdout.contains("--format"));
+    assert!(stdout.contains("--output"));
+    assert!(stdout.contains("--config"));
+    assert!(stdout.contains("--mode"));
+    assert!(stdout.contains("--target"));
+    assert!(stdout.contains("--fail-on"));
+}
+
+#[test]
 fn tenants_reports_empty_projects() {
     let temp = TestDir::new("tenants-empty");
 
@@ -1029,6 +1045,126 @@ def create_admin():
 }
 
 #[test]
+fn action_runner_does_not_use_pr_config_to_relax_trusted_baseline_fail_on() {
+    if cfg!(windows) || Command::new("git").arg("--version").output().is_err() {
+        return;
+    }
+
+    let temp = TestDir::new("action-trusted-baseline-fail-on");
+    let root = repo_root();
+    let workspace = temp.path().join("workspace");
+    let project = workspace.join("project");
+    write_file(
+        &project.join("app.py"),
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts():
+    return []
+"#,
+    );
+    write_file(
+        &workspace.join("authmap.yml"),
+        "drift:\n  fail_on: [added_high_risk_route]\n",
+    );
+    init_git_repo(&workspace);
+    let baseline = authmap_in_dir(
+        &[
+            "scan",
+            "project",
+            "--config",
+            "authmap.yml",
+            "--format",
+            "json",
+            "--output",
+            "baseline.json",
+        ],
+        &workspace,
+    );
+    assert_exit(&baseline, 0);
+    git_commit_all(&workspace, "base");
+    let base_sha_output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&workspace)
+        .output()
+        .expect("git should run");
+    assert_exit(&base_sha_output, 0);
+    let base_sha = String::from_utf8_lossy(&base_sha_output.stdout)
+        .trim()
+        .to_string();
+
+    write_file(
+        &project.join("app.py"),
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts():
+    return []
+
+@app.post("/admin")
+def create_admin():
+    return {"ok": True}
+"#,
+    );
+    write_file(
+        &workspace.join("authmap.yml"),
+        "drift:\n  fail_on: [new_linked_mutation]\n",
+    );
+
+    let run_action = |fail_on: &str, suffix: &str| {
+        Command::new("bash")
+            .arg(root.join(".github/actions/authmap/run.sh"))
+            .current_dir(&root)
+            .env("GITHUB_ACTION_PATH", &root)
+            .env("GITHUB_WORKSPACE", &workspace)
+            .env(
+                "GITHUB_OUTPUT",
+                temp.path().join(format!("github-output-{suffix}.txt")),
+            )
+            .env(
+                "GITHUB_STEP_SUMMARY",
+                temp.path().join(format!("summary-{suffix}.md")),
+            )
+            .env("INPUT_MODE", "enforce")
+            .env("INPUT_OUTPUT", "json")
+            .env("INPUT_TARGET", "project")
+            .env("INPUT_CONFIG", "authmap.yml")
+            .env("INPUT_BASELINE", "baseline.json")
+            .env("INPUT_BASELINE_REF", "")
+            .env("AUTHMAP_PR_BASE_SHA", &base_sha)
+            .env("INPUT_FAIL_ON", fail_on)
+            .env("INPUT_OUTPUT_DIRECTORY", format!("reports-{suffix}"))
+            .env("INPUT_UPLOAD_SARIF", "false")
+            .output()
+            .expect("action runner should execute")
+    };
+
+    let default_policy = run_action("", "default");
+    assert_exit(&default_policy, 20);
+    let default_report: Value = serde_json::from_str(
+        &fs::read_to_string(workspace.join("reports-default/authmap.diff.json"))
+            .expect("default diff JSON should be readable"),
+    )
+    .expect("default diff JSON should parse");
+    assert_eq!(default_report["summary"]["blocking_changes"], 1);
+
+    let explicit_policy = run_action("new_linked_mutation", "explicit");
+    assert_exit(&explicit_policy, 0);
+    let explicit_report: Value = serde_json::from_str(
+        &fs::read_to_string(workspace.join("reports-explicit/authmap.diff.json"))
+            .expect("explicit diff JSON should be readable"),
+    )
+    .expect("explicit diff JSON should parse");
+    assert_eq!(explicit_report["summary"]["blocking_changes"], 0);
+}
+
+#[test]
 fn action_runner_rejects_unsafe_workspace_relative_paths() {
     if cfg!(windows) {
         return;
@@ -1041,6 +1177,12 @@ fn action_runner_rejects_unsafe_workspace_relative_paths() {
         ("INPUT_OUTPUT_DIRECTORY", "reports/", "output-directory"),
         ("INPUT_BASELINE", "baselines\nforged=1", "baseline"),
         ("INPUT_BASELINE_REF", "-main", "baseline-ref"),
+        ("INPUT_BASELINE_REF", "+main", "baseline-ref"),
+        (
+            "INPUT_BASELINE_REF",
+            "main:refs/heads/forged",
+            "baseline-ref",
+        ),
     ];
 
     for (name, value, label) in cases {
@@ -1255,6 +1397,187 @@ fn diff_map_files_emit_deterministic_json_markdown_and_enforce_policy() {
 }
 
 #[test]
+fn controls_map_files_emit_dedicated_control_report() {
+    let temp = TestDir::new("controls-map-files");
+    let base_path = temp.path().join("base.json");
+    let head_path = temp.path().join("head.json");
+    let base_document: Value =
+        serde_json::from_str(explain_document_json()).expect("fixture JSON should parse");
+    let mut head_document = drift_head_document();
+    head_document["evidence"] = json!([]);
+    assert_valid_authmap_document(&base_document);
+    assert_valid_authmap_document(&head_document);
+    write_file(
+        &base_path,
+        &serde_json::to_string_pretty(&base_document).expect("base should serialize"),
+    );
+    write_file(
+        &head_path,
+        &serde_json::to_string_pretty(&head_document).expect("head should serialize"),
+    );
+
+    let output = authmap(&[
+        "controls",
+        "--base",
+        base_path.to_str().expect("path should be UTF-8"),
+        "--head",
+        head_path.to_str().expect("path should be UTF-8"),
+        "--format",
+        "json",
+    ]);
+
+    assert_exit(&output, 0);
+    let report: Value = serde_json::from_slice(&output.stdout).expect("controls JSON should parse");
+    assert_eq!(report["report_type"], "authmap.controls");
+    assert_eq!(report["summary"]["total_findings"], 2);
+    assert!(
+        report["findings"]
+            .as_array()
+            .expect("findings should be an array")
+            .iter()
+            .any(|finding| finding["control_type"] == "route_guard"
+                && finding["source_change_kind"] == "coverage_changed")
+    );
+    assert!(
+        report["findings"]
+            .as_array()
+            .expect("findings should be an array")
+            .iter()
+            .any(|finding| finding["control_type"] == "guard"
+                && finding["source_change_kind"] == "removed_evidence")
+    );
+
+    let output = authmap(&[
+        "controls",
+        "--base",
+        base_path.to_str().expect("path should be UTF-8"),
+        "--head",
+        head_path.to_str().expect("path should be UTF-8"),
+        "--format",
+        "markdown",
+    ]);
+
+    assert_exit(&output, 0);
+    let markdown = String::from_utf8_lossy(&output.stdout);
+    assert!(markdown.contains("# AuthMap Controls Report"));
+    assert!(markdown.contains("route_guard"));
+    assert!(markdown.contains("removed_evidence"));
+}
+
+#[test]
+fn controls_reports_empty_no_change_diff() {
+    let temp = TestDir::new("controls-no-change");
+    let base_path = temp.path().join("base.json");
+    let head_path = temp.path().join("head.json");
+    write_file(&base_path, explain_document_json());
+    write_file(&head_path, explain_document_json());
+
+    let output = authmap(&[
+        "controls",
+        "--base",
+        base_path.to_str().expect("path should be UTF-8"),
+        "--head",
+        head_path.to_str().expect("path should be UTF-8"),
+        "--format",
+        "json",
+    ]);
+
+    assert_exit(&output, 0);
+    let report: Value = serde_json::from_slice(&output.stdout).expect("controls JSON should parse");
+    assert_eq!(report["report_type"], "authmap.controls");
+    assert_eq!(report["summary"]["total_findings"], 0);
+    assert_eq!(
+        report["findings"]
+            .as_array()
+            .expect("findings should be array")
+            .len(),
+        0
+    );
+
+    let output = authmap(&[
+        "controls",
+        "--base",
+        base_path.to_str().expect("path should be UTF-8"),
+        "--head",
+        head_path.to_str().expect("path should be UTF-8"),
+        "--format",
+        "markdown",
+    ]);
+    assert_exit(&output, 0);
+    assert!(
+        String::from_utf8_lossy(&output.stdout)
+            .contains("No authorization-control drift was detected.")
+    );
+}
+
+#[test]
+fn controls_git_range_reports_auth_relevant_source_drift_without_unrelated_churn() {
+    if Command::new("git").arg("--version").output().is_err() {
+        return;
+    }
+
+    let temp = TestDir::new("controls-git-range");
+    write_file(
+        &temp.path().join("app.py"),
+        r#"
+from fastapi import FastAPI, Depends
+from security.guards import require_user
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts(user=Depends(require_user)):
+    return []
+"#,
+    );
+    write_file(
+        &temp.path().join("security/guards.py"),
+        "def require_user():\n    return {'id': 'user_1'}\n",
+    );
+    write_file(&temp.path().join("ui/theme.py"), "COLOR = 'blue'\n");
+    init_git_repo(temp.path());
+    git_commit_all(temp.path(), "base");
+
+    write_file(
+        &temp.path().join("security/guards.py"),
+        "def require_user():\n    return {'id': 'user_1', 'changed': True}\n",
+    );
+    write_file(&temp.path().join("ui/theme.py"), "COLOR = 'green'\n");
+    git_commit_all(temp.path(), "head");
+
+    let output = authmap_in_dir(
+        &[
+            "controls",
+            "HEAD~1...HEAD",
+            "--target",
+            ".",
+            "--format",
+            "json",
+        ],
+        temp.path(),
+    );
+
+    assert_exit(&output, 0);
+    let report: Value = serde_json::from_slice(&output.stdout).expect("controls JSON should parse");
+    assert_eq!(report["report_type"], "authmap.controls");
+    assert!(
+        report["findings"]
+            .as_array()
+            .expect("findings should be array")
+            .iter()
+            .any(|finding| finding["control_type"] == "guard"
+                && finding["location"]["file"] == "security/guards.py")
+    );
+    assert!(
+        !report["findings"]
+            .as_array()
+            .expect("findings should be array")
+            .iter()
+            .any(|finding| finding["location"]["file"] == "ui/theme.py")
+    );
+}
+
+#[test]
 fn diff_git_range_scans_committed_refs_without_mutating_checkout() {
     if Command::new("git").arg("--version").output().is_err() {
         return;
@@ -1342,6 +1665,8 @@ fn diff_git_range_rejects_unsafe_refs() {
         vec!["diff", "--", "-main...HEAD"],
         vec!["diff", "HEAD ~1...HEAD"],
         vec!["diff", "HEAD...\nHEAD"],
+        vec!["diff", "+main...HEAD"],
+        vec!["diff", "main:refs/heads/forged...HEAD"],
         vec!["diff", "...HEAD"],
         vec!["diff", "HEAD..."],
     ] {
@@ -1353,6 +1678,78 @@ fn diff_git_range_rejects_unsafe_refs() {
             "stderr should mention git range validation; got:\n{stderr}"
         );
     }
+}
+
+#[test]
+fn diff_git_range_rejects_symlink_target_escape() {
+    if cfg!(windows) || Command::new("git").arg("--version").output().is_err() {
+        return;
+    }
+
+    let temp = TestDir::new("diff-git-range-symlink-escape");
+    let outside = temp.path().join("outside");
+    let base_outside = outside.join("base.py");
+    let head_outside = outside.join("head.py");
+    write_file(
+        &base_outside,
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts():
+    return []
+"#,
+    );
+    write_file(
+        &head_outside,
+        r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/accounts")
+def read_accounts():
+    return []
+
+@app.post("/admin")
+def create_admin():
+    return {"ok": True}
+"#,
+    );
+
+    let link = temp.path().join("app.py");
+    if create_file_symlink(&base_outside, &link).is_err() {
+        return;
+    }
+    init_git_repo(temp.path());
+    git_commit_all(temp.path(), "base");
+
+    fs::remove_file(&link).expect("base symlink should be removable");
+    if create_file_symlink(&head_outside, &link).is_err() {
+        return;
+    }
+    git_commit_all(temp.path(), "head");
+
+    let output = authmap_in_dir(
+        &[
+            "diff",
+            "HEAD~1...HEAD",
+            "--target",
+            "app.py",
+            "--format",
+            "json",
+        ],
+        temp.path(),
+    );
+
+    assert_exit(&output, 2);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("symlink"),
+        "stderr should explain symlink rejection; got:\n{stderr}"
+    );
 }
 
 #[test]

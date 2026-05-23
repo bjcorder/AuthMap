@@ -3,14 +3,17 @@ use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command as ProcessCommand, ExitCode, Stdio};
 
-use authmap_analysis::{DriftConfigMetadata, analyze_drift_with_config, run_scan, suggest_rules};
+use authmap_analysis::{
+    DriftConfigMetadata, analyze_controls_with_config, analyze_drift_with_config, run_scan,
+    suggest_rules,
+};
 use authmap_config::{DriftFailCategory, ScanConfig, ScanPlan, load_config};
 use authmap_core::{AuthMapDocument, SCHEMA_VERSION, ScanMode, diagnostic_codes};
 use authmap_report::{
-    JsonReporter, MarkdownReporter, Reporter, SarifReporter, render_drift_json,
-    render_drift_markdown, render_explain, render_routes_json, render_routes_markdown,
-    render_rule_suggestions_json, render_rule_suggestions_markdown, render_tenants_json,
-    render_tenants_markdown, write_atomic,
+    JsonReporter, MarkdownReporter, Reporter, SarifReporter, render_controls_json,
+    render_controls_markdown, render_drift_json, render_drift_markdown, render_explain,
+    render_routes_json, render_routes_markdown, render_rule_suggestions_json,
+    render_rule_suggestions_markdown, render_tenants_json, render_tenants_markdown, write_atomic,
 };
 use clap::{Parser, Subcommand, ValueEnum};
 use thiserror::Error;
@@ -98,6 +101,25 @@ enum Command {
         max_runtime_ms: Option<u64>,
     },
     Diff {
+        range: Option<String>,
+        #[arg(long)]
+        base: Option<PathBuf>,
+        #[arg(long)]
+        head: Option<PathBuf>,
+        #[arg(long, value_enum, default_value_t = DiffOutputFormat::Markdown)]
+        format: DiffOutputFormat,
+        #[arg(long)]
+        output: Option<PathBuf>,
+        #[arg(long)]
+        config: Option<PathBuf>,
+        #[arg(long, value_enum)]
+        mode: Option<ScanModeArg>,
+        #[arg(long, default_value = ".")]
+        target: PathBuf,
+        #[arg(long)]
+        fail_on: Option<String>,
+    },
+    Controls {
         range: Option<String>,
         #[arg(long)]
         base: Option<PathBuf>,
@@ -340,6 +362,27 @@ fn run() -> Result<ExitCode, CliError> {
             target,
             fail_on,
         }),
+        Command::Controls {
+            range,
+            base,
+            head,
+            format,
+            output,
+            config,
+            mode,
+            target,
+            fail_on,
+        } => run_controls(DiffArgs {
+            range,
+            base,
+            head,
+            format,
+            output,
+            config,
+            mode,
+            target,
+            fail_on,
+        }),
         Command::Explain { id, input } => run_explain(&id, &input),
         Command::Baseline {
             command:
@@ -535,6 +578,16 @@ struct DiffArgs {
     fail_on: Option<String>,
 }
 
+struct DiffInputContext {
+    base_document: AuthMapDocument,
+    head_document: AuthMapDocument,
+    base_label: String,
+    head_label: String,
+    report_mode: ScanMode,
+    fail_on: Vec<DriftFailCategory>,
+    config_meta: DriftConfigMetadata,
+}
+
 fn run_baseline_create(
     target: PathBuf,
     output: PathBuf,
@@ -559,109 +612,16 @@ fn run_baseline_create(
 }
 
 fn run_diff(args: DiffArgs) -> Result<ExitCode, CliError> {
-    if args.base.is_some() != args.head.is_some() {
-        return Err(CliError::InvalidDiffInput(
-            "--base and --head must be provided together".to_string(),
-        ));
-    }
-    if args.range.is_some() && (args.base.is_some() || args.head.is_some()) {
-        return Err(CliError::InvalidDiffInput(
-            "use either map-file diff or git range diff, not both".to_string(),
-        ));
-    }
-
-    let (base_document, head_document, base_label, head_label, report_mode, fail_on, config_meta) =
-        if let (Some(base), Some(head)) = (&args.base, &args.head) {
-            let (_config_path, mut config) =
-                load_config(args.config.clone()).map_err(CliError::Config)?;
-            if let Some(mode) = args.mode {
-                config.mode = mode.into();
-            }
-            let fail_on = if let Some(fail_on) = args.fail_on.as_deref() {
-                parse_fail_on(fail_on)?
-            } else {
-                config.drift.fail_on.clone()
-            };
-            let config_meta = args
-                .config
-                .as_ref()
-                .map(|path| DriftConfigMetadata::external(path.display().to_string()))
-                .unwrap_or_else(DriftConfigMetadata::none);
-            (
-                read_authmap_document(base)?,
-                read_authmap_document(head)?,
-                base.display().to_string(),
-                head.display().to_string(),
-                config.mode,
-                fail_on,
-                config_meta,
-            )
-        } else if let Some(range) = &args.range {
-            validate_git_range_target(&args.target)?;
-            let (base_ref, head_ref) = parse_git_range(range)?;
-            let temp = tempfile::Builder::new()
-                .prefix("authmap-diff-")
-                .tempdir()
-                .map_err(|source| CliError::TempDir {
-                    path: std::env::temp_dir(),
-                    source,
-                })?;
-            let base_dir = temp.path().join("base");
-            let head_dir = temp.path().join("head");
-            let archive_paths = git_diff_archive_paths(&args.target, args.config.as_deref())?;
-            extract_git_ref(&base_ref, &base_dir, &archive_paths)?;
-            extract_git_ref(&head_ref, &head_dir, &archive_paths)?;
-            let (base_config_path, mut base_config, head_config_path, mut head_config, config_meta) =
-                load_git_diff_configs(args.config.clone(), &base_dir, &head_dir)?;
-            if let Some(mode) = args.mode {
-                let mode = ScanMode::from(mode);
-                base_config.mode = mode;
-                head_config.mode = mode;
-            }
-            let report_mode = head_config.mode;
-            let fail_on = if let Some(fail_on) = args.fail_on.as_deref() {
-                parse_fail_on(fail_on)?
-            } else {
-                head_config.drift.fail_on.clone()
-            };
-            let base_document = run_scan(&ScanPlan::new(
-                vec![base_dir.join(&args.target)],
-                base_config_path,
-                base_config,
-            ))
-            .map_err(CliError::Scan)?;
-            let head_document = run_scan(&ScanPlan::new(
-                vec![head_dir.join(&args.target)],
-                head_config_path,
-                head_config,
-            ))
-            .map_err(CliError::Scan)?;
-            (
-                base_document,
-                head_document,
-                base_ref,
-                head_ref,
-                report_mode,
-                fail_on,
-                config_meta,
-            )
-        } else {
-            return Err(CliError::InvalidDiffInput(
-                "pass --base and --head map files, or a BASE...HEAD range".to_string(),
-            ));
-        };
-
-    ensure_supported_document(&base_document, &base_label)?;
-    ensure_supported_document(&head_document, &head_label)?;
+    let context = load_diff_input_context(&args)?;
 
     let report = analyze_drift_with_config(
-        &base_document,
-        &head_document,
-        report_mode,
-        &fail_on,
-        base_label,
-        head_label,
-        config_meta,
+        &context.base_document,
+        &context.head_document,
+        context.report_mode,
+        &context.fail_on,
+        context.base_label,
+        context.head_label,
+        context.config_meta,
     );
     let rendered = match args.format {
         DiffOutputFormat::Markdown => render_drift_markdown(&report),
@@ -679,6 +639,133 @@ fn run_diff(args: DiffArgs) -> Result<ExitCode, CliError> {
     } else {
         Ok(ExitCode::SUCCESS)
     }
+}
+
+fn run_controls(args: DiffArgs) -> Result<ExitCode, CliError> {
+    let context = load_diff_input_context(&args)?;
+
+    let report = analyze_controls_with_config(
+        &context.base_document,
+        &context.head_document,
+        context.report_mode,
+        &context.fail_on,
+        context.base_label,
+        context.head_label,
+        context.config_meta,
+    );
+    let rendered = match args.format {
+        DiffOutputFormat::Markdown => render_controls_markdown(&report),
+        DiffOutputFormat::Json => render_controls_json(&report).map_err(CliError::Report)?,
+    };
+
+    if let Some(output) = args.output {
+        write_atomic(&output, &rendered).map_err(CliError::Report)?;
+    } else {
+        println!("{rendered}");
+    }
+
+    if report.has_enforce_blocking_findings() {
+        Ok(ExitCode::from(20))
+    } else {
+        Ok(ExitCode::SUCCESS)
+    }
+}
+
+fn load_diff_input_context(args: &DiffArgs) -> Result<DiffInputContext, CliError> {
+    if args.base.is_some() != args.head.is_some() {
+        return Err(CliError::InvalidDiffInput(
+            "--base and --head must be provided together".to_string(),
+        ));
+    }
+    if args.range.is_some() && (args.base.is_some() || args.head.is_some()) {
+        return Err(CliError::InvalidDiffInput(
+            "use either map-file diff or git range diff, not both".to_string(),
+        ));
+    }
+
+    let context = if let (Some(base), Some(head)) = (&args.base, &args.head) {
+        let (_config_path, mut config) =
+            load_config(args.config.clone()).map_err(CliError::Config)?;
+        if let Some(mode) = args.mode {
+            config.mode = mode.into();
+        }
+        let fail_on = if let Some(fail_on) = args.fail_on.as_deref() {
+            parse_fail_on(fail_on)?
+        } else {
+            config.drift.fail_on.clone()
+        };
+        let config_meta = args
+            .config
+            .as_ref()
+            .map(|path| DriftConfigMetadata::external(path.display().to_string()))
+            .unwrap_or_else(DriftConfigMetadata::none);
+        DiffInputContext {
+            base_document: read_authmap_document(base)?,
+            head_document: read_authmap_document(head)?,
+            base_label: base.display().to_string(),
+            head_label: head.display().to_string(),
+            report_mode: config.mode,
+            fail_on,
+            config_meta,
+        }
+    } else if let Some(range) = &args.range {
+        validate_git_range_target(&args.target)?;
+        let (base_ref, head_ref) = parse_git_range(range)?;
+        let temp = tempfile::Builder::new()
+            .prefix("authmap-diff-")
+            .tempdir()
+            .map_err(|source| CliError::TempDir {
+                path: std::env::temp_dir(),
+                source,
+            })?;
+        let base_dir = temp.path().join("base");
+        let head_dir = temp.path().join("head");
+        let archive_paths = git_diff_archive_paths(&args.target, args.config.as_deref())?;
+        extract_git_ref(&base_ref, &base_dir, &archive_paths)?;
+        extract_git_ref(&head_ref, &head_dir, &archive_paths)?;
+        let (base_config_path, mut base_config, head_config_path, mut head_config, config_meta) =
+            load_git_diff_configs(args.config.clone(), &base_dir, &head_dir)?;
+        if let Some(mode) = args.mode {
+            let mode = ScanMode::from(mode);
+            base_config.mode = mode;
+            head_config.mode = mode;
+        }
+        let report_mode = head_config.mode;
+        let fail_on = if let Some(fail_on) = args.fail_on.as_deref() {
+            parse_fail_on(fail_on)?
+        } else {
+            head_config.drift.fail_on.clone()
+        };
+        let base_document = run_scan(&ScanPlan::new(
+            vec![base_dir.join(&args.target)],
+            base_config_path,
+            base_config,
+        ))
+        .map_err(CliError::Scan)?;
+        let head_document = run_scan(&ScanPlan::new(
+            vec![head_dir.join(&args.target)],
+            head_config_path,
+            head_config,
+        ))
+        .map_err(CliError::Scan)?;
+        DiffInputContext {
+            base_document,
+            head_document,
+            base_label: base_ref,
+            head_label: head_ref,
+            report_mode,
+            fail_on,
+            config_meta,
+        }
+    } else {
+        return Err(CliError::InvalidDiffInput(
+            "pass --base and --head map files, or a BASE...HEAD range".to_string(),
+        ));
+    };
+
+    ensure_supported_document(&context.base_document, &context.base_label)?;
+    ensure_supported_document(&context.head_document, &context.head_label)?;
+    Ok(context)
 }
 
 fn validate_git_range_target(target: &Path) -> Result<(), CliError> {
@@ -782,6 +869,8 @@ fn parse_fail_on(value: &str) -> Result<Vec<DriftFailCategory>, CliError> {
             "added_review_required_route" => DriftFailCategory::AddedReviewRequiredRoute,
             "auth_downgrade" => DriftFailCategory::AuthDowngrade,
             "new_linked_mutation" => DriftFailCategory::NewLinkedMutation,
+            "removed_authorization_evidence" => DriftFailCategory::RemovedAuthorizationEvidence,
+            "policy_decision_change" => DriftFailCategory::PolicyDecisionChange,
             _ => return Err(CliError::InvalidDriftFailCategory(item.to_string())),
         };
         if !categories.contains(&category) {
@@ -816,12 +905,13 @@ fn validate_git_range_ref(ref_name: &str) -> Result<&str, CliError> {
     }
     if ref_name != trimmed
         || trimmed.starts_with('-')
+        || trimmed.contains([':', '+'])
         || ref_name
             .chars()
             .any(|ch| ch.is_whitespace() || ch.is_control())
     {
         return Err(CliError::InvalidDiffInput(
-            "git range refs must not start with '-' or contain whitespace/control characters"
+            "git range refs must not start with '-' or contain refspec metacharacters, whitespace, or control characters"
                 .to_string(),
         ));
     }
@@ -903,6 +993,46 @@ fn extract_git_ref(ref_name: &str, destination: &Path, paths: &[PathBuf]) -> Res
         return Err(CliError::InvalidDiffInput(format!(
             "tar extraction failed for ref {ref_name}"
         )));
+    }
+    reject_extracted_symlinks(destination, ref_name)?;
+    Ok(())
+}
+
+fn reject_extracted_symlinks(destination: &Path, ref_name: &str) -> Result<(), CliError> {
+    let mut pending = vec![destination.to_path_buf()];
+    while let Some(path) = pending.pop() {
+        let metadata = fs::symlink_metadata(&path).map_err(|source| {
+            CliError::InvalidDiffInput(format!(
+                "failed to inspect extracted archive path {} for ref {ref_name}: {source}",
+                path.display()
+            ))
+        })?;
+        if metadata.file_type().is_symlink() {
+            let relative = path
+                .strip_prefix(destination)
+                .unwrap_or(path.as_path())
+                .display();
+            return Err(CliError::InvalidDiffInput(format!(
+                "git archive for ref {ref_name} contains symlink {relative}; refusing to scan extracted ref"
+            )));
+        }
+        if metadata.is_dir() {
+            let entries = fs::read_dir(&path).map_err(|source| {
+                CliError::InvalidDiffInput(format!(
+                    "failed to inspect extracted archive directory {} for ref {ref_name}: {source}",
+                    path.display()
+                ))
+            })?;
+            for entry in entries {
+                let entry = entry.map_err(|source| {
+                    CliError::InvalidDiffInput(format!(
+                        "failed to inspect extracted archive directory {} for ref {ref_name}: {source}",
+                        path.display()
+                    ))
+                })?;
+                pending.push(entry.path());
+            }
+        }
     }
     Ok(())
 }
@@ -1061,6 +1191,9 @@ drift:
     - added_high_risk_route
     - auth_downgrade
     - new_linked_mutation
+    # Optional stricter semantic drift categories:
+    # - removed_authorization_evidence
+    # - policy_decision_change
 
 authorization:
   rules: []

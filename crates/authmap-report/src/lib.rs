@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use authmap_analysis::{
-    DriftChange, DriftChangeKind, DriftChangeSeverity, DriftComparison, DriftReport,
-    RuleSuggestionReport,
+    ControlDriftKind, ControlFinding, ControlReport, DriftChange, DriftChangeKind,
+    DriftChangeSeverity, DriftComparison, DriftReport, RuleSuggestionReport,
 };
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticSeverity, Evidence,
@@ -1283,6 +1283,108 @@ pub fn render_drift_json(report: &DriftReport) -> Result<String, ReportError> {
     serde_json::to_string_pretty(&value).map_err(ReportError::Json)
 }
 
+pub fn render_controls_json(report: &ControlReport) -> Result<String, ReportError> {
+    let mut value = serde_json::to_value(report).map_err(ReportError::Json)?;
+    redact_json_value(&mut value);
+    serde_json::to_string_pretty(&value).map_err(ReportError::Json)
+}
+
+pub fn render_controls_markdown(report: &ControlReport) -> String {
+    let mut output = String::new();
+    let _ = writeln!(output, "# AuthMap Controls Report");
+    let _ = writeln!(output);
+    let _ = writeln!(output, "- Mode: {}", scan_mode_label(report.metadata.mode));
+    let _ = writeln!(
+        output,
+        "- Base: {}",
+        escape_inline(&report.metadata.base.label)
+    );
+    let _ = writeln!(
+        output,
+        "- Head: {}",
+        escape_inline(&report.metadata.head.label)
+    );
+    let _ = writeln!(
+        output,
+        "- Enforce fail-on: {}",
+        list_or_none(
+            report
+                .metadata
+                .fail_on
+                .iter()
+                .map(enum_value)
+                .collect::<Vec<_>>()
+        )
+    );
+    let _ = writeln!(output);
+
+    let _ = writeln!(output, "## Summary");
+    let _ = writeln!(output);
+    let _ = writeln!(
+        output,
+        "- Total findings: {}",
+        report.summary.total_findings
+    );
+    let _ = writeln!(output, "- Guard changes: {}", report.summary.guard_changes);
+    let _ = writeln!(
+        output,
+        "- Route guard changes: {}",
+        report.summary.route_guard_changes
+    );
+    let _ = writeln!(
+        output,
+        "- Permission changes: {}",
+        report.summary.permission_changes
+    );
+    let _ = writeln!(
+        output,
+        "- Tenant changes: {}",
+        report.summary.tenant_changes
+    );
+    let _ = writeln!(output, "- Admin changes: {}", report.summary.admin_changes);
+    let _ = writeln!(
+        output,
+        "- Policy changes: {}",
+        report.summary.policy_changes
+    );
+    let _ = writeln!(
+        output,
+        "- Blocking findings: {}",
+        report.summary.blocking_findings
+    );
+    let _ = writeln!(output);
+
+    let _ = writeln!(output, "## Findings");
+    let _ = writeln!(output);
+    if report.findings.is_empty() {
+        let _ = writeln!(output, "No authorization-control drift was detected.");
+        let _ = writeln!(output);
+        return output;
+    }
+
+    let rows = report
+        .findings
+        .iter()
+        .map(control_finding_row)
+        .collect::<Vec<_>>();
+    render_table(
+        &mut output,
+        &[
+            "ID",
+            "Severity",
+            "Control",
+            "Route",
+            "Source Change",
+            "Fail Category",
+            "Blocking",
+            "Message",
+        ],
+        &rows,
+    );
+    let _ = writeln!(output);
+    output
+}
+
 pub fn render_drift_markdown(report: &DriftReport) -> String {
     let mut output = String::new();
     let _ = writeln!(output, "# AuthMap Drift Report");
@@ -1341,6 +1443,11 @@ pub fn render_drift_markdown(report: &DriftReport) -> String {
     );
     let _ = writeln!(
         output,
+        "- Removed evidence: {}",
+        report.summary.removed_evidence
+    );
+    let _ = writeln!(
+        output,
         "- Coverage changes: {}",
         report.summary.coverage_changes
     );
@@ -1348,6 +1455,11 @@ pub fn render_drift_markdown(report: &DriftReport) -> String {
         output,
         "- New linked mutations: {}",
         report.summary.new_linked_mutations
+    );
+    let _ = writeln!(
+        output,
+        "- Policy changes: {}",
+        report.summary.policy_changes
     );
     let _ = writeln!(
         output,
@@ -1387,6 +1499,29 @@ pub fn render_drift_markdown(report: &DriftReport) -> String {
     output
 }
 
+fn control_finding_row(finding: &ControlFinding) -> Vec<String> {
+    vec![
+        escape_table(&finding.id),
+        escape_table(drift_severity_label(finding.severity)),
+        escape_table(control_drift_kind_label(finding.control_type)),
+        escape_table(&finding.route_key),
+        escape_table(drift_kind_label(finding.source_change_kind)),
+        escape_table(
+            &finding
+                .fail_category
+                .as_ref()
+                .map(enum_value)
+                .unwrap_or_else(|| "none".to_string()),
+        ),
+        if finding.enforcement_blocking {
+            "yes".to_string()
+        } else {
+            "no".to_string()
+        },
+        escape_table(&finding.message),
+    ]
+}
+
 fn drift_change_row(change: &DriftChange) -> Vec<String> {
     vec![
         escape_table(&change.id),
@@ -1416,8 +1551,25 @@ fn drift_kind_label(kind: DriftChangeKind) -> &'static str {
         DriftChangeKind::RemovedRoute => "removed_route",
         DriftChangeKind::HandlerChanged => "handler_changed",
         DriftChangeKind::EvidenceChanged => "evidence_changed",
+        DriftChangeKind::RemovedEvidence => "removed_evidence",
         DriftChangeKind::CoverageChanged => "coverage_changed",
         DriftChangeKind::NewLinkedMutation => "new_linked_mutation",
+        DriftChangeKind::PolicyChanged => "policy_changed",
+        DriftChangeKind::ControlSourceChanged => "control_source_changed",
+    }
+}
+
+fn control_drift_kind_label(kind: ControlDriftKind) -> &'static str {
+    match kind {
+        ControlDriftKind::Guard => "guard",
+        ControlDriftKind::RouteGuard => "route_guard",
+        ControlDriftKind::PermissionMap => "permission_map",
+        ControlDriftKind::TenantHelper => "tenant_helper",
+        ControlDriftKind::OwnershipHelper => "ownership_helper",
+        ControlDriftKind::AdminGate => "admin_gate",
+        ControlDriftKind::AuditControl => "audit_control",
+        ControlDriftKind::PolicyHelper => "policy_helper",
+        ControlDriftKind::AuthRelevantHeader => "auth_relevant_header",
     }
 }
 
@@ -3057,7 +3209,9 @@ pub enum ReportError {
 mod tests {
     use super::*;
     use authmap_analysis::{
-        RuleSuggestion, RuleSuggestionExample, RuleSuggestionMatch, RuleSuggestionReport,
+        ControlDriftKind, ControlFinding, ControlReport, ControlSummary, DriftConfigMetadata,
+        DriftInputMetadata, DriftMetadata, RuleSuggestion, RuleSuggestionExample,
+        RuleSuggestionMatch, RuleSuggestionReport,
     };
     use authmap_core::{
         AuthMapDocument, ByteRange, Confidence, Coverage, CoverageClass, Diagnostic,
@@ -3330,10 +3484,56 @@ mod tests {
         suggestions.suggestions[0].mechanism = "api_key=sk-abcdefghijklmnopqrstuvwxyz".to_string();
         suggestions.suggestions[0].rationale =
             vec!["Authorization: Bearer abcdefghijklmnopqrstuvwxyz".to_string()];
+        let controls = ControlReport {
+            schema_version: SCHEMA_VERSION.to_string(),
+            report_type: "authmap.controls".to_string(),
+            metadata: DriftMetadata {
+                mode: ScanMode::Advisory,
+                base: DriftInputMetadata {
+                    label: "base".to_string(),
+                    schema_version: SCHEMA_VERSION.to_string(),
+                    target_roots: vec!["src".to_string()],
+                },
+                head: DriftInputMetadata {
+                    label: "head".to_string(),
+                    schema_version: SCHEMA_VERSION.to_string(),
+                    target_roots: vec!["src".to_string()],
+                },
+                config: DriftConfigMetadata::none(),
+                fail_on: Vec::new(),
+            },
+            summary: ControlSummary {
+                total_findings: 1,
+                ..ControlSummary::default()
+            },
+            findings: vec![ControlFinding {
+                id: "control_0001".to_string(),
+                control_type: ControlDriftKind::Guard,
+                source_change_id: "drift_0001".to_string(),
+                source_change_kind: DriftChangeKind::RemovedEvidence,
+                severity: DriftChangeSeverity::Warning,
+                route_key: "GET /callback?token=abcdef1234567890".to_string(),
+                base_route_id: Some("route_0001".to_string()),
+                head_route_id: Some("route_0001".to_string()),
+                message: "Authorization: Bearer abcdefghijklmnopqrstuvwxyz".to_string(),
+                confidence: Confidence::High,
+                location: None,
+                evidence_ids: Vec::new(),
+                weak_evidence_ids: Vec::new(),
+                mutation_ids: Vec::new(),
+                link_ids: Vec::new(),
+                reviewer_questions: Vec::new(),
+                fail_category: None,
+                enforcement_blocking: false,
+            }],
+            diagnostics: Vec::new(),
+        };
 
         let outputs = [
             render_drift_markdown(&drift),
             render_drift_json(&drift).expect("drift JSON should render"),
+            render_controls_markdown(&controls),
+            render_controls_json(&controls).expect("controls JSON should render"),
             render_rule_suggestions_markdown(&suggestions),
             render_rule_suggestions_json(&suggestions).expect("rule suggestion JSON should render"),
         ];

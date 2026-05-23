@@ -25,8 +25,9 @@ use tree_sitter::Node;
 mod drift;
 
 pub use drift::{
-    DriftChange, DriftChangeKind, DriftChangeSeverity, DriftComparison, DriftConfigMetadata,
-    DriftInputMetadata, DriftMetadata, DriftReport, DriftSummary, analyze_drift,
+    ControlDriftKind, ControlFinding, ControlReport, ControlSummary, DriftChange, DriftChangeKind,
+    DriftChangeSeverity, DriftComparison, DriftConfigMetadata, DriftInputMetadata, DriftMetadata,
+    DriftReport, DriftSummary, analyze_controls_with_config, analyze_drift,
     analyze_drift_with_config,
 };
 

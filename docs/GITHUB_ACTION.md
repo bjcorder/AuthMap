@@ -144,8 +144,11 @@ warnings do not fail the action.
 Enforce mode writes each requested report before returning exit code `20` when
 the completed AuthMap document contains enforce-blocking diagnostics. With a
 baseline, enforce mode also returns `20` when drift matches the effective
-`fail-on` policy. Other CLI errors, such as invalid inputs, unreadable targets,
-or missing baselines, fail with the CLI exit code.
+`fail-on` policy. Supported fail-on categories include
+`added_high_risk_route`, `added_review_required_route`, `auth_downgrade`,
+`new_linked_mutation`, `removed_authorization_evidence`, and
+`policy_decision_change`. Other CLI errors, such as invalid inputs, unreadable
+targets, or missing baselines, fail with the CLI exit code.
 
 Path-like action inputs (`target`, `config`, `baseline`, and
 `output-directory`) are workspace-relative only. Absolute paths, parent
