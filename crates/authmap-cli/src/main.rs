@@ -905,12 +905,13 @@ fn validate_git_range_ref(ref_name: &str) -> Result<&str, CliError> {
     }
     if ref_name != trimmed
         || trimmed.starts_with('-')
+        || trimmed.contains([':', '+'])
         || ref_name
             .chars()
             .any(|ch| ch.is_whitespace() || ch.is_control())
     {
         return Err(CliError::InvalidDiffInput(
-            "git range refs must not start with '-' or contain whitespace/control characters"
+            "git range refs must not start with '-' or contain refspec metacharacters, whitespace, or control characters"
                 .to_string(),
         ));
     }
@@ -992,6 +993,46 @@ fn extract_git_ref(ref_name: &str, destination: &Path, paths: &[PathBuf]) -> Res
         return Err(CliError::InvalidDiffInput(format!(
             "tar extraction failed for ref {ref_name}"
         )));
+    }
+    reject_extracted_symlinks(destination, ref_name)?;
+    Ok(())
+}
+
+fn reject_extracted_symlinks(destination: &Path, ref_name: &str) -> Result<(), CliError> {
+    let mut pending = vec![destination.to_path_buf()];
+    while let Some(path) = pending.pop() {
+        let metadata = fs::symlink_metadata(&path).map_err(|source| {
+            CliError::InvalidDiffInput(format!(
+                "failed to inspect extracted archive path {} for ref {ref_name}: {source}",
+                path.display()
+            ))
+        })?;
+        if metadata.file_type().is_symlink() {
+            let relative = path
+                .strip_prefix(destination)
+                .unwrap_or(path.as_path())
+                .display();
+            return Err(CliError::InvalidDiffInput(format!(
+                "git archive for ref {ref_name} contains symlink {relative}; refusing to scan extracted ref"
+            )));
+        }
+        if metadata.is_dir() {
+            let entries = fs::read_dir(&path).map_err(|source| {
+                CliError::InvalidDiffInput(format!(
+                    "failed to inspect extracted archive directory {} for ref {ref_name}: {source}",
+                    path.display()
+                ))
+            })?;
+            for entry in entries {
+                let entry = entry.map_err(|source| {
+                    CliError::InvalidDiffInput(format!(
+                        "failed to inspect extracted archive directory {} for ref {ref_name}: {source}",
+                        path.display()
+                    ))
+                })?;
+                pending.push(entry.path());
+            }
+        }
     }
     Ok(())
 }
