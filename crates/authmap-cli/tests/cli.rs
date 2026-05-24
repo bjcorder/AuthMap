@@ -710,6 +710,7 @@ fn release_workflow_runs_locked_tests_and_smokes_unpacked_artifacts() {
             "provenance-name: authmap-${{ needs.subjects.outputs.version }}.intoto.jsonl"
         )
     );
+    assert!(workflow.contains("continue-on-error: true"));
     assert!(workflow.contains("softprops/action-gh-release@"));
     assert!(workflow.contains("dist/authmap-*"));
     assert!(workflow.contains("dist/*.sha256"));
