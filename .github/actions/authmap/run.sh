@@ -34,6 +34,36 @@ workspace_path() {
   printf '%s/%s' "$GITHUB_WORKSPACE" "$value"
 }
 
+ensure_workspace_directory() {
+  local name="$1"
+  local relative="$2"
+  local path="$3"
+  local workspace_real
+  local current
+  local part
+  local output_real
+
+  workspace_real="$(cd "$GITHUB_WORKSPACE" && pwd -P)" || die "failed to resolve GITHUB_WORKSPACE"
+  current="$GITHUB_WORKSPACE"
+  IFS='/' read -ra parts <<< "$relative"
+  for part in "${parts[@]}"; do
+    current="$current/$part"
+    if [[ -L "$current" ]]; then
+      die "$name must not contain symlink path components"
+    fi
+  done
+
+  mkdir -p "$path" || die "failed to create $name"
+  if [[ -L "$path" ]]; then
+    die "$name must not be a symlink"
+  fi
+  output_real="$(cd "$path" && pwd -P)" || die "failed to resolve $name"
+  case "$output_real" in
+    "$workspace_real"/*) ;;
+    *) die "$name must resolve inside GITHUB_WORKSPACE" ;;
+  esac
+}
+
 validate_git_ref_input() {
   local name="$1"
   local value="$2"
@@ -208,7 +238,7 @@ fail_on_input="$(trim "${INPUT_FAIL_ON:-}")"
 output_dir_input="$(trim "${INPUT_OUTPUT_DIRECTORY:-.authmap}")"
 output_dir_input="$(validate_relative_path "output-directory" "$output_dir_input" false)" || exit $?
 output_dir="$(workspace_path "$output_dir_input")"
-mkdir -p "$output_dir"
+ensure_workspace_directory "output-directory" "$output_dir_input" "$output_dir"
 
 formats=()
 IFS=',' read -ra requested_formats <<< "${INPUT_OUTPUT:-markdown,json}"

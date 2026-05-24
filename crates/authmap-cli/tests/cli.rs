@@ -1196,6 +1196,54 @@ fn action_runner_rejects_unsafe_workspace_relative_paths() {
     }
 }
 
+#[test]
+fn action_runner_rejects_symlinked_output_directory_escape() {
+    if cfg!(windows) {
+        return;
+    }
+
+    let temp = TestDir::new("action-symlink-output-dir");
+    let root = repo_root();
+    let workspace = temp.path().join("workspace");
+    let outside = temp.path().join("outside");
+    write_file(
+        &workspace.join("project").join("app.py"),
+        "print('hello')\n",
+    );
+    fs::create_dir_all(&outside).expect("outside directory should be created");
+    std::os::unix::fs::symlink(&outside, workspace.join("reports"))
+        .expect("symlink should be created");
+
+    let output = Command::new("bash")
+        .arg(root.join(".github/actions/authmap/run.sh"))
+        .current_dir(&root)
+        .env("GITHUB_ACTION_PATH", &root)
+        .env("GITHUB_WORKSPACE", &workspace)
+        .env("GITHUB_OUTPUT", temp.path().join("github-output.txt"))
+        .env("GITHUB_STEP_SUMMARY", temp.path().join("summary.md"))
+        .env("INPUT_MODE", "advisory")
+        .env("INPUT_OUTPUT", "json")
+        .env("INPUT_TARGET", "project")
+        .env("INPUT_CONFIG", "")
+        .env("INPUT_BASELINE", "")
+        .env("INPUT_FAIL_ON", "")
+        .env("INPUT_OUTPUT_DIRECTORY", "reports")
+        .env("INPUT_UPLOAD_SARIF", "false")
+        .output()
+        .expect("action runner should execute");
+
+    assert_exit(&output, 2);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("output-directory") && stderr.contains("symlink"),
+        "stderr should reject symlinked output-directory; got:\n{stderr}"
+    );
+    assert!(
+        !outside.join("authmap.json").exists(),
+        "report should not be written outside the workspace"
+    );
+}
+
 fn run_action_validation_case(name: &str, value: &str) -> Output {
     let temp = TestDir::new("action-invalid-path");
     let root = repo_root();

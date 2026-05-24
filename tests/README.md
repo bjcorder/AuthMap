@@ -30,6 +30,7 @@ Golden files are reviewed source artifacts. When behavior intentionally changes,
 
 ```sh
 AUTHMAP_UPDATE_GOLDENS=1 cargo test -p authmap-testkit --test route_inventory_regression
+AUTHMAP_UPDATE_GOLDENS=1 cargo test -p authmap-testkit --test post_v1_workflow_regression
 ```
 
 Review the diff and keep only intentional changes.
