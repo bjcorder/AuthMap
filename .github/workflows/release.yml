@@ -265,7 +265,7 @@ jobs:
 
           version = os.environ["VERSION"]
           changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-          pattern = re.compile(rf"^## {re.escape(version)}(?:\\s+-.*)?$", re.MULTILINE)
+          pattern = re.compile(rf"^## {re.escape(version)}(?:\s+-.*)?$", re.MULTILINE)
           match = pattern.search(changelog)
           if not match:
               print(f"CHANGELOG.md does not contain a section for {version}", file=sys.stderr)

@@ -676,6 +676,7 @@ fn release_workflow_runs_locked_tests_and_smokes_unpacked_artifacts() {
             .contains("git merge-base --is-ancestor \"${tag_commit}\" refs/remotes/origin/main")
     );
     assert!(workflow.contains("CHANGELOG.md"));
+    assert!(workflow.contains(r#"(?:\s+-.*)?"#));
     assert!(workflow.contains("cargo test --workspace --all-targets --locked"));
     assert!(
         workflow.contains("cargo build --package authmap-cli --bin authmap --release --locked")
