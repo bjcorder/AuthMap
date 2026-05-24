@@ -19,6 +19,13 @@ AuthMap maps authorization coverage across the routes, handlers, service calls, 
 
 Authorization bugs are often inventory failures before they are coding failures. AuthMap gives you the inventory.
 
+AuthMap's post-v1 capability areas are folded into this single map rather than
+separate tools: route inventory, policy evidence and explanation, tenant and
+ownership review, semantic authorization diffs, focused controls review, CI
+outputs, SARIF, and downstream JSON integrations. See
+[docs/CAPABILITIES.md](docs/CAPABILITIES.md) for workflow examples and
+limitations.
+
 ## Quickstart
 
 Install from source:
@@ -120,6 +127,11 @@ Evidence sources include middleware, decorators, guards, policy objects, service
 
 **Typed coverage classification.** Each route is placed into one of nine classes — `public_declared`, `unauthenticated`, `authn_only`, `role_guarded`, `permission_guarded`, `ownership_guarded`, `tenant_guarded`, `admin_guarded`, `unknown_or_dynamic` — with a risk label and a machine-readable rationale.
 
+**Policy and tenant review.** PolicyLens-style policy cases, `authmap explain`,
+and the focused `authmap tenants` report connect route coverage to guard,
+permission, ownership, tenant, dynamic-policy, linked-mutation, confidence, and
+reviewer-question context without claiming runtime exploitability.
+
 **Drift detection in CI.** Capture a baseline JSON document and diff future scans against it. AuthMap reports added or removed routes, evidence changes, coverage downgrades, and newly reachable mutations — with policy knobs to fail builds on specific drift categories.
 
 ```bash
@@ -131,6 +143,10 @@ authmap diff --base authmap.baseline.json --head authmap.json --format markdown
 **Rule suggestions.** `authmap rules suggest` is a local, read-only helper that scans for project-specific guard, role, and permission patterns and proposes additions to `authmap.yml`. It never modifies your config.
 
 **Explainable findings.** `authmap explain <id>` resolves any route, evidence, mutation, or link ID against a generated report and prints the supporting context — useful for triage and PR review.
+
+**Focused controls review.** `authmap controls` accepts the same inputs as
+`authmap diff` and summarizes auth-relevant guard, route guard, permission map,
+tenant, ownership, admin, audit, policy-helper, and header drift for PR review.
 
 ## Output formats
 
@@ -194,6 +210,7 @@ Enforce mode writes the requested reports first, then exits `20` when blocking d
 | Document                                                                       | Contents                                                              |
 | ------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
 | [docs/USAGE.md](docs/USAGE.md)                                                 | End-to-end CLI usage, output interpretation, defensive-use guidance   |
+| [docs/CAPABILITIES.md](docs/CAPABILITIES.md)                                   | Folded capability model and post-v1 workflow examples                 |
 | [docs/SCHEMA.md](docs/SCHEMA.md)                                               | JSON schema and contract                                              |
 | [docs/JSON_CONSUMERS.md](docs/JSON_CONSUMERS.md)                               | Downstream JSON consumer contract and examples                        |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md)                                 | `authmap.yml`, custom authorization rules, sensitivity labels         |
