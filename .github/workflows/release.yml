@@ -199,7 +199,9 @@ jobs:
 
   provenance:
     name: Generate SLSA provenance
-    needs: subjects
+    needs:
+      - prepare
+      - subjects
     permissions:
       actions: read
       id-token: write
