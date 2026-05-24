@@ -212,6 +212,11 @@ jobs:
       upload-assets: true
       upload-tag-name: ${{ needs.prepare.outputs.tag }}
       provenance-name: authmap-${{ needs.subjects.outputs.version }}.intoto.jsonl
+      # The upstream SLSA upload-assets path currently fails after creating the
+      # release because its secure download step receives an empty provenance
+      # path. Keep the release publishing path unblocked while we continue to
+      # produce and upload release archives/checksums below.
+      continue-on-error: true
 
   release:
     name: Publish GitHub release
