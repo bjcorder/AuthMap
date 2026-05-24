@@ -702,6 +702,7 @@ fn release_workflow_runs_locked_tests_and_smokes_unpacked_artifacts() {
     assert!(workflow.contains(
         "slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@"
     ));
+    assert!(workflow.contains("needs.prepare.outputs.tag"));
     assert!(workflow.contains("base64-subjects: ${{ needs.subjects.outputs.hashes }}"));
     assert!(workflow.contains("upload-tag-name: ${{ needs.prepare.outputs.tag }}"));
     assert!(
