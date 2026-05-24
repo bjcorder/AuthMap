@@ -23,6 +23,12 @@ Modern web applications spread authorization across middleware, decorators, cont
 
 AuthMap is not a general SAST scanner. It is a coverage inventory and evidence graph for authorization controls. This creates a stable substrate for later policy checks and invariant analysis.
 
+Post-v1 capabilities stay folded into that substrate rather than becoming
+separate products. Route inventory, PolicyLens-style policy explanation,
+TenantFence-style tenant review, PermDiff-style semantic diffs,
+GuardRailDiff-style controls review, SARIF, CI summaries, and downstream JSON
+consumption are views over the same static evidence graph.
+
 ## MVP success criteria
 
 - Scans a representative FastAPI or Express app without running it.
@@ -31,6 +37,14 @@ AuthMap is not a general SAST scanner. It is a coverage inventory and evidence g
 - Finds at least one reachable data mutation per sensitive route where present.
 - Produces a useful Markdown report in CI.
 - Emits machine-readable JSON for downstream tools.
+
+## Boundaries
+
+AuthMap remains defensive, local, static, and evidence-bound. It does not run
+target applications, connect to databases, exploit findings, or assert
+vulnerabilities without reviewer confirmation. Folded workflows should keep
+their output language focused on inventory, drift, uncertainty, and review
+questions.
 
 ## Open design questions
 

@@ -49,6 +49,8 @@ authmap init --output authmap.yml
 The config file is optional. It can set scan mode, include and exclude patterns,
 scan limits, drift policy, custom authorization rules, and sensitivity labels.
 The full format is documented in [CONFIGURATION.md](CONFIGURATION.md).
+For a folded overview of route, policy, tenant, diff, controls, CI, and
+downstream JSON workflows, see [CAPABILITIES.md](CAPABILITIES.md).
 
 ## Basic Scan
 

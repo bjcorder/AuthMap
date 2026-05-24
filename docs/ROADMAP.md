@@ -62,3 +62,7 @@ changes over time.
 AuthMap remains local and non-invasive. Roadmap work must not add live
 exploitation, payload generation, credential handling, or vulnerability claims
 that are not supported by static evidence.
+
+The user-facing folded model, command surface, workflow examples, limitations,
+and implemented post-v1 milestone links are documented in
+[CAPABILITIES.md](CAPABILITIES.md).
