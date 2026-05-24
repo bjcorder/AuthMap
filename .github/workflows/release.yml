@@ -208,6 +208,7 @@ jobs:
     with:
       base64-subjects: ${{ needs.subjects.outputs.hashes }}
       upload-assets: true
+      upload-tag-name: ${{ needs.prepare.outputs.tag }}
       provenance-name: authmap-${{ needs.subjects.outputs.version }}.intoto.jsonl
 
   release:
