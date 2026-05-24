@@ -64,6 +64,56 @@ ensure_workspace_directory() {
   esac
 }
 
+resolve_workspace_read_path() {
+  local name="$1"
+  local relative="$2"
+  local allow_workspace_root="$3"
+  local workspace_real
+  local current
+  local part
+  local path
+  local parent
+  local parent_real
+  local base
+  local resolved
+
+  workspace_real="$(cd "$GITHUB_WORKSPACE" && pwd -P)" || die "failed to resolve GITHUB_WORKSPACE"
+  if [[ "$relative" == "." ]]; then
+    [[ "$allow_workspace_root" == "true" ]] || die "$name must not be the workspace root"
+    printf '%s' "$workspace_real"
+    return
+  fi
+
+  path="$(workspace_path "$relative")"
+  current="$GITHUB_WORKSPACE"
+  IFS='/' read -ra parts <<< "$relative"
+  for part in "${parts[@]}"; do
+    current="$current/$part"
+    if [[ -L "$current" ]]; then
+      die "$name must not contain symlink path components"
+    fi
+  done
+
+  [[ -e "$path" ]] || die "$name must exist inside GITHUB_WORKSPACE"
+  if [[ -d "$path" ]]; then
+    resolved="$(cd "$path" && pwd -P)" || die "failed to resolve $name"
+  else
+    parent="$(dirname "$path")"
+    base="$(basename "$path")"
+    parent_real="$(cd "$parent" && pwd -P)" || die "failed to resolve $name"
+    resolved="$parent_real/$base"
+  fi
+
+  case "$resolved" in
+    "$workspace_real")
+      [[ "$allow_workspace_root" == "true" ]] || die "$name must resolve inside GITHUB_WORKSPACE"
+      ;;
+    "$workspace_real"/*) ;;
+    *) die "$name must resolve inside GITHUB_WORKSPACE" ;;
+  esac
+  printf '%s' "$resolved"
+}
+
 validate_git_ref_input() {
   local name="$1"
   local value="$2"
@@ -94,7 +144,7 @@ resolve_baseline_path() {
   fi
 
   if [[ -z "$trusted_ref" ]]; then
-    workspace_path "$baseline_relative"
+    resolve_workspace_read_path "baseline" "$baseline_relative" false
     return
   fi
 
@@ -211,13 +261,13 @@ esac
 
 target_input="$(trim "${INPUT_TARGET:-.}")"
 target_input="$(validate_relative_path "target" "$target_input" true)" || exit $?
-target_path="$(workspace_path "$target_input")"
+target_path="$(resolve_workspace_read_path "target" "$target_input" true)" || exit $?
 
 config_input="$(trim "${INPUT_CONFIG:-}")"
 config_path=""
 if [[ -n "$config_input" ]]; then
   config_input="$(validate_relative_path "config" "$config_input" false)" || exit $?
-  config_path="$(workspace_path "$config_input")"
+  config_path="$(resolve_workspace_read_path "config" "$config_input" false)" || exit $?
 fi
 
 baseline_input="$(trim "${INPUT_BASELINE:-}")"

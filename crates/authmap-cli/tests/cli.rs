@@ -805,6 +805,7 @@ fn action_metadata_defines_expected_wrapper_contract() {
     assert!(script.contains("AUTHMAP_DEFER_EXIT"));
     assert!(script.contains("exit-code"));
     assert!(script.contains("validate_relative_path"));
+    assert!(script.contains("resolve_workspace_read_path"));
     assert!(script.contains("artifact-paths"));
     assert!(script.contains("<<"));
     assert!(action.contains("steps.run-authmap.outputs.artifact-paths"));
@@ -1197,11 +1198,8 @@ fn action_runner_rejects_unsafe_workspace_relative_paths() {
 }
 
 #[test]
+#[cfg(unix)]
 fn action_runner_rejects_symlinked_output_directory_escape() {
-    if cfg!(windows) {
-        return;
-    }
-
     let temp = TestDir::new("action-symlink-output-dir");
     let root = repo_root();
     let workspace = temp.path().join("workspace");
@@ -1244,6 +1242,83 @@ fn action_runner_rejects_symlinked_output_directory_escape() {
     );
 }
 
+#[test]
+#[cfg(unix)]
+fn action_runner_rejects_symlinked_target_escape() {
+    let temp = TestDir::new("action-symlink-target");
+    let workspace = temp.path().join("workspace");
+    let outside = temp.path().join("outside");
+    write_file(&outside.join("project").join("app.py"), "print('hello')\n");
+    fs::create_dir_all(&workspace).expect("workspace should be created");
+    std::os::unix::fs::symlink(outside.join("project"), workspace.join("project"))
+        .expect("target symlink should be created");
+
+    let output = run_action_with_workspace(&workspace, temp.path(), &[("INPUT_TARGET", "project")]);
+
+    assert_exit(&output, 2);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("target") && stderr.contains("symlink"),
+        "stderr should reject symlinked target; got:\n{stderr}"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn action_runner_rejects_symlinked_config_escape() {
+    let temp = TestDir::new("action-symlink-config");
+    let workspace = temp.path().join("workspace");
+    let outside = temp.path().join("outside");
+    write_file(
+        &workspace.join("project").join("app.py"),
+        "print('hello')\n",
+    );
+    write_file(&outside.join("authmap.yml"), "mode: advisory\n");
+    std::os::unix::fs::symlink(outside.join("authmap.yml"), workspace.join("authmap.yml"))
+        .expect("config symlink should be created");
+
+    let output =
+        run_action_with_workspace(&workspace, temp.path(), &[("INPUT_CONFIG", "authmap.yml")]);
+
+    assert_exit(&output, 2);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("config") && stderr.contains("symlink"),
+        "stderr should reject symlinked config; got:\n{stderr}"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn action_runner_rejects_symlinked_worktree_baseline_escape() {
+    let temp = TestDir::new("action-symlink-baseline");
+    let workspace = temp.path().join("workspace");
+    let outside = temp.path().join("outside");
+    write_file(
+        &workspace.join("project").join("app.py"),
+        "print('hello')\n",
+    );
+    write_file(&outside.join("baseline.json"), "{}\n");
+    std::os::unix::fs::symlink(
+        outside.join("baseline.json"),
+        workspace.join("baseline.json"),
+    )
+    .expect("baseline symlink should be created");
+
+    let output = run_action_with_workspace(
+        &workspace,
+        temp.path(),
+        &[("INPUT_BASELINE", "baseline.json")],
+    );
+
+    assert_exit(&output, 2);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("baseline") && stderr.contains("symlink"),
+        "stderr should reject symlinked baseline; got:\n{stderr}"
+    );
+}
+
 fn run_action_validation_case(name: &str, value: &str) -> Output {
     let temp = TestDir::new("action-invalid-path");
     let root = repo_root();
@@ -1276,6 +1351,30 @@ fn run_action_validation_case(name: &str, value: &str) -> Output {
         .env("INPUT_OUTPUT_DIRECTORY", "reports")
         .env("INPUT_UPLOAD_SARIF", "false")
         .env(name, value);
+    command.output().expect("action runner should execute")
+}
+
+fn run_action_with_workspace(workspace: &Path, temp: &Path, overrides: &[(&str, &str)]) -> Output {
+    let root = repo_root();
+    let mut command = Command::new("bash");
+    command
+        .arg(root.join(".github/actions/authmap/run.sh"))
+        .current_dir(&root)
+        .env("GITHUB_ACTION_PATH", &root)
+        .env("GITHUB_WORKSPACE", workspace)
+        .env("GITHUB_OUTPUT", temp.join("github-output.txt"))
+        .env("GITHUB_STEP_SUMMARY", temp.join("summary.md"))
+        .env("INPUT_MODE", "advisory")
+        .env("INPUT_OUTPUT", "json")
+        .env("INPUT_TARGET", "project")
+        .env("INPUT_CONFIG", "")
+        .env("INPUT_BASELINE", "")
+        .env("INPUT_FAIL_ON", "")
+        .env("INPUT_OUTPUT_DIRECTORY", "reports")
+        .env("INPUT_UPLOAD_SARIF", "false");
+    for (name, value) in overrides {
+        command.env(name, value);
+    }
     command.output().expect("action runner should execute")
 }
 
