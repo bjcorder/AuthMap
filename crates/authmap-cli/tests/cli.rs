@@ -131,7 +131,7 @@ fn explain_document_json() -> &'static str {
   "schema_version": "0.1.0",
   "metadata": {
     "tool_name": "authmap",
-    "tool_version": "1.0.0",
+    "tool_version": "0.1.0",
     "mode": "advisory",
     "target_roots": ["src"],
     "config_path": null
@@ -274,7 +274,7 @@ fn root_version_includes_package_and_schema_versions() {
     assert_exit(&output, 0);
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "authmap 1.0.0 (schema 0.1.0)\n"
+        "authmap 0.1.0 (schema 0.1.0)\n"
     );
     assert!(output.stderr.is_empty());
 }

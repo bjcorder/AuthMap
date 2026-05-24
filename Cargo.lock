@@ -98,7 +98,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-adapters"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "authmap-core",
  "authmap-parsers",
@@ -109,7 +109,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-analysis"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "authmap-adapters",
  "authmap-config",
@@ -127,7 +127,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-cli"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "authmap-analysis",
  "authmap-config",
@@ -144,7 +144,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-config"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "authmap-core",
  "serde",
@@ -154,7 +154,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-core"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "jsonschema",
  "serde",
@@ -163,7 +163,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-discovery"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "authmap-config",
  "authmap-core",
@@ -173,7 +173,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-parsers"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "authmap-core",
  "rayon",
@@ -186,7 +186,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-report"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "authmap-analysis",
  "authmap-config",
@@ -200,7 +200,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-testkit"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "authmap-analysis",
  "authmap-config",

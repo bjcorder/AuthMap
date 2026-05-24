@@ -48,7 +48,7 @@ Use it in CI with the GitHub Action:
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: Ozark-Security-Labs/AuthMap@v1.0.0
+- uses: Ozark-Security-Labs/AuthMap@v0.1.0
   with:
     mode: advisory
     output: markdown,json
@@ -61,7 +61,7 @@ A scan of an Express + Prisma service surfaces 15 routes, classifies each by cov
 ```text
 # AuthMap Report
 
-- Tool: authmap 1.0.0
+- Tool: authmap 0.1.0
 - Schema: 0.1.0
 
 ## Summary
@@ -175,7 +175,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Ozark-Security-Labs/AuthMap@v1.0.0
+      - uses: Ozark-Security-Labs/AuthMap@v0.1.0
         with:
           mode: enforce
           output: markdown,json
@@ -200,7 +200,7 @@ Enforce mode writes the requested reports first, then exits `20` when blocking d
 
 ## Project status
 
-- **v1.0.0** — first stable release. Semantic versioning per [docs/RELEASES.md](docs/RELEASES.md).
+- **v0.1.0** — first public release. Semantic versioning per [docs/RELEASES.md](docs/RELEASES.md).
 - **JSON schema** — v0.1.0 contract; breaking changes ship via the documented compatibility policy.
 - **Rust** — MSRV 1.95, edition 2024.
 - **Platforms** — Linux, macOS, and Windows are tested in CI.
