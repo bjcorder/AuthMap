@@ -25,6 +25,9 @@ Diagnostic categories, severity semantics, and exit-code behavior are documented
 in [`docs/DIAGNOSTICS.md`](DIAGNOSTICS.md).
 Project configuration is documented in
 [`docs/CONFIGURATION.md`](CONFIGURATION.md).
+Downstream consumer guidance, stable-field expectations, extension
+compatibility, and automation workflow examples are documented in
+[`docs/JSON_CONSUMERS.md`](JSON_CONSUMERS.md).
 
 ## Locations And Relationships
 

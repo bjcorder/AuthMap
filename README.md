@@ -195,6 +195,7 @@ Enforce mode writes the requested reports first, then exits `20` when blocking d
 | ------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
 | [docs/USAGE.md](docs/USAGE.md)                                                 | End-to-end CLI usage, output interpretation, defensive-use guidance   |
 | [docs/SCHEMA.md](docs/SCHEMA.md)                                               | JSON schema and contract                                              |
+| [docs/JSON_CONSUMERS.md](docs/JSON_CONSUMERS.md)                               | Downstream JSON consumer contract and examples                        |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md)                                 | `authmap.yml`, custom authorization rules, sensitivity labels         |
 | [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md)                                     | Diagnostic categories, stable codes, exit behavior                    |
 | [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md)                                 | All Action inputs, outputs, and permissions                           |
