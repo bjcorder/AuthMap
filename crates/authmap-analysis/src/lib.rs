@@ -6706,7 +6706,17 @@ fn tenant_review_reasons(
 
 fn coverage_class(strong: &[&Evidence], all_evidence: &[&Evidence]) -> CoverageClass {
     if has_type(strong, EvidenceType::ExplicitPublic) {
-        CoverageClass::PublicDeclared
+        // A public marker that coexists with real guard evidence is a conflict,
+        // not a confirmed-public route. Classify as unknown/dynamic so it is
+        // surfaced for review (ReviewRequired) instead of looking safe.
+        if strong
+            .iter()
+            .any(|item| middleware_evidence_is_auth_guard(item.evidence_type))
+        {
+            CoverageClass::UnknownOrDynamic
+        } else {
+            CoverageClass::PublicDeclared
+        }
     } else if has_type(strong, EvidenceType::AdminCheck) {
         CoverageClass::AdminGuarded
     } else if has_type(strong, EvidenceType::PermissionCheck) {
