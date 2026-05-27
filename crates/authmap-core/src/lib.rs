@@ -209,6 +209,7 @@ pub mod diagnostic_codes {
     pub const NEXTJS_EXTERNAL_REEXPORT_UNRESOLVED: &str = "nextjs_external_reexport_unresolved";
     pub const NEXTJS_NESTED_APP_SEGMENT: &str = "nextjs_nested_app_segment";
     pub const NEXTJS_UNUSUAL_ROUTE_SEGMENT: &str = "nextjs_unusual_route_segment";
+    pub const NEXTJS_SERVER_ACTION_NOT_ANALYZED: &str = "nextjs_server_action_not_analyzed";
 
     pub const REPORT_RENDER_FAILED: &str = "report.render_failed";
     pub const REPORT_WRITE_FAILED: &str = "report.write_failed";
@@ -353,6 +354,10 @@ pub const FIRST_PARTY_DIAGNOSTIC_CODES: &[(&str, DiagnosticCategory)] = &[
     ),
     (
         diagnostic_codes::NEXTJS_UNUSUAL_ROUTE_SEGMENT,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::NEXTJS_SERVER_ACTION_NOT_ANALYZED,
         DiagnosticCategory::Adapter,
     ),
     (

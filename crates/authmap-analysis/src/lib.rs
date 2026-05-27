@@ -4011,6 +4011,16 @@ fn builtin_rules() -> Vec<EvidenceRuleSpec> {
                 "ensureLoggedIn",
                 "session",
                 "auth",
+                // Next.js / Auth.js / NextAuth / Clerk session helpers.
+                "getServerSession",
+                "getToken",
+                "getAuth",
+                "currentUser",
+                "withAuth",
+                "clerkMiddleware",
+                "authMiddleware",
+                "updateSession",
+                "isAuthenticated",
             ],
             &["auth", "session", "authenticated", "logged"],
         ),
@@ -4259,6 +4269,19 @@ fn extract_nextjs_route_evidence(
     };
 
     let mut evidence = Vec::new();
+    // `middleware.ts` protection: the adapter records the matching middleware in
+    // `route.middleware` named after the auth helper it delegates to. Match it
+    // against rules exactly like Express route-level middleware.
+    for middleware in &route.middleware {
+        if let Some(rule) = rules.match_symbol(&middleware.name) {
+            evidence.push(evidence_from_rule(
+                route,
+                rule,
+                Some(middleware.clone()),
+                middleware.span.clone(),
+            ));
+        }
+    }
     if let Some(metadata) = nextjs_route_metadata(route)
         && let Some(wrapper) = metadata.wrapper.as_deref()
         && let Some(wrapper_evidence) = evidence_from_nextjs_wrapper(route, wrapper)

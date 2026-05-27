@@ -4474,6 +4474,78 @@ def widgets_head():
     }
 
     #[test]
+    fn attaches_nextjs_middleware_to_matched_routes() {
+        let parsed = parse_sources(&[
+            (
+                "middleware.ts".to_string(),
+                Language::TypeScript,
+                "export { auth as middleware } from \"@/auth\";\n\
+                 export const config = { matcher: [\"/dashboard/:path*\"] };\n"
+                    .to_string(),
+            ),
+            (
+                "app/dashboard/route.ts".to_string(),
+                Language::TypeScript,
+                "export async function GET() {\n  return Response.json({ ok: true });\n}\n"
+                    .to_string(),
+            ),
+            (
+                "app/public/route.ts".to_string(),
+                Language::TypeScript,
+                "export async function GET() {\n  return Response.json({ ok: true });\n}\n"
+                    .to_string(),
+            ),
+        ]);
+        let output = NextJsAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        let dashboard = route(&output, "GET", "/dashboard");
+        assert!(
+            dashboard
+                .middleware
+                .iter()
+                .any(|middleware| middleware.name == "auth"),
+            "dashboard route should inherit the matcher-matched middleware"
+        );
+
+        let public_route = route(&output, "GET", "/public");
+        assert!(
+            public_route.middleware.is_empty(),
+            "unmatched route should not inherit middleware"
+        );
+    }
+
+    #[test]
+    fn discovers_nextjs_pages_api_routes() {
+        let parsed = parse_sources(&[
+            (
+                "pages/api/users/[id].ts".to_string(),
+                Language::TypeScript,
+                "import { getServerSession } from \"next-auth\";\n\
+                 export default async function handler(req, res) {\n\
+                 \u{20}\u{20}const session = await getServerSession(req, res);\n\
+                 \u{20}\u{20}if (!session) return res.status(401).end();\n\
+                 \u{20}\u{20}res.json({ id: req.query.id });\n\
+                 }\n"
+                .to_string(),
+            ),
+            (
+                "pages/api/health.ts".to_string(),
+                Language::TypeScript,
+                "export default function handler(req, res) {\n  res.json({ ok: true });\n}\n"
+                    .to_string(),
+            ),
+        ]);
+        let output = NextJsAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        let detail = route(&output, "ANY", "/api/users/[id]");
+        assert_eq!(
+            detail.handler.as_ref().map(|handler| handler.name.as_str()),
+            Some("handler")
+        );
+        assert!(output.routes.iter().any(|r| r.path == "/api/health"));
+    }
+
+    #[test]
     fn discovers_express_routes_middleware_chains_and_mounted_prefixes() {
         let parsed = parse_fixtures(&[
             "express/app.js",
