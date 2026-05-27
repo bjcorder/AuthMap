@@ -18,12 +18,14 @@ source files
 
 Adapters discover externally reachable application entrypoints.
 
-Initial adapters:
+Adapters:
 
 - FastAPI route decorators
 - Django URL patterns and DRF viewsets
 - Express router calls
 - Next.js App Router route handlers
+- tRPC procedures
+- GraphQL operations
 
 Adapter output should be normalized into a common route model.
 

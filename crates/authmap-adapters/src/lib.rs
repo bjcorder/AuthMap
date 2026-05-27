@@ -1871,7 +1871,9 @@ fn methods_for_decorator(
     decorator_name: &str,
 ) -> Option<Vec<String>> {
     match decorator_name {
-        "get" | "post" | "put" | "patch" | "delete" => Some(vec![decorator_name.to_uppercase()]),
+        "get" | "post" | "put" | "patch" | "delete" | "options" | "head" => {
+            Some(vec![decorator_name.to_uppercase()])
+        }
         "api_route" => {
             let methods = keyword_string_list(parsed, call, "methods");
             if methods.is_empty() {
@@ -3448,6 +3450,8 @@ fn express_method(member: &str) -> Option<&'static str> {
         "put" => Some("PUT"),
         "patch" => Some("PATCH"),
         "delete" => Some("DELETE"),
+        "options" => Some("OPTIONS"),
+        "head" => Some("HEAD"),
         _ => None,
     }
 }
@@ -4400,6 +4404,72 @@ app.include_router(router, dependencies=build_runtime_dependencies())
         assert_eq!(
             middleware_names(route(&output, "GET", "/items")),
             vec!["dynamic_policy_dependencies"]
+        );
+    }
+
+    #[test]
+    fn discovers_express_options_and_head_routes() {
+        let parsed = parse_sources(&[(
+            "app.js".to_string(),
+            Language::JavaScript,
+            r#"
+const express = require("express");
+const app = express();
+
+app.options("/widgets", (req, res) => res.sendStatus(204));
+app.head("/widgets", (req, res) => res.sendStatus(200));
+"#
+            .to_string(),
+        )]);
+        let output = ExpressAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.method == "OPTIONS" && route.path == "/widgets")
+        );
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.method == "HEAD" && route.path == "/widgets")
+        );
+    }
+
+    #[test]
+    fn discovers_fastapi_options_and_head_routes() {
+        let parsed = parse_sources(&[(
+            "app.py".to_string(),
+            Language::Python,
+            r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.options("/widgets")
+def widgets_options():
+    return {}
+
+@app.head("/widgets")
+def widgets_head():
+    return {}
+"#
+            .to_string(),
+        )]);
+        let output = FastApiAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.method == "OPTIONS" && route.path == "/widgets")
+        );
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.method == "HEAD" && route.path == "/widgets")
         );
     }
 
