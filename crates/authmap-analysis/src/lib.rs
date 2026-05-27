@@ -950,6 +950,15 @@ fn python_needs_syntax_tree(text: &str) -> bool {
 fn enabled_frameworks_for_sources(parsed_files: &[ParsedFile]) -> Vec<String> {
     let mut frameworks = BTreeSet::<String>::new();
     for parsed in parsed_files {
+        // Discovery records per-project `ProjectHint`s from manifests and imports.
+        // Union them in so an adapter still runs when the in-file text heuristic misses
+        // (aliased, wrapped, or re-exported framework imports).
+        for hint in &parsed.source.project_hints {
+            if let Some(name) = framework_name_for_hint(*hint) {
+                frameworks.insert(name.to_string());
+            }
+        }
+
         match parsed.language {
             authmap_core::Language::Python => {
                 if python_has_fastapi_route_indicators(&parsed.text) {
@@ -972,7 +981,7 @@ fn enabled_frameworks_for_sources(parsed_files: &[ParsedFile]) -> Vec<String> {
                 if js_has_nextjs_route_indicators(parsed, &parsed.text) {
                     frameworks.insert("nextjs".to_string());
                 }
-                if parsed.text.contains("Procedure") || parsed.text.contains("procedure") {
+                if js_has_trpc_route_indicators(&parsed.text) {
                     frameworks.insert("trpc".to_string());
                 }
             }
@@ -980,6 +989,30 @@ fn enabled_frameworks_for_sources(parsed_files: &[ParsedFile]) -> Vec<String> {
         }
     }
     frameworks.into_iter().collect()
+}
+
+/// Maps a discovery `ProjectHint` to the adapter `name()` it should enable, when any.
+/// ORM hints (SqlAlchemy, DjangoOrm, Prisma) do not map to a route adapter.
+fn framework_name_for_hint(hint: authmap_core::ProjectHint) -> Option<&'static str> {
+    match hint {
+        authmap_core::ProjectHint::FastApi => Some("fastapi"),
+        authmap_core::ProjectHint::Django | authmap_core::ProjectHint::DjangoRestFramework => {
+            Some("django")
+        }
+        authmap_core::ProjectHint::Express => Some("express"),
+        authmap_core::ProjectHint::NextJs => Some("nextjs"),
+        authmap_core::ProjectHint::SqlAlchemy
+        | authmap_core::ProjectHint::DjangoOrm
+        | authmap_core::ProjectHint::Prisma => None,
+    }
+}
+
+fn js_has_trpc_route_indicators(text: &str) -> bool {
+    text.contains("Procedure")
+        || text.contains("procedure")
+        || text.contains("@trpc/server")
+        || text.contains("createTRPCRouter")
+        || text.contains("initTRPC")
 }
 
 fn python_has_fastapi_route_indicators(text: &str) -> bool {
@@ -6716,9 +6749,9 @@ mod tests {
     use authmap_testkit::fixture_path;
 
     use super::{
-        classify_coverage, enabled_frameworks_for_sources, normalize_adapter_evidence,
-        normalize_module_path, resolve_python_module, route_id_remaps, run_scan,
-        run_scan_with_started_at, source_needs_syntax_tree, suggest_rules,
+        classify_coverage, enabled_frameworks_for_sources, framework_name_for_hint,
+        normalize_adapter_evidence, normalize_module_path, resolve_python_module, route_id_remaps,
+        run_scan, run_scan_with_started_at, source_needs_syntax_tree, suggest_rules,
         suggest_rules_with_started_at,
     };
 
@@ -6881,6 +6914,64 @@ class ProductCreate(BaseMutation):
             enabled_frameworks_for_sources(&[helper, next]),
             vec!["express".to_string(), "nextjs".to_string()]
         );
+    }
+
+    #[test]
+    fn adapter_gating_uses_project_hints_when_text_heuristics_miss() {
+        // Aliased import: the file has no `FastAPI(` literal, so the text heuristic
+        // alone would not enable the adapter. The discovery-provided hint must.
+        let parsed = ParsedFile {
+            source: SourceFile {
+                path: "main.py".to_string(),
+                language: authmap_core::Language::Python,
+                size_bytes: 0,
+                sha256: None,
+                project_hints: vec![authmap_core::ProjectHint::FastApi],
+                skipped: None,
+            },
+            language: authmap_core::Language::Python,
+            text: "\
+from fastapi import FastAPI as API
+
+app = API()
+
+
+@app.get(\"/items\")
+def list_items():
+    return []
+"
+            .to_string(),
+            tree: None,
+            status: ParseStatus::TextOnly,
+            diagnostics: Vec::new(),
+        };
+
+        assert!(
+            enabled_frameworks_for_sources(&[parsed]).contains(&"fastapi".to_string()),
+            "fastapi adapter should be enabled via project hint despite the aliased import"
+        );
+    }
+
+    #[test]
+    fn framework_name_for_hint_maps_route_adapters_and_ignores_orm_hints() {
+        use authmap_core::ProjectHint;
+        assert_eq!(
+            framework_name_for_hint(ProjectHint::FastApi),
+            Some("fastapi")
+        );
+        assert_eq!(framework_name_for_hint(ProjectHint::Django), Some("django"));
+        assert_eq!(
+            framework_name_for_hint(ProjectHint::DjangoRestFramework),
+            Some("django")
+        );
+        assert_eq!(
+            framework_name_for_hint(ProjectHint::Express),
+            Some("express")
+        );
+        assert_eq!(framework_name_for_hint(ProjectHint::NextJs), Some("nextjs"));
+        assert_eq!(framework_name_for_hint(ProjectHint::SqlAlchemy), None);
+        assert_eq!(framework_name_for_hint(ProjectHint::DjangoOrm), None);
+        assert_eq!(framework_name_for_hint(ProjectHint::Prisma), None);
     }
 
     #[test]
