@@ -71,6 +71,30 @@
       "skipped": null
     },
     {
+      "path": "tests/fixtures/django/legacy/urls.py",
+      "language": "python",
+      "size_bytes": 353,
+      "sha256": null,
+      "project_hints": [
+        "django",
+        "django_rest_framework",
+        "django_orm"
+      ],
+      "skipped": null
+    },
+    {
+      "path": "tests/fixtures/django/legacy/views.py",
+      "language": "python",
+      "size_bytes": 581,
+      "sha256": null,
+      "project_hints": [
+        "django",
+        "django_rest_framework",
+        "django_orm"
+      ],
+      "skipped": null
+    },
+    {
       "path": "tests/fixtures/django/project/urls.py",
       "language": "python",
       "size_bytes": 422,
@@ -4535,6 +4559,381 @@
       "id": "route_0033",
       "framework": "django",
       "method": "ANY",
+      "path": "/dashboard/",
+      "name": "dashboard",
+      "tags": [],
+      "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "django_login_required",
+          "symbol": {
+            "name": "login_required",
+            "span": {
+              "file": "tests/fixtures/django/legacy/views.py",
+              "line": 6,
+              "column": 1,
+              "byte_range": {
+                "start": 203,
+                "end": 218
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/legacy/views.py",
+            "line": 6,
+            "column": 1,
+            "byte_range": {
+              "start": 203,
+              "end": 218
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0029"
+          ],
+          "notes": []
+        }
+      ],
+      "handler": {
+        "name": "dashboard",
+        "span": {
+          "file": "tests/fixtures/django/legacy/views.py",
+          "line": 7,
+          "column": 5,
+          "byte_range": {
+            "start": 223,
+            "end": 232
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/legacy/urls.py",
+        "line": 7,
+        "column": 5,
+        "byte_range": {
+          "start": 104,
+          "end": 157
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_urlpattern",
+          "symbol": {
+            "name": "dashboard",
+            "span": {
+              "file": "tests/fixtures/django/legacy/views.py",
+              "line": 7,
+              "column": 5,
+              "byte_range": {
+                "start": 223,
+                "end": 232
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/legacy/urls.py",
+            "line": 7,
+            "column": 5,
+            "byte_range": {
+              "start": 104,
+              "end": 157
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "class_name": null,
+          "handler_kind": "function",
+          "method_name": null,
+          "route_pattern_kind": "path"
+        }
+      }
+    },
+    {
+      "id": "route_0034",
+      "framework": "django",
+      "method": "ANY",
+      "path": "/reports/",
+      "name": "reports",
+      "tags": [],
+      "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "django_permission_required",
+          "symbol": {
+            "name": "permission_required",
+            "span": {
+              "file": "tests/fixtures/django/legacy/views.py",
+              "line": 11,
+              "column": 1,
+              "byte_range": {
+                "start": 290,
+                "end": 333
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/legacy/views.py",
+            "line": 11,
+            "column": 1,
+            "byte_range": {
+              "start": 290,
+              "end": 333
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0030"
+          ],
+          "notes": []
+        }
+      ],
+      "handler": {
+        "name": "reports",
+        "span": {
+          "file": "tests/fixtures/django/legacy/views.py",
+          "line": 12,
+          "column": 5,
+          "byte_range": {
+            "start": 338,
+            "end": 345
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/legacy/urls.py",
+        "line": 8,
+        "column": 5,
+        "byte_range": {
+          "start": 163,
+          "end": 210
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_urlpattern",
+          "symbol": {
+            "name": "reports",
+            "span": {
+              "file": "tests/fixtures/django/legacy/views.py",
+              "line": 12,
+              "column": 5,
+              "byte_range": {
+                "start": 338,
+                "end": 345
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/legacy/urls.py",
+            "line": 8,
+            "column": 5,
+            "byte_range": {
+              "start": 163,
+              "end": 210
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "class_name": null,
+          "handler_kind": "function",
+          "method_name": null,
+          "route_pattern_kind": "path"
+        }
+      }
+    },
+    {
+      "id": "route_0035",
+      "framework": "django",
+      "method": "ANY",
+      "path": "/widgets/",
+      "name": "widgets",
+      "tags": [],
+      "middleware": [],
+      "declared_protection": [
+        {
+          "kind": "route_guard",
+          "mechanism": "drf_permission_classes",
+          "symbol": {
+            "name": "IsAuthenticated",
+            "span": {
+              "file": "tests/fixtures/django/legacy/views.py",
+              "line": 17,
+              "column": 1,
+              "byte_range": {
+                "start": 428,
+                "end": 466
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/legacy/views.py",
+            "line": 17,
+            "column": 1,
+            "byte_range": {
+              "start": 428,
+              "end": 466
+            }
+          },
+          "inherited": false,
+          "confidence": "high",
+          "evidence_ids": [
+            "evidence_0031"
+          ],
+          "notes": []
+        }
+      ],
+      "handler": {
+        "name": "widgets",
+        "span": {
+          "file": "tests/fixtures/django/legacy/views.py",
+          "line": 18,
+          "column": 5,
+          "byte_range": {
+            "start": 471,
+            "end": 478
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/legacy/urls.py",
+        "line": 9,
+        "column": 5,
+        "byte_range": {
+          "start": 216,
+          "end": 265
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_re_path",
+          "symbol": {
+            "name": "widgets",
+            "span": {
+              "file": "tests/fixtures/django/legacy/views.py",
+              "line": 18,
+              "column": 5,
+              "byte_range": {
+                "start": 471,
+                "end": 478
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/legacy/urls.py",
+            "line": 9,
+            "column": 5,
+            "byte_range": {
+              "start": 216,
+              "end": 265
+            }
+          },
+          "confidence": "medium",
+          "notes": [
+            "Django re_path regex literal normalized as route path"
+          ]
+        }
+      ],
+      "confidence": "medium",
+      "notes": [
+        "Django re_path regex literal normalized as route path"
+      ],
+      "extensions": {
+        "authmap.django": {
+          "class_name": null,
+          "handler_kind": "function",
+          "method_name": null,
+          "route_pattern_kind": "re_path"
+        }
+      }
+    },
+    {
+      "id": "route_0036",
+      "framework": "django",
+      "method": "ANY",
+      "path": "/status/",
+      "name": "public_status",
+      "tags": [],
+      "middleware": [],
+      "handler": {
+        "name": "public_status",
+        "span": {
+          "file": "tests/fixtures/django/legacy/views.py",
+          "line": 22,
+          "column": 5,
+          "byte_range": {
+            "start": 519,
+            "end": 532
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/legacy/urls.py",
+        "line": 13,
+        "column": 5,
+        "byte_range": {
+          "start": 291,
+          "end": 349
+        }
+      },
+      "source_evidence": [
+        {
+          "mechanism": "django_urlpattern",
+          "symbol": {
+            "name": "public_status",
+            "span": {
+              "file": "tests/fixtures/django/legacy/views.py",
+              "line": 22,
+              "column": 5,
+              "byte_range": {
+                "start": 519,
+                "end": 532
+              }
+            }
+          },
+          "span": {
+            "file": "tests/fixtures/django/legacy/urls.py",
+            "line": 13,
+            "column": 5,
+            "byte_range": {
+              "start": 291,
+              "end": 349
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "confidence": "high",
+      "notes": [],
+      "extensions": {
+        "authmap.django": {
+          "class_name": null,
+          "handler_kind": "function",
+          "method_name": null,
+          "route_pattern_kind": "path"
+        }
+      }
+    },
+    {
+      "id": "route_0037",
+      "framework": "django",
+      "method": "ANY",
       "path": "/status/",
       "name": "status",
       "tags": [],
@@ -4600,7 +4999,7 @@
       }
     },
     {
-      "id": "route_0034",
+      "id": "route_0038",
       "framework": "django",
       "method": "ANY",
       "path": "/legacy/{slug}/",
@@ -5543,6 +5942,93 @@
       "notes": [
         "Authorization evidence inherited from ObjectEditView"
       ]
+    },
+    {
+      "id": "evidence_0029",
+      "route_id": "route_0033",
+      "evidence_type": "authn",
+      "mechanism": "django_login_required",
+      "symbol": {
+        "name": "login_required",
+        "span": {
+          "file": "tests/fixtures/django/legacy/views.py",
+          "line": 6,
+          "column": 1,
+          "byte_range": {
+            "start": 203,
+            "end": 218
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/legacy/views.py",
+        "line": 6,
+        "column": 1,
+        "byte_range": {
+          "start": 203,
+          "end": 218
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0030",
+      "route_id": "route_0034",
+      "evidence_type": "permission_check",
+      "mechanism": "django_permission_required",
+      "symbol": {
+        "name": "permission_required",
+        "span": {
+          "file": "tests/fixtures/django/legacy/views.py",
+          "line": 11,
+          "column": 1,
+          "byte_range": {
+            "start": 290,
+            "end": 333
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/legacy/views.py",
+        "line": 11,
+        "column": 1,
+        "byte_range": {
+          "start": 290,
+          "end": 333
+        }
+      },
+      "confidence": "high",
+      "notes": []
+    },
+    {
+      "id": "evidence_0031",
+      "route_id": "route_0035",
+      "evidence_type": "authn",
+      "mechanism": "drf_permission_classes",
+      "symbol": {
+        "name": "IsAuthenticated",
+        "span": {
+          "file": "tests/fixtures/django/legacy/views.py",
+          "line": 17,
+          "column": 1,
+          "byte_range": {
+            "start": 428,
+            "end": 466
+          }
+        }
+      },
+      "span": {
+        "file": "tests/fixtures/django/legacy/views.py",
+        "line": 17,
+        "column": 1,
+        "byte_range": {
+          "start": 428,
+          "end": 466
+        }
+      },
+      "confidence": "high",
+      "notes": []
     }
   ],
   "mutations": [
@@ -6782,6 +7268,98 @@
     },
     {
       "route_id": "route_0033",
+      "class": "authn_only",
+      "risk": "review_required",
+      "rationale": [
+        "1 strong authorization evidence item(s) support authn_only coverage.",
+        "Sensitive route modifier(s): any_method, unsafe_method."
+      ],
+      "reviewer_questions": [
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0029"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0020"
+          ],
+          "sensitivity_reasons": [
+            "any_method",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0034",
+      "class": "permission_guarded",
+      "risk": "low",
+      "rationale": [
+        "1 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): any_method, unsafe_method."
+      ],
+      "reviewer_questions": [
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0030"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0021"
+          ],
+          "sensitivity_reasons": [
+            "any_method",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0035",
+      "class": "authn_only",
+      "risk": "review_required",
+      "rationale": [
+        "1 strong authorization evidence item(s) support authn_only coverage.",
+        "Sensitive route modifier(s): any_method, unsafe_method."
+      ],
+      "reviewer_questions": [
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [
+            "evidence_0031"
+          ],
+          "link_ids": [],
+          "mutation_ids": [],
+          "policy_case_ids": [
+            "policy_case_0022"
+          ],
+          "sensitivity_reasons": [
+            "any_method",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0036",
       "class": "unauthenticated",
       "risk": "high",
       "rationale": [
@@ -6807,7 +7385,33 @@
       }
     },
     {
-      "route_id": "route_0034",
+      "route_id": "route_0037",
+      "class": "unauthenticated",
+      "risk": "high",
+      "rationale": [
+        "No authorization evidence was detected.",
+        "Sensitive route modifier(s): any_method, unsafe_method.",
+        "No strong authorization evidence was found for a high-sensitivity route."
+      ],
+      "reviewer_questions": [
+        "Should this state-changing route require more than authentication?"
+      ],
+      "uncertainty_reasons": [],
+      "extensions": {
+        "authmap.coverage": {
+          "evidence_ids": [],
+          "link_ids": [],
+          "mutation_ids": [],
+          "sensitivity_reasons": [
+            "any_method",
+            "unsafe_method"
+          ],
+          "weak_evidence_ids": []
+        }
+      }
+    },
+    {
+      "route_id": "route_0038",
       "class": "unauthenticated",
       "risk": "high",
       "rationale": [
@@ -7774,6 +8378,141 @@
         }
       },
       "confidence": "medium",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0020",
+      "route_id": "route_0033",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0029"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0029"
+          ],
+          "span": {
+            "file": "tests/fixtures/django/legacy/views.py",
+            "line": 6,
+            "column": 1,
+            "byte_range": {
+              "start": 203,
+              "end": 218
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/django/legacy/views.py",
+        "line": 6,
+        "column": 1,
+        "byte_range": {
+          "start": 203,
+          "end": 218
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0021",
+      "route_id": "route_0034",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: permission_check.",
+      "evidence_ids": [
+        "evidence_0030"
+      ],
+      "input_names": [
+        "permission"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0030"
+          ],
+          "span": {
+            "file": "tests/fixtures/django/legacy/views.py",
+            "line": 11,
+            "column": 1,
+            "byte_range": {
+              "start": 290,
+              "end": 333
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/django/legacy/views.py",
+        "line": 11,
+        "column": 1,
+        "byte_range": {
+          "start": 290,
+          "end": 333
+        }
+      },
+      "confidence": "high",
+      "reviewer_questions": [],
+      "uncertainty_reasons": []
+    },
+    {
+      "id": "policy_case_0022",
+      "route_id": "route_0035",
+      "kind": "effective_protection",
+      "summary": "1 evidence support(s) route protection: authn.",
+      "evidence_ids": [
+        "evidence_0031"
+      ],
+      "input_names": [
+        "identity"
+      ],
+      "branches": [
+        {
+          "condition": "static authorization evidence present",
+          "outcome": "allow",
+          "reachable": true,
+          "evidence_ids": [
+            "evidence_0031"
+          ],
+          "span": {
+            "file": "tests/fixtures/django/legacy/views.py",
+            "line": 17,
+            "column": 1,
+            "byte_range": {
+              "start": 428,
+              "end": 466
+            }
+          },
+          "confidence": "high",
+          "notes": []
+        }
+      ],
+      "span": {
+        "file": "tests/fixtures/django/legacy/views.py",
+        "line": 17,
+        "column": 1,
+        "byte_range": {
+          "start": 428,
+          "end": 466
+        }
+      },
+      "confidence": "high",
       "reviewer_questions": [],
       "uncertainty_reasons": []
     }

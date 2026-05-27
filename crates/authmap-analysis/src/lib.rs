@@ -2656,7 +2656,9 @@ fn django_call_mutation(
 ) -> Option<Mutation> {
     if let Some((model, method)) = django_objects_call(function_text) {
         let operation = match method {
-            "create" => MutationOperation::Create,
+            "create" | "get_or_create" | "update_or_create" | "bulk_create" => {
+                MutationOperation::Create
+            }
             "update" => MutationOperation::BulkUpdate,
             "bulk_update" => MutationOperation::BulkUpdate,
             "delete" => MutationOperation::Delete,
@@ -2698,8 +2700,16 @@ fn django_call_mutation(
 fn django_objects_call(function_text: &str) -> Option<(String, &str)> {
     let (model, rest) = function_text.split_once(".objects.")?;
     let method = function_text.rsplit('.').next()?;
-    if matches!(method, "create" | "update" | "bulk_update" | "delete")
-        && (rest.starts_with(method) || rest.contains(&format!(".{method}")))
+    if matches!(
+        method,
+        "create"
+            | "update"
+            | "bulk_update"
+            | "delete"
+            | "get_or_create"
+            | "update_or_create"
+            | "bulk_create"
+    ) && (rest.starts_with(method) || rest.contains(&format!(".{method}")))
     {
         return Some((clean_symbol(model), method));
     }
@@ -4217,8 +4227,18 @@ fn extract_django_route_evidence(
         return Vec::new();
     };
 
+    let is_function_handler = django_route_metadata(route)
+        .and_then(|metadata| metadata.handler_kind)
+        .is_none_or(|kind| kind == "function");
+
     let mut evidence = Vec::new();
     for node in django_handler_nodes(parsed, route, handler) {
+        if is_function_handler {
+            // Function-based views carry their guards as decorators
+            // (`@login_required`, `@permission_required`, DRF `@permission_classes`),
+            // which sit outside the function body scanned below.
+            evidence.extend(extract_django_fbv_decorator_evidence(parsed, node, route));
+        }
         evidence.extend(extract_calls_from_node(
             parsed,
             node,
@@ -5022,6 +5042,7 @@ fn extract_django_class_evidence(
             "initial",
             "dispatch",
             "has_permission",
+            "has_object_permission",
             "get_permissions",
             "check_permissions",
             "get_queryset",
@@ -5110,36 +5131,8 @@ fn extract_django_class_attribute_evidence(
                 "django_authentication_classes",
                 "authentication_classes".to_string(),
             )
-        } else if lower.contains("allowany") {
-            (
-                EvidenceType::ExplicitPublic,
-                "drf_permission_classes",
-                "AllowAny".to_string(),
-            )
-        } else if lower.contains("isadminuser") || lower.contains("issuperuser") {
-            (
-                EvidenceType::AdminCheck,
-                "drf_permission_classes",
-                "IsAdminUser".to_string(),
-            )
-        } else if lower.contains("isauthenticated") {
-            (
-                EvidenceType::Authn,
-                "drf_permission_classes",
-                "IsAuthenticated".to_string(),
-            )
-        } else if lower.contains("permission") {
-            (
-                EvidenceType::PermissionCheck,
-                "drf_permission_classes",
-                "permission_classes".to_string(),
-            )
         } else {
-            (
-                EvidenceType::UnknownDynamicCheck,
-                "drf_permission_classes",
-                "permission_classes".to_string(),
-            )
+            classify_drf_permission_classes(&lower)
         };
         evidence.push(Evidence {
             id: String::new(),
@@ -5161,6 +5154,150 @@ fn extract_django_class_attribute_evidence(
         });
     }
     evidence
+}
+
+/// Classifies a DRF `permission_classes` value (lowercased) into evidence.
+/// Shared by class-attribute and function-based-view `@permission_classes`
+/// detection. `IsAuthenticatedOrReadOnly` is surfaced as dynamic/review since
+/// it makes the read path public while only authenticating writes.
+fn classify_drf_permission_classes(lower: &str) -> (EvidenceType, &'static str, String) {
+    if lower.contains("allowany") {
+        (
+            EvidenceType::ExplicitPublic,
+            "drf_permission_classes",
+            "AllowAny".to_string(),
+        )
+    } else if lower.contains("isadminuser") || lower.contains("issuperuser") {
+        (
+            EvidenceType::AdminCheck,
+            "drf_permission_classes",
+            "IsAdminUser".to_string(),
+        )
+    } else if lower.contains("isauthenticatedorreadonly") {
+        (
+            EvidenceType::UnknownDynamicCheck,
+            "drf_permission_classes",
+            "IsAuthenticatedOrReadOnly".to_string(),
+        )
+    } else if lower.contains("isauthenticated") {
+        (
+            EvidenceType::Authn,
+            "drf_permission_classes",
+            "IsAuthenticated".to_string(),
+        )
+    } else if lower.contains("permission") {
+        (
+            EvidenceType::PermissionCheck,
+            "drf_permission_classes",
+            "permission_classes".to_string(),
+        )
+    } else {
+        (
+            EvidenceType::UnknownDynamicCheck,
+            "drf_permission_classes",
+            "permission_classes".to_string(),
+        )
+    }
+}
+
+/// Extracts authorization evidence from the decorators of a function-based view.
+/// `function_node` is the `function_definition`; its `decorated_definition`
+/// parent holds the decorators (`@login_required`, `@permission_required(...)`,
+/// `@api_view([...])` + `@permission_classes([...])`, etc.).
+fn extract_django_fbv_decorator_evidence(
+    parsed: &ParsedFile,
+    function_node: Node<'_>,
+    route: &authmap_core::Route,
+) -> Vec<Evidence> {
+    let mut evidence = Vec::new();
+    let Some(parent) = function_node.parent() else {
+        return evidence;
+    };
+    if parent.kind() != "decorated_definition" {
+        return evidence;
+    }
+    let mut cursor = parent.walk();
+    for decorator in parent.children(&mut cursor) {
+        if decorator.kind() != "decorator" {
+            continue;
+        }
+        let Some(expr) = decorator.named_child(0) else {
+            continue;
+        };
+        let (name_node, args_text) = if expr.kind() == "call" {
+            let function = expr.child_by_field_name("function");
+            let args = expr
+                .child_by_field_name("arguments")
+                .and_then(|args| parsed.text_for(args))
+                .unwrap_or_default();
+            (function, args.to_string())
+        } else {
+            (Some(expr), String::new())
+        };
+        let Some(name) = name_node
+            .and_then(|node| parsed.text_for(node))
+            .map(terminal_symbol_name)
+        else {
+            continue;
+        };
+        if let Some(item) =
+            django_decorator_evidence(route, &name, &args_text, parsed.span_for(decorator))
+        {
+            evidence.push(item);
+        }
+    }
+    evidence
+}
+
+fn django_decorator_evidence(
+    route: &authmap_core::Route,
+    name: &str,
+    args_text: &str,
+    span: Span,
+) -> Option<Evidence> {
+    let (evidence_type, mechanism, symbol_name) = match name {
+        "login_required" => (
+            EvidenceType::Authn,
+            "django_login_required",
+            name.to_string(),
+        ),
+        "staff_member_required" => (
+            EvidenceType::AdminCheck,
+            "django_staff_member_required",
+            name.to_string(),
+        ),
+        "permission_required" => (
+            EvidenceType::PermissionCheck,
+            "django_permission_required",
+            name.to_string(),
+        ),
+        "user_passes_test" => (
+            EvidenceType::UnknownDynamicCheck,
+            "django_user_passes_test",
+            name.to_string(),
+        ),
+        "authentication_classes" => (
+            EvidenceType::Authn,
+            "django_authentication_classes",
+            "authentication_classes".to_string(),
+        ),
+        "permission_classes" => classify_drf_permission_classes(&args_text.to_ascii_lowercase()),
+        _ => return None,
+    };
+    Some(Evidence {
+        id: String::new(),
+        route_id: Some(route.id.clone()),
+        evidence_type,
+        mechanism: mechanism.to_string(),
+        symbol: Some(SymbolRef {
+            name: symbol_name,
+            span: Some(span.clone()),
+        }),
+        span: Some(span),
+        confidence: Confidence::High,
+        notes: Vec::new(),
+        extensions: authmap_core::ExtensionMap::new(),
+    })
 }
 
 fn extract_django_builtin_evidence_from_node(
@@ -7998,7 +8135,9 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 34);
+        // 34 original fixture routes + 4 from the `legacy` app (FBV decorators,
+        // legacy `url()`, and `urlpatterns +=`).
+        assert_eq!(document.routes.len(), 38);
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::Django
                 && route.method == "ANY"
