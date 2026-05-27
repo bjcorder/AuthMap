@@ -62,6 +62,7 @@ emitting them.
 | `nextjs_external_reexport_unresolved` | Next.js route handler re-export target could not be resolved or analyzed statically |
 | `nextjs_nested_app_segment` | Next.js route file path contains nested `app` segments |
 | `nextjs_unusual_route_segment` | Next.js route segment uses an unusual routing convention |
+| `nextjs_server_action_not_analyzed` | Next.js Server Action file (`'use server'`) was seen but not analyzed for routes or authorization |
 | `report.render_failed` | Report rendering failed |
 | `report.write_failed` | Report writing failed |
 | `policy.conflicting_evidence` | Explicit public and authorization-required evidence both appear on a route |

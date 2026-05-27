@@ -141,6 +141,13 @@ try to bypass controls. Dynamic dispatch, reflection, dependency injection,
 metaprogramming, generated code, unsupported frameworks, and code outside the
 scan target can produce incomplete or uncertain evidence.
 
+Per-framework detection scope and current limitations are listed in
+[PARSERS_AND_ADAPTERS.md](PARSERS_AND_ADAPTERS.md). Two behaviors worth noting:
+a route that carries both an explicit-public marker and guard evidence is
+classified `unknown_or_dynamic` (review required) rather than `public_declared`;
+and tRPC and GraphQL routes are inventoried with their declared protection but
+are not yet linked to reachable data mutations.
+
 Reports should be read as authorization inventory and review prioritization.
 `high` and `review_required` risk values, drift findings, SARIF alerts, tenant
 questions, and policy uncertainty are not confirmed vulnerabilities until a
