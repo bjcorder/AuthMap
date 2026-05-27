@@ -2238,7 +2238,9 @@ fn extract_prisma_mutations(parsed: &ParsedFile, root: Node<'_>) -> Vec<Mutation
             && let Some(function) = node.child_by_field_name("function")
         {
             let function_text = parsed.text_for(function).unwrap_or_default();
-            if let Some(mutation) = prisma_mutation_from_call(parsed, node, function_text) {
+            if let Some(mutation) = prisma_mutation_from_call(parsed, node, function_text)
+                .or_else(|| js_orm_mutation_from_call(parsed, node, function_text))
+            {
                 mutations.push(mutation);
             }
         }
@@ -2246,6 +2248,122 @@ fn extract_prisma_mutations(parsed: &ParsedFile, root: Node<'_>) -> Vec<Mutation
         stack.extend(node.children(&mut cursor));
     }
     mutations
+}
+
+/// JavaScript identifiers that are capitalized but are not ORM models, to keep
+/// the `Model.create(...)` heuristic from firing on built-ins like `Object.create`.
+const JS_NON_MODEL_RECEIVERS: &[&str] = &[
+    "Object", "Array", "Promise", "Map", "WeakMap", "Set", "WeakSet", "Date", "RegExp", "Proxy",
+    "Reflect", "JSON", "Math", "Number", "String", "Boolean", "Symbol", "BigInt", "Error",
+    "Buffer", "Response",
+];
+
+/// Detects mutations from the common non-Prisma Node ORMs (Sequelize, TypeORM,
+/// Mongoose). Conservative: only distinctive method names, repository-gated
+/// TypeORM calls, and capitalized-model `create/update/destroy` (excluding JS
+/// built-ins) are reported. Knex query-builder chains are not yet handled.
+fn js_orm_mutation_from_call(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    function_text: &str,
+) -> Option<Mutation> {
+    let parts = function_text.split('.').collect::<Vec<_>>();
+    if parts.len() < 2 {
+        return None;
+    }
+    let method = parts.last().copied().unwrap_or_default();
+    let receiver = terminal_symbol_name(parts[parts.len() - 2]);
+    let span = parsed.span_for(call);
+
+    // Distinctive Mongoose document/query methods.
+    let mongoose = match method {
+        "findByIdAndUpdate" | "findOneAndUpdate" | "updateOne" | "updateMany" | "replaceOne" => {
+            Some(MutationOperation::Update)
+        }
+        "findByIdAndDelete" | "findByIdAndRemove" | "findOneAndDelete" | "deleteOne"
+        | "deleteMany" => Some(MutationOperation::Delete),
+        _ => None,
+    };
+    if let Some(operation) = mongoose {
+        return Some(orm_mutation(
+            operation,
+            "mongoose",
+            Some(receiver),
+            span,
+            Confidence::Medium,
+        ));
+    }
+
+    // Sequelize-distinctive methods.
+    match method {
+        "bulkCreate" => {
+            return Some(orm_mutation(
+                MutationOperation::Create,
+                "sequelize",
+                Some(receiver),
+                span,
+                Confidence::Medium,
+            ));
+        }
+        "upsert" => {
+            return Some(raw_or_unknown_mutation(
+                MutationOperation::UnknownMutation,
+                "sequelize",
+                Some(receiver),
+                span,
+                "unknown_operation",
+                "Sequelize upsert may create or update data and requires review",
+            ));
+        }
+        _ => {}
+    }
+
+    // TypeORM repository methods (receiver looks like a repository).
+    let receiver_lower = receiver.to_ascii_lowercase();
+    if receiver_lower.contains("repo") || receiver_lower.ends_with("repository") {
+        let operation = match method {
+            "save" | "insert" => Some(MutationOperation::Create),
+            "update" => Some(MutationOperation::Update),
+            "delete" | "remove" | "softDelete" | "softRemove" => Some(MutationOperation::Delete),
+            _ => None,
+        };
+        if let Some(operation) = operation {
+            return Some(orm_mutation(
+                operation,
+                "typeorm",
+                Some(receiver),
+                span,
+                Confidence::Medium,
+            ));
+        }
+    }
+
+    // Capitalized model static methods (Sequelize/Mongoose/TypeORM), excluding
+    // JS built-ins. ORM is ambiguous, so report at low confidence for review.
+    let is_model = receiver
+        .chars()
+        .next()
+        .is_some_and(|ch| ch.is_ascii_uppercase())
+        && !JS_NON_MODEL_RECEIVERS.contains(&receiver.as_str());
+    if is_model {
+        let operation = match method {
+            "create" => Some(MutationOperation::Create),
+            "update" => Some(MutationOperation::Update),
+            "destroy" => Some(MutationOperation::Delete),
+            _ => None,
+        };
+        if let Some(operation) = operation {
+            return Some(orm_mutation(
+                operation,
+                "orm",
+                Some(receiver),
+                span,
+                Confidence::Low,
+            ));
+        }
+    }
+
+    None
 }
 
 fn prisma_mutation_from_call(
@@ -2258,8 +2376,12 @@ fn prisma_mutation_from_call(
         return None;
     }
     let method = parts.last().copied().unwrap_or_default();
-    if matches!(method, "$executeRaw" | "$executeRawUnsafe" | "$queryRaw") {
-        if method == "$queryRaw" && !call_has_mutating_sql(parsed, call) {
+    if matches!(
+        method,
+        "$executeRaw" | "$executeRawUnsafe" | "$queryRaw" | "$queryRawUnsafe"
+    ) {
+        if matches!(method, "$queryRaw" | "$queryRawUnsafe") && !call_has_mutating_sql(parsed, call)
+        {
             return None;
         }
         return Some(raw_or_unknown_mutation(
@@ -4060,6 +4182,11 @@ fn builtin_rules() -> Vec<EvidenceRuleSpec> {
                 "authMiddleware",
                 "updateSession",
                 "isAuthenticated",
+                // Passport / common Node auth middleware.
+                "authenticate",
+                "ensureAuthenticated",
+                "ensureLoggedIn",
+                "isLoggedIn",
             ],
             &["auth", "session", "authenticated", "logged"],
         ),
@@ -8539,8 +8666,9 @@ sensitivity:
 
         assert_eq!(document.routes.len(), 0);
         assert_eq!(document.links.len(), 0);
-        // 21 original + SQLAlchemy insert()-via-execute and merge() (AsyncSession).
-        assert_eq!(document.mutations.len(), 23);
+        // 21 original + 2 SQLAlchemy (insert-via-execute, merge) + 8 Node ORM
+        // (Sequelize/Mongoose/TypeORM).
+        assert_eq!(document.mutations.len(), 31);
 
         assert_mutation(
             &document.mutations,
@@ -8624,6 +8752,43 @@ sensitivity:
             "sqlalchemy",
             MutationOperation::Update,
             None,
+            Confidence::Medium,
+        );
+
+        // Node ORMs: Sequelize, Mongoose, TypeORM.
+        assert_mutation(
+            &document.mutations,
+            "sequelize",
+            MutationOperation::Create,
+            Some("User"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "mongoose",
+            MutationOperation::Update,
+            Some("Profile"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "mongoose",
+            MutationOperation::Delete,
+            Some("Session"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "typeorm",
+            MutationOperation::Create,
+            Some("repo"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "typeorm",
+            MutationOperation::Delete,
+            Some("repository"),
             Confidence::Medium,
         );
 

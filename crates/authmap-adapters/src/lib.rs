@@ -115,10 +115,10 @@ impl FrameworkAdapter for TrpcAdapter {
                 routes.push(Route {
                     id: String::new(),
                     framework: Framework::Trpc,
-                    method: if operation.kind == "mutation" {
-                        "POST"
-                    } else {
-                        "GET"
+                    method: match operation.kind {
+                        "mutation" => "POST",
+                        "subscription" => "WS",
+                        _ => "GET",
                     }
                     .to_string(),
                     path,
@@ -231,7 +231,16 @@ fn trpc_procedure_from_line(line: &str) -> Option<(String, String)> {
             return Some((name.to_string(), procedure.to_string()));
         }
     }
-    None
+    // Fallback: any `*Procedure`-named builder (project-specific procedures such
+    // as `sessionProcedure` or `orgProcedure`). The caller still requires a
+    // `.query`/`.mutation`/`.subscription` nearby, which bounds false positives.
+    trpc_custom_procedure_token(rest).map(|procedure| (name.to_string(), procedure))
+}
+
+fn trpc_custom_procedure_token(rest: &str) -> Option<String> {
+    rest.split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
+        .find(|token| !token.is_empty() && (token.ends_with("Procedure") || *token == "procedure"))
+        .map(str::to_string)
 }
 
 #[derive(Clone, Debug)]
@@ -280,6 +289,8 @@ fn trpc_operation_kind(line: &str) -> Option<&'static str> {
         Some("mutation")
     } else if line.contains(".query") {
         Some("query")
+    } else if line.contains(".subscription") {
+        Some("subscription")
     } else {
         None
     }
@@ -4474,6 +4485,42 @@ def widgets_head():
                 .routes
                 .iter()
                 .any(|route| route.method == "HEAD" && route.path == "/widgets")
+        );
+    }
+
+    #[test]
+    fn discovers_trpc_custom_procedures_and_subscriptions() {
+        let parsed = parse_sources(&[(
+            "userRouter.ts".to_string(),
+            Language::TypeScript,
+            r#"
+import { initTRPC } from "@trpc/server";
+
+const t = initTRPC.create();
+const sessionProcedure = t.procedure.use(isAuthed);
+
+export const userRouter = router({
+  getProfile: sessionProcedure.query(() => ({})),
+  onUpdate: protectedProcedure.subscription(() => observable()),
+});
+"#
+            .to_string(),
+        )]);
+        let output = TrpcAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.path.ends_with("/getProfile") && route.method == "GET"),
+            "custom *Procedure should still be discovered"
+        );
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.path.ends_with("/onUpdate") && route.method == "WS"),
+            "subscription operations should be discovered as WS"
         );
     }
 
