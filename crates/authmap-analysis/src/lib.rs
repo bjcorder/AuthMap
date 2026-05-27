@@ -2434,7 +2434,7 @@ fn collect_python_session_symbols(parsed: &ParsedFile, function: Node<'_>) -> BT
         };
         if annotation
             .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
-            .any(|part| part == "Session")
+            .any(|part| matches!(part, "Session" | "AsyncSession"))
         {
             let symbol = clean_symbol(name.trim_start_matches('*'));
             if !symbol.is_empty() {
@@ -2567,6 +2567,26 @@ fn sqlalchemy_call_mutation(
                 Confidence::Medium,
             ))
         }
+        text if text.ends_with(".merge")
+            && is_sqlalchemy_session_receiver(&receiver, session_symbols) =>
+        {
+            // session.merge() is an upsert (INSERT or UPDATE).
+            let resource = call_argument_nodes(call)
+                .first()
+                .and_then(|arg| parsed.text_for(*arg))
+                .and_then(|text| {
+                    model_by_var
+                        .get(text.trim())
+                        .map(|binding| binding_model(binding))
+                });
+            Some(orm_mutation(
+                MutationOperation::Update,
+                "sqlalchemy",
+                resource,
+                parsed.span_for(call),
+                Confidence::Medium,
+            ))
+        }
         text if text.ends_with(".execute")
             && is_sqlalchemy_session_receiver(&receiver, session_symbols) =>
         {
@@ -2596,6 +2616,15 @@ fn is_sqlalchemy_session_receiver(receiver: &str, session_symbols: &BTreeSet<Str
 fn sqlalchemy_execute_mutation(parsed: &ParsedFile, call: Node<'_>) -> Option<Mutation> {
     let first_arg = call_argument_nodes(call).into_iter().next()?;
     let arg_text = parsed.text_for(first_arg).unwrap_or_default().trim();
+    if let Some(resource) = call_resource(arg_text, "insert") {
+        return Some(orm_mutation(
+            MutationOperation::Create,
+            "sqlalchemy",
+            Some(resource),
+            parsed.span_for(call),
+            Confidence::High,
+        ));
+    }
     if let Some(resource) = call_resource(arg_text, "update") {
         return Some(orm_mutation(
             MutationOperation::Update,
@@ -6183,7 +6212,10 @@ fn terminal_symbol_name(text: &str) -> String {
 }
 
 fn is_fastapi_depends(function_text: &str) -> bool {
-    terminal_symbol_name(function_text) == "Depends"
+    matches!(
+        terminal_symbol_name(function_text).as_str(),
+        "Depends" | "Security"
+    )
 }
 
 fn is_framework_route_call(function_text: &str) -> bool {
@@ -8507,7 +8539,8 @@ sensitivity:
 
         assert_eq!(document.routes.len(), 0);
         assert_eq!(document.links.len(), 0);
-        assert_eq!(document.mutations.len(), 21);
+        // 21 original + SQLAlchemy insert()-via-execute and merge() (AsyncSession).
+        assert_eq!(document.mutations.len(), 23);
 
         assert_mutation(
             &document.mutations,
@@ -8576,6 +8609,22 @@ sensitivity:
             "sqlalchemy",
             MutationOperation::RawSqlMutation,
             "raw_sql",
+        );
+        // session.execute(insert(User)...) is detected as a Create.
+        assert_mutation(
+            &document.mutations,
+            "sqlalchemy",
+            MutationOperation::Create,
+            Some("User"),
+            Confidence::High,
+        );
+        // db_conn.merge(token) where db_conn: AsyncSession is an upsert (Update).
+        assert_mutation(
+            &document.mutations,
+            "sqlalchemy",
+            MutationOperation::Update,
+            None,
+            Confidence::Medium,
         );
 
         assert_mutation(

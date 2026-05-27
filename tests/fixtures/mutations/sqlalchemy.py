@@ -1,4 +1,5 @@
-from sqlalchemy import delete, text, update
+from sqlalchemy import delete, insert, text, update
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.models import SessionToken, User
@@ -47,3 +48,13 @@ def raw_delete(session: Session, user_id: str):
 
 def read_only(session: Session, user_id: str):
     return session.execute(text("select * from users where id = :user_id"), {"user_id": user_id})
+
+
+def create_with_execute(session: Session, email: str):
+    session.execute(insert(User).values(email=email))
+    session.commit()
+
+
+async def upsert_token(db_conn: AsyncSession, token: SessionToken):
+    db_conn.merge(token)
+    await db_conn.commit()

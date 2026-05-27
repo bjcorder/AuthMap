@@ -1874,6 +1874,7 @@ fn methods_for_decorator(
         "get" | "post" | "put" | "patch" | "delete" | "options" | "head" => {
             Some(vec![decorator_name.to_uppercase()])
         }
+        "websocket" => Some(vec!["WS".to_string()]),
         "api_route" => {
             let methods = keyword_string_list(parsed, call, "methods");
             if methods.is_empty() {
@@ -2222,7 +2223,10 @@ fn fastapi_dependency_symbols(parsed: &ParsedFile, node: Node<'_>) -> Vec<Symbol
     while let Some(current) = stack.pop() {
         if current.kind() == "call"
             && let Some(function) = current.child_by_field_name("function")
-            && terminal_name(parsed, function).as_deref() == Some("Depends")
+            && matches!(
+                terminal_name(parsed, function).as_deref(),
+                Some("Depends" | "Security")
+            )
             && let Some(symbol) = first_python_symbol_argument(parsed, current)
         {
             symbols.push(symbol);
@@ -4470,6 +4474,47 @@ def widgets_head():
                 .routes
                 .iter()
                 .any(|route| route.method == "HEAD" && route.path == "/widgets")
+        );
+    }
+
+    #[test]
+    fn recognizes_fastapi_security_dependency_and_websocket() {
+        let parsed = parse_sources(&[(
+            "app.py".to_string(),
+            Language::Python,
+            r#"
+from fastapi import FastAPI, Security, WebSocket
+from fastapi.security import HTTPBearer
+
+app = FastAPI()
+bearer = HTTPBearer()
+
+@app.get("/items", dependencies=[Security(verify_token, scopes=["items:read"])])
+def list_items():
+    return []
+
+@app.websocket("/ws")
+async def ws_endpoint(websocket: WebSocket):
+    await websocket.accept()
+"#
+            .to_string(),
+        )]);
+        let output = FastApiAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        let items = route(&output, "GET", "/items");
+        assert!(
+            items
+                .middleware
+                .iter()
+                .any(|dependency| dependency.name == "verify_token"),
+            "Security(...) dependency should be captured like Depends(...)"
+        );
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.method == "WS" && route.path == "/ws"),
+            "@app.websocket route should be discovered"
         );
     }
 
