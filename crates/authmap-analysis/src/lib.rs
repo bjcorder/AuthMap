@@ -984,6 +984,9 @@ fn enabled_frameworks_for_sources(parsed_files: &[ParsedFile]) -> Vec<String> {
                 if js_has_trpc_route_indicators(&parsed.text) {
                     frameworks.insert("trpc".to_string());
                 }
+                if js_has_graphql_route_indicators(&parsed.text) {
+                    frameworks.insert("graphql".to_string());
+                }
             }
             authmap_core::Language::Unknown => {}
         }
@@ -1055,6 +1058,20 @@ fn python_has_graphql_route_indicators(text: &str) -> bool {
             "DeprecatedModelMutation",
         ],
     )
+}
+
+fn js_has_graphql_route_indicators(text: &str) -> bool {
+    contains_any(
+        text,
+        &[
+            "@Resolver",
+            "type-graphql",
+            "@Mutation(",
+            "@Query(",
+            "makeExecutableSchema",
+            "ApolloServer",
+        ],
+    ) || (text.contains("resolvers") && (text.contains("Query:") || text.contains("Mutation:")))
 }
 
 fn js_has_express_route_indicators(text: &str) -> bool {
@@ -4534,6 +4551,12 @@ fn extract_graphql_route_evidence(route: &authmap_core::Route) -> Vec<Evidence> 
     }
     let (evidence_type, mechanism) = if graphql_permissions_explicitly_public(permissions) {
         (EvidenceType::ExplicitPublic, "graphql_public_permissions")
+    } else if matches!(
+        permissions.trim().to_ascii_lowercase().as_str(),
+        "authenticated" | "authorized"
+    ) {
+        // type-graphql bare @Authorized() — authentication, no specific role.
+        (EvidenceType::Authn, "graphql_authorized")
     } else {
         (EvidenceType::PermissionCheck, "graphql_permissions")
     };
@@ -8656,6 +8679,20 @@ sensitivity:
                 || route.path == "/graphql/baseMutation"
                 || route.path == "/graphql/modelDeleteMutation"
         }));
+
+        // JS/TS GraphQL: type-graphql @Authorized mutation and a resolver-map field.
+        assert!(graphql_document.coverage.iter().any(|coverage| {
+            coverage.class == CoverageClass::PermissionGuarded
+                && graphql_document.routes.iter().any(|route| {
+                    route.id == coverage.route_id && route.path == "/graphql/deleteWidget"
+                })
+        }));
+        assert!(
+            graphql_document
+                .routes
+                .iter()
+                .any(|route| { route.method == "QUERY" && route.path == "/graphql/publicFeed" })
+        );
     }
 
     #[test]

@@ -187,6 +187,12 @@ impl FrameworkAdapter for GraphqlAdapter {
                 }
             }
         }
+        for parsed in parsed_files
+            .iter()
+            .filter(|file| is_js_like(file.language) && graphql_js_file_indicators(&file.text))
+        {
+            candidates.extend(graphql_js_routes(parsed));
+        }
         let mut routes = dedup_graphql_routes(candidates);
         routes.sort_by_key(route_sort_key);
         for (index, route) in routes.iter_mut().enumerate() {
@@ -564,10 +570,10 @@ fn graphql_route(
     Route {
         id: String::new(),
         framework: Framework::Graphql,
-        method: if operation_kind == "mutation" {
-            "MUTATION"
-        } else {
-            "QUERY"
+        method: match operation_kind {
+            "mutation" => "MUTATION",
+            "subscription" => "SUBSCRIPTION",
+            _ => "QUERY",
         }
         .to_string(),
         path: format!("/graphql/{operation_name}"),
@@ -591,6 +597,182 @@ fn graphql_route(
         notes: Vec::new(),
         extensions,
     }
+}
+
+fn graphql_js_file_indicators(text: &str) -> bool {
+    text.contains("@Resolver")
+        || text.contains("type-graphql")
+        || text.contains("@Mutation(")
+        || text.contains("@Query(")
+        || (text.contains("resolvers") && (text.contains("Query:") || text.contains("Mutation:")))
+        || text.contains("makeExecutableSchema")
+        || text.contains("ApolloServer")
+}
+
+fn graphql_js_routes(parsed: &ParsedFile) -> Vec<Route> {
+    let mut routes = graphql_typegraphql_routes(parsed);
+    routes.extend(graphql_resolver_map_routes(parsed));
+    routes
+}
+
+/// type-graphql: `@Query`/`@Mutation`/`@Subscription`-decorated resolver methods,
+/// with `@Authorized(...)` providing role/permission or authn evidence.
+fn graphql_typegraphql_routes(parsed: &ParsedFile) -> Vec<Route> {
+    let mut routes = Vec::new();
+    let mut pending: Vec<String> = Vec::new();
+    for (index, raw) in parsed.text.lines().enumerate() {
+        let line = raw.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if line.starts_with('@') {
+            pending.push(line.to_string());
+            continue;
+        }
+        let kind = pending.iter().find_map(|decorator| {
+            if decorator.starts_with("@Query") {
+                Some("query")
+            } else if decorator.starts_with("@Mutation") {
+                Some("mutation")
+            } else if decorator.starts_with("@Subscription") {
+                Some("subscription")
+            } else {
+                None
+            }
+        });
+        if let Some(kind) = kind
+            && let Some(method) = js_method_name_from_line(line)
+        {
+            let permissions = pending
+                .iter()
+                .find(|decorator| decorator.starts_with("@Authorized"))
+                .map(|decorator| graphql_authorized_permissions(decorator));
+            routes.push(graphql_route(
+                parsed,
+                index + 1,
+                kind,
+                method.clone(),
+                None,
+                Some(method.clone()),
+                permissions,
+                &method,
+                "graphql_typegraphql_resolver",
+            ));
+        }
+        pending.clear();
+    }
+    routes
+}
+
+fn js_method_name_from_line(line: &str) -> Option<String> {
+    let before = line.split('(').next()?;
+    let name = before.split_whitespace().last()?.trim_start_matches('*');
+    let first = name.chars().next()?;
+    if !first.is_ascii_alphabetic() && first != '_' {
+        return None;
+    }
+    if matches!(
+        name,
+        "if" | "for" | "while" | "switch" | "catch" | "return" | "function" | "constructor"
+    ) {
+        return None;
+    }
+    Some(name.to_string())
+}
+
+fn graphql_authorized_permissions(decorator: &str) -> String {
+    let args = decorator
+        .split_once('(')
+        .and_then(|(_, rest)| rest.rsplit_once(')').map(|(inner, _)| inner))
+        .unwrap_or("")
+        .trim();
+    if args.is_empty() {
+        // bare @Authorized() — authentication required, no specific role.
+        "authenticated".to_string()
+    } else {
+        args.to_string()
+    }
+}
+
+/// Resolver maps: `const resolvers = { Query: {...}, Mutation: {...} }`. Each
+/// field becomes a route (inventory). Field-level auth inside resolver bodies is
+/// not yet classified here.
+fn graphql_resolver_map_routes(parsed: &ParsedFile) -> Vec<Route> {
+    let Some(root) = parsed.root_node() else {
+        return Vec::new();
+    };
+    let mut routes = Vec::new();
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "pair"
+            && let Some(key) = node.child_by_field_name("key")
+            && let Some(kind) = parsed
+                .text_for(key)
+                .map(|text| text.trim_matches(['"', '\'', '`', ' ']))
+                .and_then(graphql_root_type_kind)
+            && let Some(value) = node.child_by_field_name("value")
+            && value.kind() == "object"
+        {
+            let mut cursor = value.walk();
+            for field in value.children(&mut cursor).filter(|child| child.is_named()) {
+                let Some(name) = graphql_resolver_field_name(parsed, field) else {
+                    continue;
+                };
+                if name.is_empty() || !is_plain_identifier(&name) {
+                    continue;
+                }
+                let line = parsed.span_for(field).line as usize;
+                routes.push(graphql_route(
+                    parsed,
+                    line,
+                    kind,
+                    name.clone(),
+                    None,
+                    Some(name.clone()),
+                    None,
+                    &name,
+                    "graphql_resolver_map",
+                ));
+            }
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    routes
+}
+
+fn graphql_root_type_kind(key: &str) -> Option<&'static str> {
+    match key {
+        "Query" => Some("query"),
+        "Mutation" => Some("mutation"),
+        "Subscription" => Some("subscription"),
+        _ => None,
+    }
+}
+
+fn graphql_resolver_field_name(parsed: &ParsedFile, field: Node<'_>) -> Option<String> {
+    match field.kind() {
+        "pair" => field
+            .child_by_field_name("key")
+            .and_then(|key| parsed.text_for(key))
+            .map(|text| text.trim_matches(['"', '\'', '`', ' ']).to_string()),
+        "method_definition" => field
+            .child_by_field_name("name")
+            .and_then(|name| parsed.text_for(name))
+            .map(str::to_string),
+        "shorthand_property_identifier" => parsed.text_for(field).map(str::to_string),
+        _ => None,
+    }
+}
+
+fn is_plain_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars
+        .next()
+        .is_some_and(|ch| ch.is_ascii_alphabetic() || ch == '_')
+        && name
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
 
 fn dedup_graphql_routes(routes: Vec<Route>) -> Vec<Route> {
@@ -4485,6 +4667,84 @@ def widgets_head():
                 .routes
                 .iter()
                 .any(|route| route.method == "HEAD" && route.path == "/widgets")
+        );
+    }
+
+    #[test]
+    fn discovers_js_graphql_typegraphql_and_resolver_maps() {
+        let parsed = parse_sources(&[
+            (
+                "schema.ts".to_string(),
+                Language::TypeScript,
+                r#"
+import { Resolver, Query, Mutation, Authorized, Arg } from "type-graphql";
+
+@Resolver()
+export class UserResolver {
+  @Query(() => [User])
+  users() {
+    return [];
+  }
+
+  @Authorized(["admin"])
+  @Mutation(() => User)
+  async createUser(@Arg("data") data: CreateUserInput) {
+    return {};
+  }
+}
+"#
+                .to_string(),
+            ),
+            (
+                "resolvers.ts".to_string(),
+                Language::TypeScript,
+                r#"
+export const resolvers = {
+  Query: {
+    me: (_parent, _args, ctx) => ctx.user,
+  },
+  Mutation: {
+    deleteAccount(_parent, args, ctx) {
+      return doDelete(args.id);
+    },
+  },
+};
+"#
+                .to_string(),
+            ),
+        ]);
+        let output = GraphqlAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        let has = |method: &str, name: &str| {
+            output
+                .routes
+                .iter()
+                .any(|route| route.method == method && route.name.as_deref() == Some(name))
+        };
+        assert!(has("QUERY", "users"), "type-graphql @Query method");
+        assert!(
+            has("MUTATION", "createUser"),
+            "type-graphql @Mutation method"
+        );
+        assert!(has("QUERY", "me"), "resolver-map Query field");
+        assert!(
+            has("MUTATION", "deleteAccount"),
+            "resolver-map Mutation field"
+        );
+
+        let create = output
+            .routes
+            .iter()
+            .find(|route| route.name.as_deref() == Some("createUser"))
+            .expect("createUser route");
+        let permissions = create
+            .extensions
+            .get("authmap.graphql")
+            .and_then(|value| value.get("permissions"))
+            .and_then(serde_json::Value::as_str);
+        assert!(
+            permissions.is_some_and(|value| value.contains("admin")),
+            "@Authorized([\"admin\"]) should populate permissions"
         );
     }
 
