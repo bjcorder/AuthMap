@@ -144,14 +144,22 @@ warnings do not fail the action.
 Enforce mode writes each requested report before returning exit code `20` when
 the completed AuthMap document contains enforce-blocking diagnostics. With a
 baseline, enforce mode also returns `20` when drift matches the effective
-`fail-on` policy. Other CLI errors, such as invalid inputs, unreadable targets,
-or missing baselines, fail with the CLI exit code.
+`fail-on` policy. Supported fail-on categories include
+`added_high_risk_route`, `added_review_required_route`, `auth_downgrade`,
+`new_linked_mutation`, `removed_authorization_evidence`, and
+`policy_decision_change`. Other errors, such as invalid action inputs,
+unreadable targets, missing baselines, or CLI scan/report failures, fail with a
+non-zero exit code.
 
 Path-like action inputs (`target`, `config`, `baseline`, and
 `output-directory`) are workspace-relative only. Absolute paths, parent
 directory components, empty path components, control characters, and
-`output-directory: .` are rejected before AuthMap runs. `baseline-ref` must be a
-git ref, tag, or commit SHA without whitespace, control characters, or a leading
-`-`. The baseline must be an existing AuthMap JSON document; create one with
+`output-directory: .` are rejected before AuthMap runs. Worktree-backed read
+paths also reject symlink path components and must resolve inside
+`GITHUB_WORKSPACE`; when `baseline-ref` or pull request base SHA context is
+available, the baseline is read from that trusted git object instead of from the
+pull request worktree. `baseline-ref` must be a git ref, tag, or commit SHA
+without whitespace, control characters, or a leading `-`. The baseline must be
+an existing AuthMap JSON document; create one with
 `authmap baseline create . --output authmap.baseline.json` and commit or restore
 it on the trusted baseline ref before the action runs.

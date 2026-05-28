@@ -98,7 +98,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-adapters"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "authmap-core",
  "authmap-parsers",
@@ -109,7 +109,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-analysis"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "authmap-adapters",
  "authmap-config",
@@ -127,7 +127,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-cli"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "authmap-analysis",
  "authmap-config",
@@ -144,7 +144,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-config"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "authmap-core",
  "serde",
@@ -154,7 +154,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-core"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "jsonschema",
  "serde",
@@ -163,7 +163,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-discovery"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "authmap-config",
  "authmap-core",
@@ -173,7 +173,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-parsers"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "authmap-core",
  "rayon",
@@ -186,7 +186,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-report"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "authmap-analysis",
  "authmap-config",
@@ -200,7 +200,7 @@ dependencies = [
 
 [[package]]
 name = "authmap-testkit"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "authmap-analysis",
  "authmap-config",
@@ -689,9 +689,9 @@ dependencies = [
 
 [[package]]
 name = "jsonschema"
-version = "0.46.4"
+version = "0.46.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc59d2432e047d6090ba1d83c782d0128bd6203857978218f5614dbd3287281f"
+checksum = "6a5fe5206f06e589caf25e79fc05ccdf91fca745685fe9fe1a13bbdfb479a631"
 dependencies = [
  "ahash",
  "bytecount",
@@ -1029,9 +1029,9 @@ dependencies = [
 
 [[package]]
 name = "referencing"
-version = "0.46.4"
+version = "0.46.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb674900ca31acd75c4aaf63f48e43e719631c0539ea5a9e64163d1296bcb730"
+checksum = "69e4e17ef386c5383591d07623d3de49cbc601156e7582973e6db98d66a57de2"
 dependencies = [
  "ahash",
  "fluent-uri",
@@ -1151,9 +1151,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.149"
+version = "1.0.150"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83fc039473c5595ace860d8c4fafa220ff474b3fc6bfdb4293327f1a37e94d86"
+checksum = "e8014e44b4736ed0538adeecded0fce2a272f22dc9578a7eb6b2d9993c74cfb9"
 dependencies = [
  "indexmap",
  "itoa",

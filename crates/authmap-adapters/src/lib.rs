@@ -115,10 +115,10 @@ impl FrameworkAdapter for TrpcAdapter {
                 routes.push(Route {
                     id: String::new(),
                     framework: Framework::Trpc,
-                    method: if operation.kind == "mutation" {
-                        "POST"
-                    } else {
-                        "GET"
+                    method: match operation.kind {
+                        "mutation" => "POST",
+                        "subscription" => "WS",
+                        _ => "GET",
                     }
                     .to_string(),
                     path,
@@ -187,6 +187,12 @@ impl FrameworkAdapter for GraphqlAdapter {
                 }
             }
         }
+        for parsed in parsed_files
+            .iter()
+            .filter(|file| is_js_like(file.language) && graphql_js_file_indicators(&file.text))
+        {
+            candidates.extend(graphql_js_routes(parsed));
+        }
         let mut routes = dedup_graphql_routes(candidates);
         routes.sort_by_key(route_sort_key);
         for (index, route) in routes.iter_mut().enumerate() {
@@ -231,7 +237,16 @@ fn trpc_procedure_from_line(line: &str) -> Option<(String, String)> {
             return Some((name.to_string(), procedure.to_string()));
         }
     }
-    None
+    // Fallback: any `*Procedure`-named builder (project-specific procedures such
+    // as `sessionProcedure` or `orgProcedure`). The caller still requires a
+    // `.query`/`.mutation`/`.subscription` nearby, which bounds false positives.
+    trpc_custom_procedure_token(rest).map(|procedure| (name.to_string(), procedure))
+}
+
+fn trpc_custom_procedure_token(rest: &str) -> Option<String> {
+    rest.split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
+        .find(|token| !token.is_empty() && (token.ends_with("Procedure") || *token == "procedure"))
+        .map(str::to_string)
 }
 
 #[derive(Clone, Debug)]
@@ -280,6 +295,8 @@ fn trpc_operation_kind(line: &str) -> Option<&'static str> {
         Some("mutation")
     } else if line.contains(".query") {
         Some("query")
+    } else if line.contains(".subscription") {
+        Some("subscription")
     } else {
         None
     }
@@ -553,10 +570,10 @@ fn graphql_route(
     Route {
         id: String::new(),
         framework: Framework::Graphql,
-        method: if operation_kind == "mutation" {
-            "MUTATION"
-        } else {
-            "QUERY"
+        method: match operation_kind {
+            "mutation" => "MUTATION",
+            "subscription" => "SUBSCRIPTION",
+            _ => "QUERY",
         }
         .to_string(),
         path: format!("/graphql/{operation_name}"),
@@ -580,6 +597,182 @@ fn graphql_route(
         notes: Vec::new(),
         extensions,
     }
+}
+
+fn graphql_js_file_indicators(text: &str) -> bool {
+    text.contains("@Resolver")
+        || text.contains("type-graphql")
+        || text.contains("@Mutation(")
+        || text.contains("@Query(")
+        || (text.contains("resolvers") && (text.contains("Query:") || text.contains("Mutation:")))
+        || text.contains("makeExecutableSchema")
+        || text.contains("ApolloServer")
+}
+
+fn graphql_js_routes(parsed: &ParsedFile) -> Vec<Route> {
+    let mut routes = graphql_typegraphql_routes(parsed);
+    routes.extend(graphql_resolver_map_routes(parsed));
+    routes
+}
+
+/// type-graphql: `@Query`/`@Mutation`/`@Subscription`-decorated resolver methods,
+/// with `@Authorized(...)` providing role/permission or authn evidence.
+fn graphql_typegraphql_routes(parsed: &ParsedFile) -> Vec<Route> {
+    let mut routes = Vec::new();
+    let mut pending: Vec<String> = Vec::new();
+    for (index, raw) in parsed.text.lines().enumerate() {
+        let line = raw.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if line.starts_with('@') {
+            pending.push(line.to_string());
+            continue;
+        }
+        let kind = pending.iter().find_map(|decorator| {
+            if decorator.starts_with("@Query") {
+                Some("query")
+            } else if decorator.starts_with("@Mutation") {
+                Some("mutation")
+            } else if decorator.starts_with("@Subscription") {
+                Some("subscription")
+            } else {
+                None
+            }
+        });
+        if let Some(kind) = kind
+            && let Some(method) = js_method_name_from_line(line)
+        {
+            let permissions = pending
+                .iter()
+                .find(|decorator| decorator.starts_with("@Authorized"))
+                .map(|decorator| graphql_authorized_permissions(decorator));
+            routes.push(graphql_route(
+                parsed,
+                index + 1,
+                kind,
+                method.clone(),
+                None,
+                Some(method.clone()),
+                permissions,
+                &method,
+                "graphql_typegraphql_resolver",
+            ));
+        }
+        pending.clear();
+    }
+    routes
+}
+
+fn js_method_name_from_line(line: &str) -> Option<String> {
+    let before = line.split('(').next()?;
+    let name = before.split_whitespace().last()?.trim_start_matches('*');
+    let first = name.chars().next()?;
+    if !first.is_ascii_alphabetic() && first != '_' {
+        return None;
+    }
+    if matches!(
+        name,
+        "if" | "for" | "while" | "switch" | "catch" | "return" | "function" | "constructor"
+    ) {
+        return None;
+    }
+    Some(name.to_string())
+}
+
+fn graphql_authorized_permissions(decorator: &str) -> String {
+    let args = decorator
+        .split_once('(')
+        .and_then(|(_, rest)| rest.rsplit_once(')').map(|(inner, _)| inner))
+        .unwrap_or("")
+        .trim();
+    if args.is_empty() {
+        // bare @Authorized() — authentication required, no specific role.
+        "authenticated".to_string()
+    } else {
+        args.to_string()
+    }
+}
+
+/// Resolver maps: `const resolvers = { Query: {...}, Mutation: {...} }`. Each
+/// field becomes a route (inventory). Field-level auth inside resolver bodies is
+/// not yet classified here.
+fn graphql_resolver_map_routes(parsed: &ParsedFile) -> Vec<Route> {
+    let Some(root) = parsed.root_node() else {
+        return Vec::new();
+    };
+    let mut routes = Vec::new();
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "pair"
+            && let Some(key) = node.child_by_field_name("key")
+            && let Some(kind) = parsed
+                .text_for(key)
+                .map(|text| text.trim_matches(['"', '\'', '`', ' ']))
+                .and_then(graphql_root_type_kind)
+            && let Some(value) = node.child_by_field_name("value")
+            && value.kind() == "object"
+        {
+            let mut cursor = value.walk();
+            for field in value.children(&mut cursor).filter(|child| child.is_named()) {
+                let Some(name) = graphql_resolver_field_name(parsed, field) else {
+                    continue;
+                };
+                if name.is_empty() || !is_plain_identifier(&name) {
+                    continue;
+                }
+                let line = parsed.span_for(field).line as usize;
+                routes.push(graphql_route(
+                    parsed,
+                    line,
+                    kind,
+                    name.clone(),
+                    None,
+                    Some(name.clone()),
+                    None,
+                    &name,
+                    "graphql_resolver_map",
+                ));
+            }
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    routes
+}
+
+fn graphql_root_type_kind(key: &str) -> Option<&'static str> {
+    match key {
+        "Query" => Some("query"),
+        "Mutation" => Some("mutation"),
+        "Subscription" => Some("subscription"),
+        _ => None,
+    }
+}
+
+fn graphql_resolver_field_name(parsed: &ParsedFile, field: Node<'_>) -> Option<String> {
+    match field.kind() {
+        "pair" => field
+            .child_by_field_name("key")
+            .and_then(|key| parsed.text_for(key))
+            .map(|text| text.trim_matches(['"', '\'', '`', ' ']).to_string()),
+        "method_definition" => field
+            .child_by_field_name("name")
+            .and_then(|name| parsed.text_for(name))
+            .map(str::to_string),
+        "shorthand_property_identifier" => parsed.text_for(field).map(str::to_string),
+        _ => None,
+    }
+}
+
+fn is_plain_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars
+        .next()
+        .is_some_and(|ch| ch.is_ascii_alphabetic() || ch == '_')
+        && name
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
 
 fn dedup_graphql_routes(routes: Vec<Route>) -> Vec<Route> {
@@ -1871,7 +2064,10 @@ fn methods_for_decorator(
     decorator_name: &str,
 ) -> Option<Vec<String>> {
     match decorator_name {
-        "get" | "post" | "put" | "patch" | "delete" => Some(vec![decorator_name.to_uppercase()]),
+        "get" | "post" | "put" | "patch" | "delete" | "options" | "head" => {
+            Some(vec![decorator_name.to_uppercase()])
+        }
+        "websocket" => Some(vec!["WS".to_string()]),
         "api_route" => {
             let methods = keyword_string_list(parsed, call, "methods");
             if methods.is_empty() {
@@ -2220,7 +2416,10 @@ fn fastapi_dependency_symbols(parsed: &ParsedFile, node: Node<'_>) -> Vec<Symbol
     while let Some(current) = stack.pop() {
         if current.kind() == "call"
             && let Some(function) = current.child_by_field_name("function")
-            && terminal_name(parsed, function).as_deref() == Some("Depends")
+            && matches!(
+                terminal_name(parsed, function).as_deref(),
+                Some("Depends" | "Security")
+            )
             && let Some(symbol) = first_python_symbol_argument(parsed, current)
         {
             symbols.push(symbol);
@@ -3448,6 +3647,8 @@ fn express_method(member: &str) -> Option<&'static str> {
         "put" => Some("PUT"),
         "patch" => Some("PATCH"),
         "delete" => Some("DELETE"),
+        "options" => Some("OPTIONS"),
+        "head" => Some("HEAD"),
         _ => None,
     }
 }
@@ -4404,6 +4605,299 @@ app.include_router(router, dependencies=build_runtime_dependencies())
     }
 
     #[test]
+    fn discovers_express_options_and_head_routes() {
+        let parsed = parse_sources(&[(
+            "app.js".to_string(),
+            Language::JavaScript,
+            r#"
+const express = require("express");
+const app = express();
+
+app.options("/widgets", (req, res) => res.sendStatus(204));
+app.head("/widgets", (req, res) => res.sendStatus(200));
+"#
+            .to_string(),
+        )]);
+        let output = ExpressAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.method == "OPTIONS" && route.path == "/widgets")
+        );
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.method == "HEAD" && route.path == "/widgets")
+        );
+    }
+
+    #[test]
+    fn discovers_fastapi_options_and_head_routes() {
+        let parsed = parse_sources(&[(
+            "app.py".to_string(),
+            Language::Python,
+            r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.options("/widgets")
+def widgets_options():
+    return {}
+
+@app.head("/widgets")
+def widgets_head():
+    return {}
+"#
+            .to_string(),
+        )]);
+        let output = FastApiAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.method == "OPTIONS" && route.path == "/widgets")
+        );
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.method == "HEAD" && route.path == "/widgets")
+        );
+    }
+
+    #[test]
+    fn discovers_js_graphql_typegraphql_and_resolver_maps() {
+        let parsed = parse_sources(&[
+            (
+                "schema.ts".to_string(),
+                Language::TypeScript,
+                r#"
+import { Resolver, Query, Mutation, Authorized, Arg } from "type-graphql";
+
+@Resolver()
+export class UserResolver {
+  @Query(() => [User])
+  users() {
+    return [];
+  }
+
+  @Authorized(["admin"])
+  @Mutation(() => User)
+  async createUser(@Arg("data") data: CreateUserInput) {
+    return {};
+  }
+}
+"#
+                .to_string(),
+            ),
+            (
+                "resolvers.ts".to_string(),
+                Language::TypeScript,
+                r#"
+export const resolvers = {
+  Query: {
+    me: (_parent, _args, ctx) => ctx.user,
+  },
+  Mutation: {
+    deleteAccount(_parent, args, ctx) {
+      return doDelete(args.id);
+    },
+  },
+};
+"#
+                .to_string(),
+            ),
+        ]);
+        let output = GraphqlAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        let has = |method: &str, name: &str| {
+            output
+                .routes
+                .iter()
+                .any(|route| route.method == method && route.name.as_deref() == Some(name))
+        };
+        assert!(has("QUERY", "users"), "type-graphql @Query method");
+        assert!(
+            has("MUTATION", "createUser"),
+            "type-graphql @Mutation method"
+        );
+        assert!(has("QUERY", "me"), "resolver-map Query field");
+        assert!(
+            has("MUTATION", "deleteAccount"),
+            "resolver-map Mutation field"
+        );
+
+        let create = output
+            .routes
+            .iter()
+            .find(|route| route.name.as_deref() == Some("createUser"))
+            .expect("createUser route");
+        let permissions = create
+            .extensions
+            .get("authmap.graphql")
+            .and_then(|value| value.get("permissions"))
+            .and_then(serde_json::Value::as_str);
+        assert!(
+            permissions.is_some_and(|value| value.contains("admin")),
+            "@Authorized([\"admin\"]) should populate permissions"
+        );
+    }
+
+    #[test]
+    fn discovers_trpc_custom_procedures_and_subscriptions() {
+        let parsed = parse_sources(&[(
+            "userRouter.ts".to_string(),
+            Language::TypeScript,
+            r#"
+import { initTRPC } from "@trpc/server";
+
+const t = initTRPC.create();
+const sessionProcedure = t.procedure.use(isAuthed);
+
+export const userRouter = router({
+  getProfile: sessionProcedure.query(() => ({})),
+  onUpdate: protectedProcedure.subscription(() => observable()),
+});
+"#
+            .to_string(),
+        )]);
+        let output = TrpcAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.path.ends_with("/getProfile") && route.method == "GET"),
+            "custom *Procedure should still be discovered"
+        );
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.path.ends_with("/onUpdate") && route.method == "WS"),
+            "subscription operations should be discovered as WS"
+        );
+    }
+
+    #[test]
+    fn recognizes_fastapi_security_dependency_and_websocket() {
+        let parsed = parse_sources(&[(
+            "app.py".to_string(),
+            Language::Python,
+            r#"
+from fastapi import FastAPI, Security, WebSocket
+from fastapi.security import HTTPBearer
+
+app = FastAPI()
+bearer = HTTPBearer()
+
+@app.get("/items", dependencies=[Security(verify_token, scopes=["items:read"])])
+def list_items():
+    return []
+
+@app.websocket("/ws")
+async def ws_endpoint(websocket: WebSocket):
+    await websocket.accept()
+"#
+            .to_string(),
+        )]);
+        let output = FastApiAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        let items = route(&output, "GET", "/items");
+        assert!(
+            items
+                .middleware
+                .iter()
+                .any(|dependency| dependency.name == "verify_token"),
+            "Security(...) dependency should be captured like Depends(...)"
+        );
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.method == "WS" && route.path == "/ws"),
+            "@app.websocket route should be discovered"
+        );
+    }
+
+    #[test]
+    fn attaches_nextjs_middleware_to_matched_routes() {
+        let parsed = parse_sources(&[
+            (
+                "middleware.ts".to_string(),
+                Language::TypeScript,
+                "export { auth as middleware } from \"@/auth\";\n\
+                 export const config = { matcher: [\"/dashboard/:path*\"] };\n"
+                    .to_string(),
+            ),
+            (
+                "app/dashboard/route.ts".to_string(),
+                Language::TypeScript,
+                "export async function GET() {\n  return Response.json({ ok: true });\n}\n"
+                    .to_string(),
+            ),
+            (
+                "app/public/route.ts".to_string(),
+                Language::TypeScript,
+                "export async function GET() {\n  return Response.json({ ok: true });\n}\n"
+                    .to_string(),
+            ),
+        ]);
+        let output = NextJsAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        let dashboard = route(&output, "GET", "/dashboard");
+        assert!(
+            dashboard
+                .middleware
+                .iter()
+                .any(|middleware| middleware.name == "auth"),
+            "dashboard route should inherit the matcher-matched middleware"
+        );
+
+        let public_route = route(&output, "GET", "/public");
+        assert!(
+            public_route.middleware.is_empty(),
+            "unmatched route should not inherit middleware"
+        );
+    }
+
+    #[test]
+    fn discovers_nextjs_pages_api_routes() {
+        let parsed = parse_sources(&[
+            (
+                "pages/api/users/[id].ts".to_string(),
+                Language::TypeScript,
+                "import { getServerSession } from \"next-auth\";\n\
+                 export default async function handler(req, res) {\n\
+                 \u{20}\u{20}const session = await getServerSession(req, res);\n\
+                 \u{20}\u{20}if (!session) return res.status(401).end();\n\
+                 \u{20}\u{20}res.json({ id: req.query.id });\n\
+                 }\n"
+                .to_string(),
+            ),
+            (
+                "pages/api/health.ts".to_string(),
+                Language::TypeScript,
+                "export default function handler(req, res) {\n  res.json({ ok: true });\n}\n"
+                    .to_string(),
+            ),
+        ]);
+        let output = NextJsAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        let detail = route(&output, "ANY", "/api/users/[id]");
+        assert_eq!(
+            detail.handler.as_ref().map(|handler| handler.name.as_str()),
+            Some("handler")
+        );
+        assert!(output.routes.iter().any(|r| r.path == "/api/health"));
+    }
+
+    #[test]
     fn discovers_express_routes_middleware_chains_and_mounted_prefixes() {
         let parsed = parse_fixtures(&[
             "express/app.js",
@@ -4414,7 +4908,7 @@ app.include_router(router, dependencies=build_runtime_dependencies())
         ]);
         let output = ExpressAdapter.discover_routes(&parsed, &AdapterContext::default());
 
-        assert_eq!(output.routes.len(), 26);
+        assert_eq!(output.routes.len(), 29);
         assert!(
             output
                 .routes
@@ -4492,7 +4986,19 @@ app.include_router(router, dependencies=build_runtime_dependencies())
                 .as_ref()
                 .and_then(|handler| handler.span.as_ref())
                 .map(|span| span.line),
-            Some(44)
+            Some(48)
+        );
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/public/status")),
+            vec!["publicRoute"]
+        );
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/conflicting")),
+            vec!["publicRoute", "requireAuth"]
+        );
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/unreachable/admin")),
+            vec!["requireAuth"]
         );
 
         let admin_jobs = route(&output, "POST", "/admin/jobs");

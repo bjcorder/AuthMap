@@ -1,0 +1,1401 @@
+{
+  "diagnostics": [
+    {
+      "category": "adapter",
+      "code": "express_dynamic_mount_prefix",
+      "message": "Express mount prefix is dynamic and could not be resolved",
+      "recoverability": "recoverable",
+      "severity": "warning",
+      "span": {
+        "byte_range": {
+          "end": 1208,
+          "start": 1195
+        },
+        "column": 9,
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 43
+      }
+    },
+    {
+      "category": "adapter",
+      "code": "express_unresolved_mount_router",
+      "message": "Express mounted router could not be resolved statically",
+      "recoverability": "recoverable",
+      "severity": "warning",
+      "span": {
+        "byte_range": {
+          "end": 1261,
+          "start": 1227
+        },
+        "column": 1,
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 44
+      }
+    },
+    {
+      "category": "policy",
+      "code": "policy.duplicate_evidence",
+      "message": "Duplicate policy evidence `requireAuth` appears on the same route.",
+      "recoverability": "recoverable",
+      "severity": "warning",
+      "span": {
+        "byte_range": {
+          "end": 1168,
+          "start": 1157
+        },
+        "column": 17,
+        "file": "tests/fixtures/realistic/express/app.ts",
+        "line": 42
+      }
+    },
+    {
+      "category": "policy",
+      "code": "policy.dynamic_behavior",
+      "message": "Dynamic policy evidence requires review.",
+      "recoverability": "recoverable",
+      "severity": "warning",
+      "span": {
+        "byte_range": {
+          "end": 946,
+          "start": 909
+        },
+        "column": 10,
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 28
+      }
+    }
+  ],
+  "metadata": {
+    "config_path": null,
+    "mode": "advisory",
+    "target_roots": [
+      "tests/fixtures/realistic/express"
+    ],
+    "tool_name": "authmap",
+    "tool_version": "0.1.0"
+  },
+  "report_type": "authmap.tenants",
+  "routes": [
+    {
+      "coverage": "authn_only",
+      "evidence": [
+        {
+          "confidence": "low",
+          "evidence_type": "tenant_check",
+          "id": "evidence_0001",
+          "location": {
+            "byte_range": {
+              "end": 543,
+              "start": 409
+            },
+            "column": 1,
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 13
+          },
+          "mechanism": "route_param_scope_signal",
+          "notes": [
+            "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+          ],
+          "symbol": {
+            "name": "accountId",
+            "span": {
+              "byte_range": {
+                "end": 543,
+                "start": 409
+              },
+              "column": 1,
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 13
+            }
+          }
+        }
+      ],
+      "framework": "express",
+      "handler": {
+        "name": "<inline_handler>",
+        "span": {
+          "byte_range": {
+            "end": 542,
+            "start": 448
+          },
+          "column": 40,
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 13
+        }
+      },
+      "id": "route_0002",
+      "links": [],
+      "location": {
+        "byte_range": {
+          "end": 543,
+          "start": 409
+        },
+        "column": 1,
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 13
+      },
+      "method": "GET",
+      "mutations": [],
+      "path": "/:accountId",
+      "rationale": [
+        "1 strong authorization evidence item(s) support authn_only coverage.",
+        "Sensitive route modifier(s): account_path, path_param.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?"
+      ],
+      "risk": "review_required",
+      "tenant_review": {
+        "evidence_ids": [],
+        "reasons": [
+          "missing_tenant_or_ownership_evidence",
+          "only_weak_tenant_or_ownership_signal"
+        ],
+        "review_required": true,
+        "weak_evidence_ids": [
+          "evidence_0001"
+        ]
+      },
+      "uncertainty_reasons": [
+        "Low-confidence authorization evidence was detected.",
+        "Route inventory confidence is not high."
+      ]
+    },
+    {
+      "coverage": "authn_only",
+      "evidence": [
+        {
+          "confidence": "low",
+          "evidence_type": "tenant_check",
+          "id": "evidence_0004",
+          "location": {
+            "byte_range": {
+              "end": 543,
+              "start": 409
+            },
+            "column": 1,
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 13
+          },
+          "mechanism": "route_param_scope_signal",
+          "notes": [
+            "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+          ],
+          "symbol": {
+            "name": "accountId",
+            "span": {
+              "byte_range": {
+                "end": 543,
+                "start": 409
+              },
+              "column": 1,
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 13
+            }
+          }
+        }
+      ],
+      "framework": "express",
+      "handler": {
+        "name": "<inline_handler>",
+        "span": {
+          "byte_range": {
+            "end": 542,
+            "start": 448
+          },
+          "column": 40,
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 13
+        }
+      },
+      "id": "route_0003",
+      "links": [],
+      "location": {
+        "byte_range": {
+          "end": 543,
+          "start": 409
+        },
+        "column": 1,
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 13
+      },
+      "method": "GET",
+      "mutations": [],
+      "path": "/api/:accountId",
+      "rationale": [
+        "2 strong authorization evidence item(s) support authn_only coverage.",
+        "Sensitive route modifier(s): account_path, path_param.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal."
+      ],
+      "reviewer_questions": [
+        "Is duplicated guard evidence intentional or redundant?",
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?"
+      ],
+      "risk": "review_required",
+      "tenant_review": {
+        "evidence_ids": [],
+        "reasons": [
+          "missing_tenant_or_ownership_evidence",
+          "only_weak_tenant_or_ownership_signal"
+        ],
+        "review_required": true,
+        "weak_evidence_ids": [
+          "evidence_0004"
+        ]
+      },
+      "uncertainty_reasons": [
+        "Duplicated policy evidence may be safe but should be reviewed.",
+        "Low-confidence authorization evidence was detected."
+      ]
+    },
+    {
+      "coverage": "ownership_guarded",
+      "evidence": [
+        {
+          "confidence": "high",
+          "evidence_type": "ownership_check",
+          "id": "evidence_0008",
+          "location": {
+            "byte_range": {
+              "end": 733,
+              "start": 648
+            },
+            "column": 9,
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 18
+          },
+          "mechanism": "mutation_scope",
+          "notes": [
+            "Mutation input includes ownership scoping"
+          ],
+          "symbol": {
+            "name": "owner",
+            "span": {
+              "byte_range": {
+                "end": 733,
+                "start": 648
+              },
+              "column": 9,
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 18
+            }
+          }
+        }
+      ],
+      "framework": "express",
+      "handler": {
+        "name": "<inline_handler>",
+        "span": {
+          "byte_range": {
+            "end": 767,
+            "start": 583
+          },
+          "column": 38,
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 17
+        }
+      },
+      "id": "route_0004",
+      "links": [
+        {
+          "confidence": "high",
+          "evidence_id": null,
+          "id": "link_0001",
+          "mutation_id": "mutation_0001",
+          "notes": [
+            "Mutation is directly inside route handler"
+          ],
+          "route_id": "route_0004"
+        }
+      ],
+      "location": {
+        "byte_range": {
+          "end": 768,
+          "start": 546
+        },
+        "column": 1,
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 17
+      },
+      "method": "POST",
+      "mutations": [
+        {
+          "confidence": "high",
+          "id": "mutation_0001",
+          "library": "prisma",
+          "location": {
+            "byte_range": {
+              "end": 733,
+              "start": 648
+            },
+            "column": 9,
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 18
+          },
+          "notes": [],
+          "operation": "create",
+          "resource": "account"
+        }
+      ],
+      "path": "/",
+      "rationale": [
+        "2 strong authorization evidence item(s) support ownership_guarded coverage.",
+        "Sensitive route modifier(s): linked_mutation, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "risk": "low",
+      "tenant_review": {
+        "reasons": [],
+        "review_required": false
+      },
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ]
+    },
+    {
+      "coverage": "ownership_guarded",
+      "evidence": [
+        {
+          "confidence": "high",
+          "evidence_type": "ownership_check",
+          "id": "evidence_0012",
+          "location": {
+            "byte_range": {
+              "end": 733,
+              "start": 648
+            },
+            "column": 9,
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 18
+          },
+          "mechanism": "mutation_scope",
+          "notes": [
+            "Mutation input includes ownership scoping"
+          ],
+          "symbol": {
+            "name": "owner",
+            "span": {
+              "byte_range": {
+                "end": 733,
+                "start": 648
+              },
+              "column": 9,
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 18
+            }
+          }
+        }
+      ],
+      "framework": "express",
+      "handler": {
+        "name": "<inline_handler>",
+        "span": {
+          "byte_range": {
+            "end": 767,
+            "start": 583
+          },
+          "column": 38,
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 17
+        }
+      },
+      "id": "route_0005",
+      "links": [
+        {
+          "confidence": "high",
+          "evidence_id": null,
+          "id": "link_0002",
+          "mutation_id": "mutation_0001",
+          "notes": [
+            "Mutation is directly inside route handler"
+          ],
+          "route_id": "route_0005"
+        }
+      ],
+      "location": {
+        "byte_range": {
+          "end": 768,
+          "start": 546
+        },
+        "column": 1,
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 17
+      },
+      "method": "POST",
+      "mutations": [
+        {
+          "confidence": "high",
+          "id": "mutation_0001",
+          "library": "prisma",
+          "location": {
+            "byte_range": {
+              "end": 733,
+              "start": 648
+            },
+            "column": 9,
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 18
+          },
+          "notes": [],
+          "operation": "create",
+          "resource": "account"
+        }
+      ],
+      "path": "/api",
+      "rationale": [
+        "3 strong authorization evidence item(s) support ownership_guarded coverage.",
+        "Sensitive route modifier(s): linked_mutation, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity."
+      ],
+      "reviewer_questions": [
+        "Is duplicated guard evidence intentional or redundant?",
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "risk": "low",
+      "tenant_review": {
+        "reasons": [],
+        "review_required": false
+      },
+      "uncertainty_reasons": [
+        "Duplicated policy evidence may be safe but should be reviewed."
+      ]
+    },
+    {
+      "coverage": "permission_guarded",
+      "evidence": [
+        {
+          "confidence": "low",
+          "evidence_type": "tenant_check",
+          "id": "evidence_0013",
+          "location": {
+            "byte_range": {
+              "end": 1086,
+              "start": 771
+            },
+            "column": 1,
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 24
+          },
+          "mechanism": "route_param_scope_signal",
+          "notes": [
+            "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+          ],
+          "symbol": {
+            "name": "accountId",
+            "span": {
+              "byte_range": {
+                "end": 1086,
+                "start": 771
+              },
+              "column": 1,
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 24
+            }
+          }
+        }
+      ],
+      "framework": "express",
+      "handler": {
+        "name": "<inline_handler>",
+        "span": {
+          "byte_range": {
+            "end": 1083,
+            "start": 843
+          },
+          "column": 3,
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 27
+        }
+      },
+      "id": "route_0006",
+      "links": [
+        {
+          "confidence": "medium",
+          "evidence_id": null,
+          "id": "link_0003",
+          "mutation_id": "mutation_0003",
+          "notes": [
+            "One-hop imported service call `updateAccount` reaches `updateAccount`"
+          ],
+          "route_id": "route_0006"
+        }
+      ],
+      "location": {
+        "byte_range": {
+          "end": 1086,
+          "start": 771
+        },
+        "column": 1,
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 24
+      },
+      "method": "PATCH",
+      "mutations": [
+        {
+          "confidence": "high",
+          "id": "mutation_0003",
+          "library": "prisma",
+          "location": {
+            "byte_range": {
+              "end": 389,
+              "start": 321
+            },
+            "column": 10,
+            "file": "tests/fixtures/realistic/express/services/accounts.ts",
+            "line": 12
+          },
+          "notes": [],
+          "operation": "update",
+          "resource": "account"
+        }
+      ],
+      "path": "/:accountId",
+      "rationale": [
+        "1 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal, route_param_mutation_without_scope."
+      ],
+      "reviewer_questions": [
+        "Can the dynamic authorization path be confirmed?",
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "risk": "review_required",
+      "tenant_review": {
+        "evidence_ids": [],
+        "reasons": [
+          "missing_tenant_or_ownership_evidence",
+          "only_weak_tenant_or_ownership_signal",
+          "route_param_mutation_without_scope"
+        ],
+        "review_required": true,
+        "weak_evidence_ids": [
+          "evidence_0013"
+        ]
+      },
+      "uncertainty_reasons": [
+        "Dynamic authorization evidence requires review.",
+        "Low-confidence authorization evidence was detected.",
+        "Route inventory confidence is not high."
+      ]
+    },
+    {
+      "coverage": "permission_guarded",
+      "evidence": [
+        {
+          "confidence": "low",
+          "evidence_type": "tenant_check",
+          "id": "evidence_0017",
+          "location": {
+            "byte_range": {
+              "end": 1086,
+              "start": 771
+            },
+            "column": 1,
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 24
+          },
+          "mechanism": "route_param_scope_signal",
+          "notes": [
+            "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+          ],
+          "symbol": {
+            "name": "accountId",
+            "span": {
+              "byte_range": {
+                "end": 1086,
+                "start": 771
+              },
+              "column": 1,
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 24
+            }
+          }
+        }
+      ],
+      "framework": "express",
+      "handler": {
+        "name": "<inline_handler>",
+        "span": {
+          "byte_range": {
+            "end": 1083,
+            "start": 843
+          },
+          "column": 3,
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 27
+        }
+      },
+      "id": "route_0007",
+      "links": [
+        {
+          "confidence": "medium",
+          "evidence_id": null,
+          "id": "link_0004",
+          "mutation_id": "mutation_0003",
+          "notes": [
+            "One-hop imported service call `updateAccount` reaches `updateAccount`"
+          ],
+          "route_id": "route_0007"
+        }
+      ],
+      "location": {
+        "byte_range": {
+          "end": 1086,
+          "start": 771
+        },
+        "column": 1,
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 24
+      },
+      "method": "PATCH",
+      "mutations": [
+        {
+          "confidence": "high",
+          "id": "mutation_0003",
+          "library": "prisma",
+          "location": {
+            "byte_range": {
+              "end": 389,
+              "start": 321
+            },
+            "column": 10,
+            "file": "tests/fixtures/realistic/express/services/accounts.ts",
+            "line": 12
+          },
+          "notes": [],
+          "operation": "update",
+          "resource": "account"
+        }
+      ],
+      "path": "/api/:accountId",
+      "rationale": [
+        "2 strong authorization evidence item(s) support permission_guarded coverage.",
+        "Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal, route_param_mutation_without_scope."
+      ],
+      "reviewer_questions": [
+        "Can the dynamic authorization path be confirmed?",
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "risk": "review_required",
+      "tenant_review": {
+        "evidence_ids": [],
+        "reasons": [
+          "missing_tenant_or_ownership_evidence",
+          "only_weak_tenant_or_ownership_signal",
+          "route_param_mutation_without_scope"
+        ],
+        "review_required": true,
+        "weak_evidence_ids": [
+          "evidence_0017"
+        ]
+      },
+      "uncertainty_reasons": [
+        "Dynamic authorization evidence requires review.",
+        "Low-confidence authorization evidence was detected."
+      ]
+    },
+    {
+      "coverage": "admin_guarded",
+      "evidence": [
+        {
+          "confidence": "low",
+          "evidence_type": "tenant_check",
+          "id": "evidence_0020",
+          "location": {
+            "byte_range": {
+              "end": 1259,
+              "start": 1089
+            },
+            "column": 1,
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 36
+          },
+          "mechanism": "route_param_scope_signal",
+          "notes": [
+            "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+          ],
+          "symbol": {
+            "name": "accountId",
+            "span": {
+              "byte_range": {
+                "end": 1259,
+                "start": 1089
+              },
+              "column": 1,
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 36
+            }
+          }
+        }
+      ],
+      "framework": "express",
+      "handler": {
+        "name": "<inline_handler>",
+        "span": {
+          "byte_range": {
+            "end": 1258,
+            "start": 1132
+          },
+          "column": 44,
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 36
+        }
+      },
+      "id": "route_0008",
+      "links": [
+        {
+          "confidence": "medium",
+          "evidence_id": null,
+          "id": "link_0005",
+          "mutation_id": "mutation_0004",
+          "notes": [
+            "One-hop imported service call `deleteAccount` reaches `deleteAccount`"
+          ],
+          "route_id": "route_0008"
+        }
+      ],
+      "location": {
+        "byte_range": {
+          "end": 1259,
+          "start": 1089
+        },
+        "column": 1,
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 36
+      },
+      "method": "DELETE",
+      "mutations": [
+        {
+          "confidence": "high",
+          "id": "mutation_0004",
+          "library": "prisma",
+          "location": {
+            "byte_range": {
+              "end": 518,
+              "start": 460
+            },
+            "column": 10,
+            "file": "tests/fixtures/realistic/express/services/accounts.ts",
+            "line": 19
+          },
+          "notes": [],
+          "operation": "delete",
+          "resource": "account"
+        }
+      ],
+      "path": "/:accountId",
+      "rationale": [
+        "1 strong authorization evidence item(s) support admin_guarded coverage.",
+        "Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal, route_param_mutation_without_scope."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "risk": "review_required",
+      "tenant_review": {
+        "evidence_ids": [],
+        "reasons": [
+          "missing_tenant_or_ownership_evidence",
+          "only_weak_tenant_or_ownership_signal",
+          "route_param_mutation_without_scope"
+        ],
+        "review_required": true,
+        "weak_evidence_ids": [
+          "evidence_0020"
+        ]
+      },
+      "uncertainty_reasons": [
+        "Low-confidence authorization evidence was detected.",
+        "Route inventory confidence is not high."
+      ]
+    },
+    {
+      "coverage": "admin_guarded",
+      "evidence": [
+        {
+          "confidence": "low",
+          "evidence_type": "tenant_check",
+          "id": "evidence_0023",
+          "location": {
+            "byte_range": {
+              "end": 1259,
+              "start": 1089
+            },
+            "column": 1,
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 36
+          },
+          "mechanism": "route_param_scope_signal",
+          "notes": [
+            "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+          ],
+          "symbol": {
+            "name": "accountId",
+            "span": {
+              "byte_range": {
+                "end": 1259,
+                "start": 1089
+              },
+              "column": 1,
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 36
+            }
+          }
+        }
+      ],
+      "framework": "express",
+      "handler": {
+        "name": "<inline_handler>",
+        "span": {
+          "byte_range": {
+            "end": 1258,
+            "start": 1132
+          },
+          "column": 44,
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 36
+        }
+      },
+      "id": "route_0009",
+      "links": [
+        {
+          "confidence": "medium",
+          "evidence_id": null,
+          "id": "link_0006",
+          "mutation_id": "mutation_0004",
+          "notes": [
+            "One-hop imported service call `deleteAccount` reaches `deleteAccount`"
+          ],
+          "route_id": "route_0009"
+        }
+      ],
+      "location": {
+        "byte_range": {
+          "end": 1259,
+          "start": 1089
+        },
+        "column": 1,
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 36
+      },
+      "method": "DELETE",
+      "mutations": [
+        {
+          "confidence": "high",
+          "id": "mutation_0004",
+          "library": "prisma",
+          "location": {
+            "byte_range": {
+              "end": 518,
+              "start": 460
+            },
+            "column": 10,
+            "file": "tests/fixtures/realistic/express/services/accounts.ts",
+            "line": 19
+          },
+          "notes": [],
+          "operation": "delete",
+          "resource": "account"
+        }
+      ],
+      "path": "/api/:accountId",
+      "rationale": [
+        "2 strong authorization evidence item(s) support admin_guarded coverage.",
+        "Sensitive route modifier(s): account_path, linked_mutation, path_param, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence, only_weak_tenant_or_ownership_signal, route_param_mutation_without_scope."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "risk": "review_required",
+      "tenant_review": {
+        "evidence_ids": [],
+        "reasons": [
+          "missing_tenant_or_ownership_evidence",
+          "only_weak_tenant_or_ownership_signal",
+          "route_param_mutation_without_scope"
+        ],
+        "review_required": true,
+        "weak_evidence_ids": [
+          "evidence_0023"
+        ]
+      },
+      "uncertainty_reasons": [
+        "Low-confidence authorization evidence was detected."
+      ]
+    },
+    {
+      "coverage": "authn_only",
+      "evidence": [],
+      "framework": "express",
+      "handler": {
+        "name": "<inline_handler>",
+        "span": {
+          "byte_range": {
+            "end": 1439,
+            "start": 1299
+          },
+          "column": 38,
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 41
+        }
+      },
+      "id": "route_0010",
+      "links": [
+        {
+          "confidence": "medium",
+          "evidence_id": null,
+          "id": "link_0007",
+          "mutation_id": "mutation_0002",
+          "notes": [
+            "One-hop imported service call `createAccount` reaches `createAccount`"
+          ],
+          "route_id": "route_0010"
+        }
+      ],
+      "location": {
+        "byte_range": {
+          "end": 1440,
+          "start": 1262
+        },
+        "column": 1,
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 41
+      },
+      "method": "POST",
+      "mutations": [
+        {
+          "confidence": "high",
+          "id": "mutation_0002",
+          "library": "prisma",
+          "location": {
+            "byte_range": {
+              "end": 219,
+              "start": 162
+            },
+            "column": 10,
+            "file": "tests/fixtures/realistic/express/services/accounts.ts",
+            "line": 6
+          },
+          "notes": [],
+          "operation": "create",
+          "resource": "account"
+        }
+      ],
+      "path": "/api/service",
+      "rationale": [
+        "2 strong authorization evidence item(s) support authn_only coverage.",
+        "Sensitive route modifier(s): linked_mutation, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence."
+      ],
+      "reviewer_questions": [
+        "Is duplicated guard evidence intentional or redundant?",
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require tenant or ownership scoping?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "risk": "review_required",
+      "tenant_review": {
+        "evidence_ids": [],
+        "reasons": [
+          "missing_tenant_or_ownership_evidence"
+        ],
+        "review_required": true,
+        "weak_evidence_ids": []
+      },
+      "uncertainty_reasons": [
+        "Duplicated policy evidence may be safe but should be reviewed."
+      ]
+    },
+    {
+      "coverage": "authn_only",
+      "evidence": [],
+      "framework": "express",
+      "handler": {
+        "name": "<inline_handler>",
+        "span": {
+          "byte_range": {
+            "end": 1439,
+            "start": 1299
+          },
+          "column": 38,
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 41
+        }
+      },
+      "id": "route_0011",
+      "links": [
+        {
+          "confidence": "medium",
+          "evidence_id": null,
+          "id": "link_0008",
+          "mutation_id": "mutation_0002",
+          "notes": [
+            "One-hop imported service call `createAccount` reaches `createAccount`"
+          ],
+          "route_id": "route_0011"
+        }
+      ],
+      "location": {
+        "byte_range": {
+          "end": 1440,
+          "start": 1262
+        },
+        "column": 1,
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 41
+      },
+      "method": "POST",
+      "mutations": [
+        {
+          "confidence": "high",
+          "id": "mutation_0002",
+          "library": "prisma",
+          "location": {
+            "byte_range": {
+              "end": 219,
+              "start": 162
+            },
+            "column": 10,
+            "file": "tests/fixtures/realistic/express/services/accounts.ts",
+            "line": 6
+          },
+          "notes": [],
+          "operation": "create",
+          "resource": "account"
+        }
+      ],
+      "path": "/service",
+      "rationale": [
+        "1 strong authorization evidence item(s) support authn_only coverage.",
+        "Sensitive route modifier(s): linked_mutation, unsafe_method.",
+        "Linked data mutation(s) increase review sensitivity.",
+        "Tenant isolation review required: missing_tenant_or_ownership_evidence."
+      ],
+      "reviewer_questions": [
+        "Should linked data mutations have resource-specific authorization evidence?",
+        "Should this route require tenant or ownership scoping?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "risk": "review_required",
+      "tenant_review": {
+        "evidence_ids": [],
+        "reasons": [
+          "missing_tenant_or_ownership_evidence"
+        ],
+        "review_required": true,
+        "weak_evidence_ids": []
+      },
+      "uncertainty_reasons": [
+        "Route inventory confidence is not high."
+      ]
+    },
+    {
+      "coverage": "tenant_guarded",
+      "evidence": [
+        {
+          "confidence": "low",
+          "evidence_type": "tenant_check",
+          "id": "evidence_0032",
+          "location": {
+            "byte_range": {
+              "end": 1757,
+              "start": 1610
+            },
+            "column": 1,
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 50
+          },
+          "mechanism": "route_param_scope_signal",
+          "notes": [
+            "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+          ],
+          "symbol": {
+            "name": "tenantId",
+            "span": {
+              "byte_range": {
+                "end": 1757,
+                "start": 1610
+              },
+              "column": 1,
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 50
+            }
+          }
+        },
+        {
+          "confidence": "high",
+          "evidence_type": "tenant_check",
+          "id": "evidence_0033",
+          "location": {
+            "byte_range": {
+              "end": 1655,
+              "start": 1642
+            },
+            "column": 33,
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 50
+          },
+          "mechanism": "tenant_guard",
+          "notes": [],
+          "symbol": {
+            "name": "requireTenant",
+            "span": {
+              "byte_range": {
+                "end": 1655,
+                "start": 1642
+              },
+              "column": 33,
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 50
+            }
+          }
+        },
+        {
+          "confidence": "high",
+          "evidence_type": "tenant_check",
+          "id": "evidence_0034",
+          "location": {
+            "byte_range": {
+              "end": 1750,
+              "start": 1721
+            },
+            "column": 14,
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 51
+          },
+          "mechanism": "mutation_scope",
+          "notes": [
+            "Mutation input includes tenant scoping"
+          ],
+          "symbol": {
+            "name": "tenant",
+            "span": {
+              "byte_range": {
+                "end": 1750,
+                "start": 1721
+              },
+              "column": 14,
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 51
+            }
+          }
+        }
+      ],
+      "framework": "express",
+      "handler": {
+        "name": "<inline_handler>",
+        "span": {
+          "byte_range": {
+            "end": 1756,
+            "start": 1657
+          },
+          "column": 48,
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 50
+        }
+      },
+      "id": "route_0014",
+      "links": [],
+      "location": {
+        "byte_range": {
+          "end": 1757,
+          "start": 1610
+        },
+        "column": 1,
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 50
+      },
+      "method": "GET",
+      "mutations": [],
+      "path": "/api/tenant/:tenantId",
+      "rationale": [
+        "3 strong authorization evidence item(s) support tenant_guarded coverage.",
+        "Sensitive route modifier(s): path_param, tenant_path."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant isolation checks?"
+      ],
+      "risk": "low",
+      "tenant_review": {
+        "reasons": [],
+        "review_required": false
+      },
+      "uncertainty_reasons": [
+        "Low-confidence authorization evidence was detected."
+      ]
+    },
+    {
+      "coverage": "tenant_guarded",
+      "evidence": [
+        {
+          "confidence": "low",
+          "evidence_type": "tenant_check",
+          "id": "evidence_0035",
+          "location": {
+            "byte_range": {
+              "end": 1757,
+              "start": 1610
+            },
+            "column": 1,
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 50
+          },
+          "mechanism": "route_param_scope_signal",
+          "notes": [
+            "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+          ],
+          "symbol": {
+            "name": "tenantId",
+            "span": {
+              "byte_range": {
+                "end": 1757,
+                "start": 1610
+              },
+              "column": 1,
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 50
+            }
+          }
+        },
+        {
+          "confidence": "high",
+          "evidence_type": "tenant_check",
+          "id": "evidence_0036",
+          "location": {
+            "byte_range": {
+              "end": 1655,
+              "start": 1642
+            },
+            "column": 33,
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 50
+          },
+          "mechanism": "tenant_guard",
+          "notes": [],
+          "symbol": {
+            "name": "requireTenant",
+            "span": {
+              "byte_range": {
+                "end": 1655,
+                "start": 1642
+              },
+              "column": 33,
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 50
+            }
+          }
+        },
+        {
+          "confidence": "high",
+          "evidence_type": "tenant_check",
+          "id": "evidence_0037",
+          "location": {
+            "byte_range": {
+              "end": 1750,
+              "start": 1721
+            },
+            "column": 14,
+            "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+            "line": 51
+          },
+          "mechanism": "mutation_scope",
+          "notes": [
+            "Mutation input includes tenant scoping"
+          ],
+          "symbol": {
+            "name": "tenant",
+            "span": {
+              "byte_range": {
+                "end": 1750,
+                "start": 1721
+              },
+              "column": 14,
+              "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+              "line": 51
+            }
+          }
+        }
+      ],
+      "framework": "express",
+      "handler": {
+        "name": "<inline_handler>",
+        "span": {
+          "byte_range": {
+            "end": 1756,
+            "start": 1657
+          },
+          "column": 48,
+          "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+          "line": 50
+        }
+      },
+      "id": "route_0015",
+      "links": [],
+      "location": {
+        "byte_range": {
+          "end": 1757,
+          "start": 1610
+        },
+        "column": 1,
+        "file": "tests/fixtures/realistic/express/routes/accounts.ts",
+        "line": 50
+      },
+      "method": "GET",
+      "mutations": [],
+      "path": "/tenant/:tenantId",
+      "rationale": [
+        "2 strong authorization evidence item(s) support tenant_guarded coverage.",
+        "Sensitive route modifier(s): path_param, tenant_path."
+      ],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant isolation checks?"
+      ],
+      "risk": "low",
+      "tenant_review": {
+        "reasons": [],
+        "review_required": false
+      },
+      "uncertainty_reasons": [
+        "Low-confidence authorization evidence was detected.",
+        "Route inventory confidence is not high."
+      ]
+    }
+  ],
+  "schema_version": "0.1.0",
+  "summary": {
+    "diagnostics": 4,
+    "relevant_routes": 12,
+    "review_required": 10,
+    "routes": 15
+  }
+}

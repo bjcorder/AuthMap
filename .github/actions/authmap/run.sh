@@ -34,14 +34,94 @@ workspace_path() {
   printf '%s/%s' "$GITHUB_WORKSPACE" "$value"
 }
 
+ensure_workspace_directory() {
+  local name="$1"
+  local relative="$2"
+  local path="$3"
+  local workspace_real
+  local current
+  local part
+  local output_real
+
+  workspace_real="$(cd "$GITHUB_WORKSPACE" && pwd -P)" || die "failed to resolve GITHUB_WORKSPACE"
+  current="$GITHUB_WORKSPACE"
+  IFS='/' read -ra parts <<< "$relative"
+  for part in "${parts[@]}"; do
+    current="$current/$part"
+    if [[ -L "$current" ]]; then
+      die "$name must not contain symlink path components"
+    fi
+  done
+
+  mkdir -p "$path" || die "failed to create $name"
+  if [[ -L "$path" ]]; then
+    die "$name must not be a symlink"
+  fi
+  output_real="$(cd "$path" && pwd -P)" || die "failed to resolve $name"
+  case "$output_real" in
+    "$workspace_real"/*) ;;
+    *) die "$name must resolve inside GITHUB_WORKSPACE" ;;
+  esac
+}
+
+resolve_workspace_read_path() {
+  local name="$1"
+  local relative="$2"
+  local allow_workspace_root="$3"
+  local workspace_real
+  local current
+  local part
+  local path
+  local parent
+  local parent_real
+  local base
+  local resolved
+
+  workspace_real="$(cd "$GITHUB_WORKSPACE" && pwd -P)" || die "failed to resolve GITHUB_WORKSPACE"
+  if [[ "$relative" == "." ]]; then
+    [[ "$allow_workspace_root" == "true" ]] || die "$name must not be the workspace root"
+    printf '%s' "$workspace_real"
+    return
+  fi
+
+  path="$(workspace_path "$relative")"
+  current="$GITHUB_WORKSPACE"
+  IFS='/' read -ra parts <<< "$relative"
+  for part in "${parts[@]}"; do
+    current="$current/$part"
+    if [[ -L "$current" ]]; then
+      die "$name must not contain symlink path components"
+    fi
+  done
+
+  [[ -e "$path" ]] || die "$name must exist inside GITHUB_WORKSPACE"
+  if [[ -d "$path" ]]; then
+    resolved="$(cd "$path" && pwd -P)" || die "failed to resolve $name"
+  else
+    parent="$(dirname "$path")"
+    base="$(basename "$path")"
+    parent_real="$(cd "$parent" && pwd -P)" || die "failed to resolve $name"
+    resolved="$parent_real/$base"
+  fi
+
+  case "$resolved" in
+    "$workspace_real")
+      [[ "$allow_workspace_root" == "true" ]] || die "$name must resolve inside GITHUB_WORKSPACE"
+      ;;
+    "$workspace_real"/*) ;;
+    *) die "$name must resolve inside GITHUB_WORKSPACE" ;;
+  esac
+  printf '%s' "$resolved"
+}
+
 validate_git_ref_input() {
   local name="$1"
   local value="$2"
 
   [[ -n "$value" ]] || die "$name must not be empty"
   case "$value" in
-    -*|*$'\n'*|*$'\r'*|*$'\t'*)
-      die "$name must be a git ref, tag, or commit SHA without control characters or leading '-'"
+    -*|*:*|*+*|*$'\n'*|*$'\r'*|*$'\t'*)
+      die "$name must be a git ref, tag, or commit SHA without refspec metacharacters, control characters, or leading '-'"
       ;;
   esac
   if printf '%s' "$value" | LC_ALL=C grep -q '[[:cntrl:][:space:]]'; then
@@ -64,7 +144,7 @@ resolve_baseline_path() {
   fi
 
   if [[ -z "$trusted_ref" ]]; then
-    workspace_path "$baseline_relative"
+    resolve_workspace_read_path "baseline" "$baseline_relative" false
     return
   fi
 
@@ -181,21 +261,25 @@ esac
 
 target_input="$(trim "${INPUT_TARGET:-.}")"
 target_input="$(validate_relative_path "target" "$target_input" true)" || exit $?
-target_path="$(workspace_path "$target_input")"
+target_path="$(resolve_workspace_read_path "target" "$target_input" true)" || exit $?
 
 config_input="$(trim "${INPUT_CONFIG:-}")"
 config_path=""
 if [[ -n "$config_input" ]]; then
   config_input="$(validate_relative_path "config" "$config_input" false)" || exit $?
-  config_path="$(workspace_path "$config_input")"
+  config_path="$(resolve_workspace_read_path "config" "$config_input" false)" || exit $?
 fi
 
 baseline_input="$(trim "${INPUT_BASELINE:-}")"
 baseline_path=""
+baseline_uses_trusted_ref="false"
 if [[ -n "$baseline_input" ]]; then
   baseline_input="$(validate_relative_path "baseline" "$baseline_input" false)" || exit $?
   baseline_ref_input="$(trim "${INPUT_BASELINE_REF:-}")"
   pr_base_sha="$(trim "${AUTHMAP_PR_BASE_SHA:-}")"
+  if [[ -n "$baseline_ref_input" || -n "$pr_base_sha" ]]; then
+    baseline_uses_trusted_ref="true"
+  fi
   baseline_path="$(resolve_baseline_path "$baseline_input" "$baseline_ref_input" "$pr_base_sha")" || exit $?
 fi
 
@@ -204,7 +288,7 @@ fail_on_input="$(trim "${INPUT_FAIL_ON:-}")"
 output_dir_input="$(trim "${INPUT_OUTPUT_DIRECTORY:-.authmap}")"
 output_dir_input="$(validate_relative_path "output-directory" "$output_dir_input" false)" || exit $?
 output_dir="$(workspace_path "$output_dir_input")"
-mkdir -p "$output_dir"
+ensure_workspace_directory "output-directory" "$output_dir_input" "$output_dir"
 
 formats=()
 IFS=',' read -ra requested_formats <<< "${INPUT_OUTPUT:-markdown,json}"
@@ -316,6 +400,8 @@ if [[ -n "$baseline_path" && ( "$final_status" -eq 0 || "$final_status" -eq 20 )
     fi
     if [[ -n "$fail_on_input" ]]; then
       cmd+=(--fail-on "$fail_on_input")
+    elif [[ "$baseline_uses_trusted_ref" == "true" ]]; then
+      cmd+=(--fail-on "added_high_risk_route,auth_downgrade,new_linked_mutation")
     fi
 
     echo "Running AuthMap ${diff_format} drift report"

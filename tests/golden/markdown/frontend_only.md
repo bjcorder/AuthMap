@@ -1,6 +1,6 @@
 # AuthMap Report
 
-- Tool: authmap 1.0.0
+- Tool: authmap 0.1.0
 - Schema: 0.1.0
 
 ## Summary
@@ -11,6 +11,7 @@
 - Routes: 0
 - Evidence entries: 0
 - Mutations: 0
+- Policy cases: 0
 - Diagnostics: 0
 - Frameworks: none
 

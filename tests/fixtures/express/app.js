@@ -37,6 +37,10 @@ function audit(req, res, next) {
   next();
 }
 
+function publicRoute(req, res, next) {
+  next();
+}
+
 function dynamicPolicyCheck(name) {
   return name === "accounts.update";
 }
@@ -54,6 +58,8 @@ app.get("/health", requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/public/status", publicRoute, listAccounts);
+app.get("/conflicting", publicRoute, requireAuth, listAccounts);
 app.post("/accounts", [requireAuth, audit], listAccounts);
 app.post("/admin/jobs", requireAuth, requireRole("admin"), listAccounts);
 app.get(`/${tenant}/reports`, requireAuth, listAccounts);
@@ -64,6 +70,9 @@ app.patch("/accounts/:id/permissions", requirePermission("accounts.write"), (req
   res.sendStatus(204);
 });
 app.delete(dynamicPath, requireAuth, listAccounts);
+if (false) {
+  app.get("/unreachable/admin", requireAuth, listAccounts);
+}
 
 localRouter.put("/:id", requireAuth, listAccounts);
 childRouter.get("/child", audit, listAccounts);

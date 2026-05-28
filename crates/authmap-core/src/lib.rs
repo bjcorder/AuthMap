@@ -17,6 +17,8 @@ pub struct AuthMapDocument {
     pub mutations: Vec<Mutation>,
     pub links: Vec<ReachabilityLink>,
     pub coverage: Vec<Coverage>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub policy_cases: Vec<PolicyCase>,
     pub diagnostics: Vec<Diagnostic>,
     #[serde(default, skip_serializing_if = "ExtensionMap::is_empty")]
     pub extensions: ExtensionMap,
@@ -33,6 +35,7 @@ impl AuthMapDocument {
             mutations: Vec::new(),
             links: Vec::new(),
             coverage: Vec::new(),
+            policy_cases: Vec::new(),
             diagnostics: Vec::new(),
             extensions: ExtensionMap::new(),
         }
@@ -206,9 +209,15 @@ pub mod diagnostic_codes {
     pub const NEXTJS_EXTERNAL_REEXPORT_UNRESOLVED: &str = "nextjs_external_reexport_unresolved";
     pub const NEXTJS_NESTED_APP_SEGMENT: &str = "nextjs_nested_app_segment";
     pub const NEXTJS_UNUSUAL_ROUTE_SEGMENT: &str = "nextjs_unusual_route_segment";
+    pub const NEXTJS_SERVER_ACTION_NOT_ANALYZED: &str = "nextjs_server_action_not_analyzed";
 
     pub const REPORT_RENDER_FAILED: &str = "report.render_failed";
     pub const REPORT_WRITE_FAILED: &str = "report.write_failed";
+
+    pub const POLICY_CONFLICTING_EVIDENCE: &str = "policy.conflicting_evidence";
+    pub const POLICY_DUPLICATE_EVIDENCE: &str = "policy.duplicate_evidence";
+    pub const POLICY_UNREACHABLE_BRANCH: &str = "policy.unreachable_branch";
+    pub const POLICY_DYNAMIC_BEHAVIOR: &str = "policy.dynamic_behavior";
 
     pub const INTERNAL_SCAN_FAILED: &str = "internal.scan_failed";
     pub const INTERNAL_RUNTIME_LIMIT_REACHED: &str = "internal.runtime_limit_reached";
@@ -348,12 +357,32 @@ pub const FIRST_PARTY_DIAGNOSTIC_CODES: &[(&str, DiagnosticCategory)] = &[
         DiagnosticCategory::Adapter,
     ),
     (
+        diagnostic_codes::NEXTJS_SERVER_ACTION_NOT_ANALYZED,
+        DiagnosticCategory::Adapter,
+    ),
+    (
         diagnostic_codes::REPORT_RENDER_FAILED,
         DiagnosticCategory::Report,
     ),
     (
         diagnostic_codes::REPORT_WRITE_FAILED,
         DiagnosticCategory::Report,
+    ),
+    (
+        diagnostic_codes::POLICY_CONFLICTING_EVIDENCE,
+        DiagnosticCategory::Policy,
+    ),
+    (
+        diagnostic_codes::POLICY_DUPLICATE_EVIDENCE,
+        DiagnosticCategory::Policy,
+    ),
+    (
+        diagnostic_codes::POLICY_UNREACHABLE_BRANCH,
+        DiagnosticCategory::Policy,
+    ),
+    (
+        diagnostic_codes::POLICY_DYNAMIC_BEHAVIOR,
+        DiagnosticCategory::Policy,
     ),
     (
         diagnostic_codes::INTERNAL_SCAN_FAILED,
@@ -525,6 +554,54 @@ pub struct Coverage {
     pub uncertainty_reasons: Vec<String>,
     #[serde(default, skip_serializing_if = "ExtensionMap::is_empty")]
     pub extensions: ExtensionMap,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct PolicyCase {
+    pub id: String,
+    pub route_id: String,
+    pub kind: PolicyCaseKind,
+    pub summary: String,
+    pub evidence_ids: Vec<String>,
+    pub input_names: Vec<String>,
+    pub branches: Vec<PolicyBranch>,
+    pub span: Option<Span>,
+    pub confidence: Confidence,
+    pub reviewer_questions: Vec<String>,
+    pub uncertainty_reasons: Vec<String>,
+    #[serde(default, skip_serializing_if = "ExtensionMap::is_empty")]
+    pub extensions: ExtensionMap,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct PolicyBranch {
+    pub condition: String,
+    pub outcome: PolicyOutcome,
+    pub reachable: bool,
+    pub evidence_ids: Vec<String>,
+    pub span: Option<Span>,
+    pub confidence: Confidence,
+    pub notes: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PolicyCaseKind {
+    EffectiveProtection,
+    LinkedMutationProtection,
+    Conflict,
+    Duplicate,
+    Unreachable,
+    Dynamic,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PolicyOutcome {
+    Allow,
+    Deny,
+    Unknown,
+    ReviewRequired,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]

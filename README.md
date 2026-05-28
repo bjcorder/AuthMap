@@ -19,6 +19,13 @@ AuthMap maps authorization coverage across the routes, handlers, service calls, 
 
 Authorization bugs are often inventory failures before they are coding failures. AuthMap gives you the inventory.
 
+AuthMap's post-v1 capability areas are folded into this single map rather than
+separate tools: route inventory, policy evidence and explanation, tenant and
+ownership review, semantic authorization diffs, focused controls review, CI
+outputs, SARIF, and downstream JSON integrations. See
+[docs/CAPABILITIES.md](docs/CAPABILITIES.md) for workflow examples and
+limitations.
+
 ## Quickstart
 
 Install from source:
@@ -41,7 +48,7 @@ Use it in CI with the GitHub Action:
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: Ozark-Security-Labs/AuthMap@v1.0.0
+- uses: Ozark-Security-Labs/AuthMap@v0.1.0
   with:
     mode: advisory
     output: markdown,json
@@ -54,7 +61,7 @@ A scan of an Express + Prisma service surfaces 15 routes, classifies each by cov
 ```text
 # AuthMap Report
 
-- Tool: authmap 1.0.0
+- Tool: authmap 0.1.0
 - Schema: 0.1.0
 
 ## Summary
@@ -108,17 +115,22 @@ A SARIF report covering the same routes is available for GitHub code scanning.
 | Django                | Python               |
 | Django REST Framework | Python               |
 | Express               | Node.js / TypeScript |
-| Next.js (App Router)  | TypeScript           |
+| Next.js (App + Pages) | TypeScript / Node.js |
 | tRPC                  | TypeScript           |
-| GraphQL               | TypeScript / Node.js |
+| GraphQL               | Python / TypeScript / Node.js |
 
-Plus ORM mutation evidence for **SQLAlchemy**, **Django ORM**, and **Prisma**, linked to the routes that can reach them.
+Plus ORM mutation evidence for **SQLAlchemy**, **Django ORM**, and **Prisma** (with best-effort detection of **Sequelize**, **Mongoose**, and **TypeORM**), linked to the routes that can reach them.
 
 Evidence sources include middleware, decorators, guards, policy objects, service-layer checks, ownership and tenant-isolation patterns, and ORM mutations. See [docs/PARSERS_AND_ADAPTERS.md](docs/PARSERS_AND_ADAPTERS.md) for the adapter contract.
 
 ## What you get
 
 **Typed coverage classification.** Each route is placed into one of nine classes — `public_declared`, `unauthenticated`, `authn_only`, `role_guarded`, `permission_guarded`, `ownership_guarded`, `tenant_guarded`, `admin_guarded`, `unknown_or_dynamic` — with a risk label and a machine-readable rationale.
+
+**Policy and tenant review.** PolicyLens-style policy cases, `authmap explain`,
+and the focused `authmap tenants` report connect route coverage to guard,
+permission, ownership, tenant, dynamic-policy, linked-mutation, confidence, and
+reviewer-question context without claiming runtime exploitability.
 
 **Drift detection in CI.** Capture a baseline JSON document and diff future scans against it. AuthMap reports added or removed routes, evidence changes, coverage downgrades, and newly reachable mutations — with policy knobs to fail builds on specific drift categories.
 
@@ -131,6 +143,10 @@ authmap diff --base authmap.baseline.json --head authmap.json --format markdown
 **Rule suggestions.** `authmap rules suggest` is a local, read-only helper that scans for project-specific guard, role, and permission patterns and proposes additions to `authmap.yml`. It never modifies your config.
 
 **Explainable findings.** `authmap explain <id>` resolves any route, evidence, mutation, or link ID against a generated report and prints the supporting context — useful for triage and PR review.
+
+**Focused controls review.** `authmap controls` accepts the same inputs as
+`authmap diff` and summarizes auth-relevant guard, route guard, permission map,
+tenant, ownership, admin, audit, policy-helper, and header drift for PR review.
 
 ## Output formats
 
@@ -159,7 +175,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Ozark-Security-Labs/AuthMap@v1.0.0
+      - uses: Ozark-Security-Labs/AuthMap@v0.1.0
         with:
           mode: enforce
           output: markdown,json
@@ -184,7 +200,7 @@ Enforce mode writes the requested reports first, then exits `20` when blocking d
 
 ## Project status
 
-- **v1.0.0** — first stable release. Semantic versioning per [docs/RELEASES.md](docs/RELEASES.md).
+- **v0.1.0** — first public release. Semantic versioning per [docs/RELEASES.md](docs/RELEASES.md).
 - **JSON schema** — v0.1.0 contract; breaking changes ship via the documented compatibility policy.
 - **Rust** — MSRV 1.95, edition 2024.
 - **Platforms** — Linux, macOS, and Windows are tested in CI.
@@ -194,7 +210,9 @@ Enforce mode writes the requested reports first, then exits `20` when blocking d
 | Document                                                                       | Contents                                                              |
 | ------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
 | [docs/USAGE.md](docs/USAGE.md)                                                 | End-to-end CLI usage, output interpretation, defensive-use guidance   |
+| [docs/CAPABILITIES.md](docs/CAPABILITIES.md)                                   | Folded capability model and post-v1 workflow examples                 |
 | [docs/SCHEMA.md](docs/SCHEMA.md)                                               | JSON schema and contract                                              |
+| [docs/JSON_CONSUMERS.md](docs/JSON_CONSUMERS.md)                               | Downstream JSON consumer contract and examples                        |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md)                                 | `authmap.yml`, custom authorization rules, sensitivity labels         |
 | [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md)                                     | Diagnostic categories, stable codes, exit behavior                    |
 | [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md)                                 | All Action inputs, outputs, and permissions                           |

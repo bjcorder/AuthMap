@@ -49,6 +49,8 @@ authmap init --output authmap.yml
 The config file is optional. It can set scan mode, include and exclude patterns,
 scan limits, drift policy, custom authorization rules, and sensitivity labels.
 The full format is documented in [CONFIGURATION.md](CONFIGURATION.md).
+For a folded overview of route, policy, tenant, diff, controls, CI, and
+downstream JSON workflows, see [CAPABILITIES.md](CAPABILITIES.md).
 
 ## Basic Scan
 
@@ -89,6 +91,28 @@ conservative diagnostics. Its JSON output is a focused route report, not the
 canonical AuthMap document. Use `scan --format json` when automation needs the
 complete schema-backed map with routes, evidence, mutations, links, coverage,
 and diagnostics.
+
+## Tenant Review
+
+Use `authmap tenants` when you want a focused tenant-isolation view without
+reading the full authorization map:
+
+```sh
+authmap tenants . --config authmap.yml --format markdown --output authmap.tenants.md
+authmap tenants . --config authmap.yml --format json --output authmap.tenants.json
+```
+
+The command uses the same static scan pipeline, configuration, limits, and
+advisory/enforce mode as `scan`. It reports tenant and ownership evidence,
+linked sensitive operations, uncertainty, and reviewer questions. Its JSON
+output is a focused `authmap.tenants` report, not the canonical AuthMap
+document. Use `scan --format json` when automation needs the complete
+schema-backed map.
+
+Tenant review findings are review prompts, not confirmed vulnerabilities.
+Missing tenant or ownership evidence on route-param and mutation-linked flows is
+reported as `review_required` so reviewers can confirm the intended isolation
+behavior.
 
 ## Scan Modes
 
@@ -144,6 +168,11 @@ from a JSON report:
 authmap explain route_0001 --input authmap.fastapi.json
 ```
 
+Route explanations include PolicyLens cases when policy decision summaries are
+present. These cases cite AuthMap IDs for evidence, mutations, links, and
+coverage support. Dynamic or incomplete behavior is reported as review-required
+uncertainty, not as a confirmed vulnerability.
+
 ## Express Example
 
 Run AuthMap against the repository's realistic Express fixture:
@@ -189,8 +218,8 @@ Markdown is intended for reviewers. It includes:
 - review-required table
 - route inventory
 - data mutation inventory
-- route details with evidence, mutations, links, reviewer questions, and
-  uncertainty notes
+- route details with evidence, mutations, links, PolicyLens policy cases,
+  reviewer questions, and uncertainty notes
 - diagnostics and skipped files
 
 JSON is the canonical machine-readable AuthMap document. Its schema is
@@ -271,6 +300,11 @@ authorization:
       mechanism: billing_plan_guard
       match:
         exact: [ensureBillingPermission]
+    - name: workspace tenant guard
+      evidence_type: tenant_check
+      mechanism: workspace_guard
+      match:
+        exact: [ensureWorkspaceAccess]
 
 sensitivity:
   routes:
@@ -315,6 +349,21 @@ authmap diff main...HEAD --target . --format json --output authmap.diff.json
 
 Git range diffs use `git archive` into temporary directories. They do not
 include uncommitted working-tree changes.
+
+Review authorization-control drift with the same inputs:
+
+```sh
+authmap controls main...HEAD --target . --format markdown
+authmap controls --base authmap.baseline.json --head authmap.json --format json
+```
+
+`authmap controls` reports guard, route-guard, permission, tenant, ownership,
+admin, audit, and policy-helper drift that AuthMap can connect to routes,
+evidence, policies, or review context. It is not a generic SAST or
+infrastructure control scanner. Map-file controls use AuthMap facts and
+`source_files` metadata from the supplied documents. Git-range controls rescan
+the committed refs through the same archive flow as `authmap diff`; unrelated
+file churn is filtered out unless the path is authorization-relevant.
 
 ## GitHub Actions
 

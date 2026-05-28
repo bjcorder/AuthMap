@@ -1,6 +1,6 @@
 # AuthMap Report
 
-- Tool: authmap 1.0.0
+- Tool: authmap 0.1.0
 - Schema: 0.1.0
 
 ## Summary
@@ -11,6 +11,7 @@
 - Routes: 17
 - Evidence entries: 7
 - Mutations: 8
+- Policy cases: 13
 - Diagnostics: 4
 - Frameworks: next_js: 17
 
@@ -19,7 +20,7 @@
 | Item | Subject | Reason |
 | --- | --- | --- |
 | [route_0001](#route-route_0001) | GET /modal | confidence is medium; Next.js route segment \`(.)modal\` uses an unusual routing convention and was normalized for review |
-| [route_0002](#route-route_0002) | DELETE /reports | risk is high |
+| [route_0002](#route-route_0002) | DELETE /reports | risk is review_required |
 | [route_0003](#route-route_0003) | GET /blog/\[...slug\] | confidence is medium; Next.js route handler export is wrapped; wrapper behavior requires review |
 | [route_0004](#route-route_0004) | PUT /docs/\[\[...slug\]\] | confidence is medium; Next.js route handler export is wrapped; wrapper behavior requires review; risk is review_required |
 | [route_0005](#route-route_0005) | DELETE /dynamic-export | confidence is medium; Next.js route handler export value is dynamic or unsupported; review required; risk is high |
@@ -27,8 +28,8 @@
 | [route_0007](#route-route_0007) | POST /external | risk is review_required |
 | [route_0008](#route-route_0008) | PUT /external | confidence is medium; Next.js route handler re-export target could not be analyzed statically; risk is high |
 | [route_0010](#route-route_0010) | GET /nested/app/users | confidence is medium; Next.js route file path contains nested app segments; first app segment was used |
-| [route_0013](#route-route_0013) | POST / | risk is high |
-| [route_0016](#route-route_0016) | PATCH /users/\[id\] | risk is high |
+| [route_0013](#route-route_0013) | POST / | risk is review_required |
+| [route_0016](#route-route_0016) | PATCH /users/\[id\] | risk is review_required |
 | [route_0017](#route-route_0017) | PATCH /wrapped-named | confidence is medium; Next.js route handler export is wrapped; wrapper behavior requires review; risk is review_required |
 | diagnostic | nextjs_external_reexport_unresolved | Next.js route handler re-export target could not be analyzed statically at tests/fixtures/nextjs/app/external/route.ts:1:1 |
 | diagnostic | nextjs_nested_app_segment | Next.js route file path contains nested app segments at tests/fixtures/nextjs/app/nested/app/users/route.ts:1:1 |
@@ -40,7 +41,7 @@
 | ID | Framework | Method | Path | Handler | Middleware | Confidence | Coverage | Risk |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | [route_0001](#route-route_0001) | next_js | GET | /modal | \`GET\` (tests/fixtures/nextjs/app/(.)modal/route.ts:1:17) | none | medium | unauthenticated | low |
-| [route_0002](#route-route_0002) | next_js | DELETE | /reports | \`handleDelete\` (tests/fixtures/nextjs/app/(admin)/reports/route.ts:1:10) | none | high | unauthenticated | high |
+| [route_0002](#route-route_0002) | next_js | DELETE | /reports | \`handleDelete\` (tests/fixtures/nextjs/app/(admin)/reports/route.ts:1:10) | none | high | unauthenticated | review_required |
 | [route_0003](#route-route_0003) | next_js | GET | /blog/\[...slug\] | \`GET\` (tests/fixtures/nextjs/app/blog/\[...slug\]/route.ts:9:14) | none | medium | permission_guarded | low |
 | [route_0004](#route-route_0004) | next_js | PUT | /docs/\[\[...slug\]\] | \`updateDoc\` (tests/fixtures/nextjs/app/docs/\[\[...slug\]\]/route.ts:9:32) | none | medium | authn_only | review_required |
 | [route_0005](#route-route_0005) | next_js | DELETE | /dynamic-export | \`DELETE\` (tests/fixtures/nextjs/app/dynamic-export/route.ts:3:14) | none | medium | unauthenticated | high |
@@ -51,10 +52,10 @@
 | [route_0010](#route-route_0010) | next_js | GET | /nested/app/users | \`GET\` (tests/fixtures/nextjs/app/nested/app/users/route.ts:1:17) | none | medium | unauthenticated | medium |
 | [route_0011](#route-route_0011) | next_js | OPTIONS | /options | \`OPTIONS\` (tests/fixtures/nextjs/app/options/route.jsx:1:14) | none | high | unauthenticated | low |
 | [route_0012](#route-route_0012) | next_js | GET | / | \`GET\` (tests/fixtures/nextjs/app/route.ts:5:23) | none | high | authn_only | low |
-| [route_0013](#route-route_0013) | next_js | POST | / | \`POST\` (tests/fixtures/nextjs/app/route.ts:10:14) | none | high | unauthenticated | high |
+| [route_0013](#route-route_0013) | next_js | POST | / | \`POST\` (tests/fixtures/nextjs/app/route.ts:10:14) | none | high | unauthenticated | review_required |
 | [route_0014](#route-route_0014) | next_js | GET | /tsx | \`GET\` (tests/fixtures/nextjs/app/tsx/route.tsx:1:14) | none | high | unauthenticated | low |
 | [route_0015](#route-route_0015) | next_js | GET | /users/\[id\] | \`GET\` (tests/fixtures/nextjs/app/users/\[id\]/route.ts:1:23) | none | high | unauthenticated | medium |
-| [route_0016](#route-route_0016) | next_js | PATCH | /users/\[id\] | \`PATCH\` (tests/fixtures/nextjs/app/users/\[id\]/route.ts:5:14) | none | high | unauthenticated | high |
+| [route_0016](#route-route_0016) | next_js | PATCH | /users/\[id\] | \`PATCH\` (tests/fixtures/nextjs/app/users/\[id\]/route.ts:5:14) | none | high | unauthenticated | review_required |
 | [route_0017](#route-route_0017) | next_js | PATCH | /wrapped-named | \`updateProfile\` (tests/fixtures/nextjs/app/wrapped-named/route.ts:9:34) | none | medium | authn_only | review_required |
 
 ## Data Mutations
@@ -97,12 +98,22 @@
 - Route location: tests/fixtures/nextjs/app/(admin)/reports/route.ts:5:1
 - Middleware: none
 - Confidence: high
-- Coverage: unauthenticated (high)
-- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
-- Coverage support: mutations: mutation_0001; links: link_0001; sensitivity: linked_mutation, unsafe_method
+- Coverage: unauthenticated (review_required)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence.
+- Coverage support: mutations: mutation_0001; links: link_0001; policy cases: policy_case_0001; sensitivity: linked_mutation, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0001: linked_mutation_protection at tests/fixtures/nextjs/app/(admin)/reports/route.ts:5:1 (high)
+    - Summary: Route reaches linked mutation(s): mutation_0001 (report).
+    - Cites coverage: route_0002
+    - Cites mutations: mutation_0001
+    - Cites links: link_0001
+    - Inputs: report
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Auth evidence: none
 - Data mutations:
   - delete `report` via `prisma` at tests/fixtures/nextjs/app/(admin)/reports/route.ts:2:10 (high)
@@ -119,9 +130,16 @@
 - Confidence: medium
 - Coverage: permission_guarded (low)
 - Coverage rationale: 2 strong authorization evidence item(s) support permission_guarded coverage.
-- Coverage support: evidence: evidence_0001, evidence_0002
+- Coverage support: evidence: evidence_0001, evidence_0002; policy cases: policy_case_0002
 - Coverage uncertainty:
   - Route inventory confidence is not high.
+- PolicyLens:
+  - policy_case_0002: effective_protection at tests/fixtures/nextjs/app/blog/\[...slug\]/route.ts:9:14 (medium)
+    - Summary: 2 evidence support(s) route protection: authn, permission_check.
+    - Cites coverage: route_0003
+    - Cites evidence: evidence_0001, evidence_0002
+    - Inputs: identity, permission
+    - Branch: static authorization evidence present -> allow (reachable)
 - Uncertainty notes:
   - Next.js route handler export is wrapped; wrapper behavior requires review
 - Auth evidence:
@@ -143,13 +161,30 @@
 - Declared protection: requireUser
 - Confidence: medium
 - Coverage: authn_only (review_required)
-- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0003; mutations: mutation_0002; links: link_0002; sensitivity: linked_mutation, unsafe_method
+- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence, route_param_mutation_without_scope.
+- Coverage support: evidence: evidence_0003; mutations: mutation_0002; links: link_0002; policy cases: policy_case_0003, policy_case_0004; sensitivity: linked_mutation, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Route inventory confidence is not high.
+- PolicyLens:
+  - policy_case_0003: effective_protection at tests/fixtures/nextjs/app/docs/\[\[...slug\]\]/route.ts:9:14 (medium)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0004
+    - Cites evidence: evidence_0003
+    - Cites mutations: mutation_0002
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0004: linked_mutation_protection at tests/fixtures/nextjs/app/docs/\[\[...slug\]\]/route.ts:9:14 (high)
+    - Summary: Route reaches linked mutation(s): mutation_0002 (doc).
+    - Cites coverage: route_0004
+    - Cites mutations: mutation_0002
+    - Cites links: link_0002
+    - Inputs: doc
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Uncertainty notes:
   - Next.js route handler export is wrapped; wrapper behavior requires review
 - Auth evidence:
@@ -189,13 +224,30 @@
 - Declared protection: withAuth
 - Confidence: medium
 - Coverage: authn_only (review_required)
-- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0004; mutations: mutation_0004; links: link_0003; sensitivity: linked_mutation, unsafe_method
+- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence.
+- Coverage support: evidence: evidence_0004; mutations: mutation_0004; links: link_0003; policy cases: policy_case_0005, policy_case_0006; sensitivity: linked_mutation, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Route inventory confidence is not high.
+- PolicyLens:
+  - policy_case_0005: effective_protection at tests/fixtures/nextjs/app/external/route.ts:1:1 (medium)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0006
+    - Cites evidence: evidence_0004
+    - Cites mutations: mutation_0004
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0006: linked_mutation_protection at tests/fixtures/nextjs/app/external/route.ts:1:1 (high)
+    - Summary: Route reaches linked mutation(s): mutation_0004 (external).
+    - Cites coverage: route_0006
+    - Cites mutations: mutation_0004
+    - Cites links: link_0003
+    - Inputs: external
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Uncertainty notes:
   - Next.js route handler export is wrapped; wrapper behavior requires review
 - Auth evidence:
@@ -215,11 +267,28 @@
 - Declared protection: requireAuth
 - Confidence: high
 - Coverage: authn_only (review_required)
-- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0005; mutations: mutation_0003; links: link_0004; sensitivity: linked_mutation, unsafe_method
+- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence.
+- Coverage support: evidence: evidence_0005; mutations: mutation_0003; links: link_0004; policy cases: policy_case_0007, policy_case_0008; sensitivity: linked_mutation, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0007: effective_protection at tests/fixtures/nextjs/app/external/handler.ts:2:3 (high)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0007
+    - Cites evidence: evidence_0005
+    - Cites mutations: mutation_0003
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0008: linked_mutation_protection at tests/fixtures/nextjs/app/external/route.ts:1:1 (high)
+    - Summary: Route reaches linked mutation(s): mutation_0003 (external).
+    - Cites coverage: route_0007
+    - Cites mutations: mutation_0003
+    - Cites links: link_0004
+    - Inputs: external
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/nextjs/app/external/handler.ts:2:3 (high)
     - Symbol: `requireAuth` (tests/fixtures/nextjs/app/external/handler.ts:2:3)
@@ -303,7 +372,14 @@
 - Confidence: high
 - Coverage: authn_only (low)
 - Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.
-- Coverage support: evidence: evidence_0006
+- Coverage support: evidence: evidence_0006; policy cases: policy_case_0009
+- PolicyLens:
+  - policy_case_0009: effective_protection at tests/fixtures/nextjs/app/route.ts:6:3 (high)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0012
+    - Cites evidence: evidence_0006
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
 - Auth evidence:
   - authn `authn_guard` at tests/fixtures/nextjs/app/route.ts:6:3 (high)
     - Symbol: `requireAuth` (tests/fixtures/nextjs/app/route.ts:6:3)
@@ -317,12 +393,22 @@
 - Route location: tests/fixtures/nextjs/app/route.ts:10:14
 - Middleware: none
 - Confidence: high
-- Coverage: unauthenticated (high)
-- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
-- Coverage support: mutations: mutation_0005; links: link_0005; sensitivity: linked_mutation, unsafe_method
+- Coverage: unauthenticated (review_required)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence.
+- Coverage support: mutations: mutation_0005; links: link_0005; policy cases: policy_case_0010; sensitivity: linked_mutation, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0010: linked_mutation_protection at tests/fixtures/nextjs/app/route.ts:10:14 (high)
+    - Summary: Route reaches linked mutation(s): mutation_0005 (session).
+    - Cites coverage: route_0013
+    - Cites mutations: mutation_0005
+    - Cites links: link_0005
+    - Inputs: session
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Auth evidence: none
 - Data mutations:
   - create `session` via `prisma` at tests/fixtures/nextjs/app/route.ts:11:10 (high)
@@ -366,13 +452,23 @@
 - Middleware: none
 - Params: id (medium)
 - Confidence: high
-- Coverage: unauthenticated (high)
-- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): linked_mutation, unsafe_method, user_path.; Linked data mutation(s) increase review sensitivity.; No strong authorization evidence was found for a high-sensitivity route.
-- Coverage support: mutations: mutation_0007; links: link_0006; sensitivity: linked_mutation, unsafe_method, user_path
+- Coverage: unauthenticated (review_required)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): linked_mutation, unsafe_method, user_path.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence, route_param_mutation_without_scope.
+- Coverage support: mutations: mutation_0007; links: link_0006; policy cases: policy_case_0011; sensitivity: linked_mutation, unsafe_method, user_path
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
   - Should this route require ownership or permission checks?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0011: linked_mutation_protection at tests/fixtures/nextjs/app/users/\[id\]/route.ts:5:14 (high)
+    - Summary: Route reaches linked mutation(s): mutation_0007 (user).
+    - Cites coverage: route_0016
+    - Cites mutations: mutation_0007
+    - Cites links: link_0006
+    - Inputs: user
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Auth evidence: none
 - Data mutations:
   - update `user` via `prisma` at tests/fixtures/nextjs/app/users/\[id\]/route.ts:6:10 (high)
@@ -387,13 +483,30 @@
 - Declared protection: requireUser
 - Confidence: medium
 - Coverage: authn_only (review_required)
-- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.
-- Coverage support: evidence: evidence_0007; mutations: mutation_0008; links: link_0007; sensitivity: linked_mutation, unsafe_method
+- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): linked_mutation, unsafe_method.; Linked data mutation(s) increase review sensitivity.; Tenant isolation review required: missing_tenant_or_ownership_evidence.
+- Coverage support: evidence: evidence_0007; mutations: mutation_0008; links: link_0007; policy cases: policy_case_0012, policy_case_0013; sensitivity: linked_mutation, unsafe_method
 - Reviewer questions:
   - Should linked data mutations have resource-specific authorization evidence?
+  - Should this route require tenant or ownership scoping?
   - Should this state-changing route require more than authentication?
 - Coverage uncertainty:
   - Route inventory confidence is not high.
+- PolicyLens:
+  - policy_case_0012: effective_protection at tests/fixtures/nextjs/app/wrapped-named/route.ts:9:14 (medium)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0017
+    - Cites evidence: evidence_0007
+    - Cites mutations: mutation_0008
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
+  - policy_case_0013: linked_mutation_protection at tests/fixtures/nextjs/app/wrapped-named/route.ts:9:14 (high)
+    - Summary: Route reaches linked mutation(s): mutation_0008 (profile).
+    - Cites coverage: route_0017
+    - Cites mutations: mutation_0008
+    - Cites links: link_0007
+    - Inputs: profile
+    - Branch: route-to-mutation reachability -> review_required (reachable)
+    - Question: Should linked data mutations have resource-specific authorization evidence?
 - Uncertainty notes:
   - Next.js route handler export is wrapped; wrapper behavior requires review
 - Auth evidence:

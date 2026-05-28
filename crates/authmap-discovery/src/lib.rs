@@ -353,7 +353,7 @@ fn is_manifest_or_hint_file(path: &Path) -> bool {
 fn is_supported_source(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|ext| ext.to_str()),
-        Some("py" | "js" | "jsx" | "ts" | "tsx")
+        Some("py" | "js" | "jsx" | "ts" | "tsx" | "mjs" | "cjs" | "mts" | "cts")
     )
 }
 
@@ -364,9 +364,9 @@ fn normalize_path(path: &Path) -> String {
 fn detect_language(path: &Path) -> Language {
     match path.extension().and_then(|ext| ext.to_str()) {
         Some("py") => Language::Python,
-        Some("js") => Language::JavaScript,
+        Some("js" | "mjs" | "cjs") => Language::JavaScript,
         Some("jsx") => Language::JavaScriptReact,
-        Some("ts") => Language::TypeScript,
+        Some("ts" | "mts" | "cts") => Language::TypeScript,
         Some("tsx") => Language::TypeScriptReact,
         _ => Language::Unknown,
     }
@@ -769,6 +769,38 @@ mod tests {
         let result = discover_sources(&plan(temp.path())).expect("discovery should succeed");
 
         assert_eq!(names(&result), vec!["app.ts"]);
+    }
+
+    #[test]
+    fn discovers_esm_and_cjs_source_extensions() {
+        let temp = TestDir::new("esm-cjs-extensions");
+        for path in [
+            "src/app.mjs",
+            "src/legacy.cjs",
+            "src/typed.mts",
+            "src/typed-legacy.cts",
+        ] {
+            write_file(&temp.path().join(path), "const ok = true;\n");
+        }
+
+        let result = discover_sources(&plan(temp.path())).expect("discovery should succeed");
+        assert_eq!(
+            names(&result),
+            vec!["app.mjs", "legacy.cjs", "typed-legacy.cts", "typed.mts"]
+        );
+
+        let language_of = |name: &str| {
+            result
+                .files
+                .iter()
+                .find(|file| file.path.ends_with(name))
+                .map(|file| file.language)
+                .expect("file should be discovered")
+        };
+        assert_eq!(language_of("app.mjs"), Language::JavaScript);
+        assert_eq!(language_of("legacy.cjs"), Language::JavaScript);
+        assert_eq!(language_of("typed.mts"), Language::TypeScript);
+        assert_eq!(language_of("typed-legacy.cts"), Language::TypeScript);
     }
 
     #[test]

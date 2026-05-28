@@ -1,0 +1,259 @@
+{
+  "diagnostics": [
+    {
+      "category": "policy",
+      "code": "policy.dynamic_behavior",
+      "message": "Dynamic policy evidence requires review.",
+      "recoverability": "recoverable",
+      "severity": "warning",
+      "span": {
+        "byte_range": {
+          "end": 531,
+          "start": 509
+        },
+        "column": 5,
+        "file": "tests/fixtures/diff/head/app.py",
+        "line": 26
+      }
+    }
+  ],
+  "findings": [
+    {
+      "base_route_id": "route_0001",
+      "confidence": "high",
+      "control_type": "tenant_helper",
+      "enforcement_blocking": true,
+      "evidence_ids": [
+        "evidence_0003"
+      ],
+      "fail_category": "removed_authorization_evidence",
+      "head_route_id": "route_0001",
+      "id": "control_0001",
+      "link_ids": [],
+      "location": {
+        "byte_range": {
+          "end": 375,
+          "start": 352
+        },
+        "column": 70,
+        "file": "tests/fixtures/diff/base/app.py",
+        "line": 23
+      },
+      "message": "Removed tenant_check evidence for GET /accounts/{account_id}: tenant_guard",
+      "mutation_ids": [],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?"
+      ],
+      "route_key": "fast_api GET /accounts/{account_id}",
+      "severity": "error",
+      "source_change_id": "drift_0002",
+      "source_change_kind": "removed_evidence",
+      "weak_evidence_ids": [
+        "evidence_0001"
+      ]
+    },
+    {
+      "base_route_id": "route_0001",
+      "confidence": "medium",
+      "control_type": "route_guard",
+      "enforcement_blocking": true,
+      "evidence_ids": [
+        "evidence_0001",
+        "evidence_0002"
+      ],
+      "fail_category": "auth_downgrade",
+      "head_route_id": "route_0001",
+      "id": "control_0002",
+      "link_ids": [],
+      "location": null,
+      "message": "Coverage changed for GET /accounts/{account_id} from tenant_guarded (low) to authn_only (review_required)",
+      "mutation_ids": [],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?"
+      ],
+      "route_key": "fast_api GET /accounts/{account_id}",
+      "severity": "error",
+      "source_change_id": "drift_0003",
+      "source_change_kind": "coverage_changed",
+      "weak_evidence_ids": [
+        "evidence_0001"
+      ]
+    },
+    {
+      "base_route_id": "route_0001",
+      "confidence": "high",
+      "control_type": "policy_helper",
+      "enforcement_blocking": true,
+      "evidence_ids": [
+        "evidence_0001",
+        "evidence_0002"
+      ],
+      "fail_category": "policy_decision_change",
+      "head_route_id": "route_0001",
+      "id": "control_0003",
+      "link_ids": [],
+      "location": null,
+      "message": "Policy decision cases changed for GET /accounts/{account_id}",
+      "mutation_ids": [],
+      "reviewer_questions": [
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?"
+      ],
+      "route_key": "fast_api GET /accounts/{account_id}",
+      "severity": "error",
+      "source_change_id": "drift_0004",
+      "source_change_kind": "policy_changed",
+      "weak_evidence_ids": [
+        "evidence_0001"
+      ]
+    },
+    {
+      "base_route_id": "route_0002",
+      "confidence": "high",
+      "control_type": "permission_map",
+      "enforcement_blocking": true,
+      "evidence_ids": [
+        "evidence_0005"
+      ],
+      "fail_category": "removed_authorization_evidence",
+      "head_route_id": "route_0002",
+      "id": "control_0004",
+      "link_ids": [],
+      "location": {
+        "byte_range": {
+          "end": 534,
+          "start": 509
+        },
+        "column": 45,
+        "file": "tests/fixtures/diff/base/app.py",
+        "line": 28
+      },
+      "message": "Removed permission_check evidence for PATCH /accounts/{account_id}: permission_guard",
+      "mutation_ids": [],
+      "reviewer_questions": [
+        "Can the dynamic authorization path be confirmed?",
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "route_key": "fast_api PATCH /accounts/{account_id}",
+      "severity": "error",
+      "source_change_id": "drift_0006",
+      "source_change_kind": "removed_evidence",
+      "weak_evidence_ids": [
+        "evidence_0003",
+        "evidence_0005"
+      ]
+    },
+    {
+      "base_route_id": "route_0002",
+      "confidence": "medium",
+      "control_type": "route_guard",
+      "enforcement_blocking": true,
+      "evidence_ids": [
+        "evidence_0003",
+        "evidence_0004",
+        "evidence_0005"
+      ],
+      "fail_category": "auth_downgrade",
+      "head_route_id": "route_0002",
+      "id": "control_0005",
+      "link_ids": [],
+      "location": null,
+      "message": "Coverage changed for PATCH /accounts/{account_id} from permission_guarded (review_required) to authn_only (review_required)",
+      "mutation_ids": [],
+      "reviewer_questions": [
+        "Can the dynamic authorization path be confirmed?",
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "route_key": "fast_api PATCH /accounts/{account_id}",
+      "severity": "error",
+      "source_change_id": "drift_0007",
+      "source_change_kind": "coverage_changed",
+      "weak_evidence_ids": [
+        "evidence_0003",
+        "evidence_0005"
+      ]
+    },
+    {
+      "base_route_id": "route_0002",
+      "confidence": "high",
+      "control_type": "policy_helper",
+      "enforcement_blocking": true,
+      "evidence_ids": [
+        "evidence_0003",
+        "evidence_0004",
+        "evidence_0005"
+      ],
+      "fail_category": "policy_decision_change",
+      "head_route_id": "route_0002",
+      "id": "control_0006",
+      "link_ids": [],
+      "location": null,
+      "message": "Policy decision cases changed for PATCH /accounts/{account_id}",
+      "mutation_ids": [],
+      "reviewer_questions": [
+        "Can the dynamic authorization path be confirmed?",
+        "Should this route require ownership or permission checks?",
+        "Should this route require tenant or ownership scoping?",
+        "Should this state-changing route require more than authentication?"
+      ],
+      "route_key": "fast_api PATCH /accounts/{account_id}",
+      "severity": "error",
+      "source_change_id": "drift_0008",
+      "source_change_kind": "policy_changed",
+      "weak_evidence_ids": [
+        "evidence_0003",
+        "evidence_0005"
+      ]
+    }
+  ],
+  "metadata": {
+    "base": {
+      "label": "tests/fixtures/diff/base",
+      "schema_version": "0.1.0",
+      "target_roots": [
+        "tests/fixtures/diff/base"
+      ]
+    },
+    "config": {
+      "path": null,
+      "source": "none"
+    },
+    "fail_on": [
+      "added_high_risk_route",
+      "auth_downgrade",
+      "new_linked_mutation",
+      "removed_authorization_evidence",
+      "policy_decision_change"
+    ],
+    "head": {
+      "label": "tests/fixtures/diff/head",
+      "schema_version": "0.1.0",
+      "target_roots": [
+        "tests/fixtures/diff/head"
+      ]
+    },
+    "mode": "enforce"
+  },
+  "report_type": "authmap.controls",
+  "schema_version": "0.1.0",
+  "summary": {
+    "admin_changes": 0,
+    "audit_changes": 0,
+    "auth_relevant_header_changes": 0,
+    "blocking_findings": 6,
+    "guard_changes": 0,
+    "ownership_changes": 0,
+    "permission_changes": 1,
+    "policy_changes": 2,
+    "review_required": 6,
+    "route_guard_changes": 2,
+    "tenant_changes": 1,
+    "total_findings": 6
+  }
+}

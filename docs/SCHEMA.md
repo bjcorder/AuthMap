@@ -8,7 +8,7 @@ The canonical machine-readable contract lives in
 
 Every document contains:
 
-- `schema_version`: the AuthMap schema version. The v1.0.0 CLI emits schema `"0.1.0"`.
+- `schema_version`: the AuthMap schema version. The v0.1.0 CLI emits schema `"0.1.0"`.
 - `metadata`: tool version, scan mode, targets, and optional config path.
 - `source_files`: discovered files and project hints.
 - `routes`: normalized externally reachable routes or handlers.
@@ -16,6 +16,7 @@ Every document contains:
 - `mutations`: sensitive operations such as ORM writes or deletes.
 - `links`: normalized relationships between routes, evidence, and mutations.
 - `coverage`: review-oriented classification for routes.
+- `policy_cases`: optional static policy decision summaries for route review.
 - `diagnostics`: structured scan diagnostics with stable categories and codes.
 
 The JSON schema is strict: misspelled core fields are rejected.
@@ -24,6 +25,9 @@ Diagnostic categories, severity semantics, and exit-code behavior are documented
 in [`docs/DIAGNOSTICS.md`](DIAGNOSTICS.md).
 Project configuration is documented in
 [`docs/CONFIGURATION.md`](CONFIGURATION.md).
+Downstream consumer guidance, stable-field expectations, extension
+compatibility, and automation workflow examples are documented in
+[`docs/JSON_CONSUMERS.md`](JSON_CONSUMERS.md).
 
 ## Locations And Relationships
 
@@ -78,7 +82,20 @@ Risk scoring uses route sensitivity modifiers and linked facts:
 
 Coverage entries include machine-readable support metadata in the namespaced
 extension key `authmap.coverage`. The extension can contain `evidence_ids`,
-`weak_evidence_ids`, `mutation_ids`, `link_ids`, and `sensitivity_reasons`.
+`weak_evidence_ids`, `mutation_ids`, `link_ids`, `policy_case_ids`, and
+`sensitivity_reasons`.
+
+Tenant isolation review metadata can appear in
+`coverage.extensions["authmap.tenant_review"]`. It is advisory metadata for
+focused tenant reports and can include `review_required`, `reasons`,
+`evidence_ids`, and `weak_evidence_ids`; it does not change the canonical schema
+version.
+
+Policy decision cases are optional static summaries, not runtime proofs. When
+present, `policy_cases[]` entries cite route and evidence IDs, summarize
+effective protection or review-required policy behavior, record observed inputs
+and branches, and carry reviewer questions or uncertainty notes for dynamic,
+conflicting, duplicated, unreachable, or linked-mutation policy evidence.
 
 Raw or ambiguous mutation facts can include machine-readable review metadata in
 `mutation.extensions["authmap.mutation"]`. The MVP uses `review_required`,
