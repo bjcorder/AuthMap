@@ -637,7 +637,7 @@ fn ci_workflow_defines_cross_platform_rust_matrix_and_install_smoke() {
     assert!(workflow.contains("contents: read"));
     assert!(workflow.contains("toolchain: ${{ matrix.rust }}"));
     assert!(workflow.contains("components: rustfmt"));
-    assert!(workflow.contains("actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830"));
+    assert!(workflow.contains("actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae"));
     assert!(workflow.contains("~/.cargo/registry"));
     assert!(workflow.contains("~/.cargo/git"));
     assert!(!workflow.contains("target/"));
@@ -793,7 +793,7 @@ fn action_metadata_defines_expected_wrapper_contract() {
     assert!(action.contains("using: composite"));
     assert!(action.contains(".github/actions/authmap/run.sh"));
     assert!(action.contains("AUTHMAP_DEFER_EXIT"));
-    assert!(action.contains("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"));
+    assert!(action.contains("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"));
     assert!(
         action
             .contains("github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e")
