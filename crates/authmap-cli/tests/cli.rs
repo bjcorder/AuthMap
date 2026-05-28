@@ -796,7 +796,7 @@ fn action_metadata_defines_expected_wrapper_contract() {
     assert!(action.contains("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"));
     assert!(
         action
-            .contains("github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e")
+            .contains("github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa")
     );
     assert!(action.contains("Propagate AuthMap exit code"));
     assert!(script.contains("cargo run --locked"));
