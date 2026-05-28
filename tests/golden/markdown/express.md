@@ -19,6 +19,7 @@
 
 | Item | Subject | Reason |
 | --- | --- | --- |
+| [route_0003](#route-route_0003) | GET /conflicting | risk is review_required; coverage is unknown_or_dynamic |
 | [route_0004](#route-route_0004) | POST /accounts | risk is review_required |
 | [route_0006](#route-route_0006) | GET /{tenant}/reports | risk is review_required |
 | [route_0008](#route-route_0008) | DELETE &lt;dynamic&gt; | confidence is low; Express route path is dynamic and was emitted as &lt;dynamic&gt;; risk is review_required |
@@ -44,7 +45,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | [route_0001](#route-route_0001) | express | GET | /health | \`&lt;inline_handler&gt;\` (tests/fixtures/express/app.js:57:33) | \`requireAuth\` (tests/fixtures/express/app.js:14:10) | high | authn_only | low |
 | [route_0002](#route-route_0002) | express | GET | /public/status | \`listAccounts\` (tests/fixtures/express/app.js:48:10) | \`publicRoute\` (tests/fixtures/express/app.js:40:10) | high | public_declared | low |
-| [route_0003](#route-route_0003) | express | GET | /conflicting | \`listAccounts\` (tests/fixtures/express/app.js:48:10) | \`publicRoute\` (tests/fixtures/express/app.js:40:10), \`requireAuth\` (tests/fixtures/express/app.js:14:10) | high | public_declared | low |
+| [route_0003](#route-route_0003) | express | GET | /conflicting | \`listAccounts\` (tests/fixtures/express/app.js:48:10) | \`publicRoute\` (tests/fixtures/express/app.js:40:10), \`requireAuth\` (tests/fixtures/express/app.js:14:10) | high | unknown_or_dynamic | review_required |
 | [route_0004](#route-route_0004) | express | POST | /accounts | \`listAccounts\` (tests/fixtures/express/app.js:48:10) | \`requireAuth\` (tests/fixtures/express/app.js:14:10), \`audit\` (tests/fixtures/express/app.js:36:10) | high | authn_only | review_required |
 | [route_0005](#route-route_0005) | express | POST | /admin/jobs | \`listAccounts\` (tests/fixtures/express/app.js:48:10) | \`requireAuth\` (tests/fixtures/express/app.js:55:19), \`requirePermission\` (tests/fixtures/express/app.js:55:32), \`requireRole\` (tests/fixtures/express/app.js:18:10) | high | permission_guarded | low |
 | [route_0006](#route-route_0006) | express | GET | /{tenant}/reports | \`listAccounts\` (tests/fixtures/express/app.js:48:10) | \`requireAuth\` (tests/fixtures/express/app.js:14:10) | high | authn_only | review_required |
@@ -135,10 +136,11 @@ No data mutations were detected.
 - Middleware: `publicRoute` (tests/fixtures/express/app.js:40:10), `requireAuth` (tests/fixtures/express/app.js:14:10)
 - Declared protection: publicRoute, requireAuth
 - Confidence: high
-- Coverage: public_declared (low)
-- Coverage rationale: 2 strong authorization evidence item(s) support public_declared coverage.
+- Coverage: unknown_or_dynamic (review_required)
+- Coverage rationale: 2 strong authorization evidence item(s) support unknown_or_dynamic coverage.
 - Coverage support: evidence: evidence_0003, evidence_0004; policy cases: policy_case_0003, policy_case_0004
 - Reviewer questions:
+  - Can the dynamic authorization path be confirmed?
   - Is this route intentionally public and guarded?
 - Coverage uncertainty:
   - Conflicting policy evidence requires reviewer confirmation.

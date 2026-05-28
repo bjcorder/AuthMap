@@ -115,11 +115,11 @@ A SARIF report covering the same routes is available for GitHub code scanning.
 | Django                | Python               |
 | Django REST Framework | Python               |
 | Express               | Node.js / TypeScript |
-| Next.js (App Router)  | TypeScript           |
+| Next.js (App + Pages) | TypeScript / Node.js |
 | tRPC                  | TypeScript           |
-| GraphQL               | TypeScript / Node.js |
+| GraphQL               | Python / TypeScript / Node.js |
 
-Plus ORM mutation evidence for **SQLAlchemy**, **Django ORM**, and **Prisma**, linked to the routes that can reach them.
+Plus ORM mutation evidence for **SQLAlchemy**, **Django ORM**, and **Prisma** (with best-effort detection of **Sequelize**, **Mongoose**, and **TypeORM**), linked to the routes that can reach them.
 
 Evidence sources include middleware, decorators, guards, policy objects, service-layer checks, ownership and tenant-isolation patterns, and ORM mutations. See [docs/PARSERS_AND_ADAPTERS.md](docs/PARSERS_AND_ADAPTERS.md) for the adapter contract.
 

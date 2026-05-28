@@ -12,7 +12,7 @@ fn empty_markdown_matches_golden() {
         MarkdownReporter
             .render(&document)
             .expect("markdown render should succeed"),
-        include_str!("../../../tests/golden/markdown/empty.md"),
+        "empty.md",
     );
 }
 
@@ -23,7 +23,7 @@ fn fastapi_markdown_matches_golden() {
         MarkdownReporter
             .render(&document)
             .expect("markdown render should succeed"),
-        include_str!("../../../tests/golden/markdown/fastapi.md"),
+        "fastapi.md",
     );
 }
 
@@ -34,7 +34,7 @@ fn express_markdown_matches_golden() {
         MarkdownReporter
             .render(&document)
             .expect("markdown render should succeed"),
-        include_str!("../../../tests/golden/markdown/express.md"),
+        "express.md",
     );
 }
 
@@ -49,8 +49,46 @@ fn fixture_path(name: impl AsRef<Path>) -> PathBuf {
         .join(name)
 }
 
-fn assert_markdown_eq(actual: String, expected: &str) {
-    assert_eq!(normalize(&actual), normalize(expected));
+fn golden_path(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/markdown")
+        .join(name)
+}
+
+fn assert_markdown_eq(actual: String, golden_name: &str) {
+    let path = golden_path(golden_name);
+    let existing = std::fs::read_to_string(&path).ok();
+    if std::env::var_os("AUTHMAP_UPDATE_GOLDENS").is_some() {
+        // Skip rewriting when the content already matches (ignoring the
+        // cross-platform leniency `normalize` applies) so unrelated goldens do
+        // not churn on trailing-newline differences.
+        if existing
+            .as_deref()
+            .is_some_and(|current| normalize(current) == normalize(&actual))
+        {
+            return;
+        }
+        // Store with paths relativized but otherwise raw, so the on-disk golden
+        // keeps its canonical form.
+        std::fs::write(&path, relativize_paths(&actual))
+            .unwrap_or_else(|err| panic!("failed to update golden {golden_name}: {err}"));
+        return;
+    }
+    let expected = existing.unwrap_or_else(|| panic!("failed to read golden {golden_name}"));
+    assert_eq!(normalize(&actual), normalize(&expected));
+}
+
+fn relativize_paths(input: &str) -> String {
+    let fixture_root = fixture_path("")
+        .to_string_lossy()
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_string();
+    input
+        .replace("\r\n", "\n")
+        .replace(&fixture_root, "tests/fixtures")
+        .trim_end_matches('\n')
+        .to_string()
 }
 
 fn normalize(input: &str) -> String {

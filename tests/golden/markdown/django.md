@@ -7,13 +7,13 @@
 
 - Mode: advisory
 - Targets: tests/fixtures/django
-- Source files: 9
-- Routes: 34
-- Evidence entries: 28
+- Source files: 11
+- Routes: 38
+- Evidence entries: 31
 - Mutations: 7
-- Policy cases: 19
+- Policy cases: 22
 - Diagnostics: 7
-- Frameworks: django: 7, django_rest_framework: 27
+- Frameworks: django: 11, django_rest_framework: 27
 
 ## Review Required
 
@@ -33,8 +33,11 @@
 | [route_0030](#route-route_0030) | ANY &lt;dynamic&gt; | confidence is medium; Django URL path is dynamic and was emitted as &lt;dynamic&gt;; risk is high |
 | [route_0031](#route-route_0031) | ANY /accounts/generated | confidence is medium; Route emitted from statically matched generated URL helper |
 | [route_0032](#route-route_0032) | ANY /accounts/generated/&lt;int:pk&gt;/edit | confidence is medium; Route emitted from statically matched generated URL helper |
-| [route_0033](#route-route_0033) | ANY /status/ | risk is high |
-| [route_0034](#route-route_0034) | ANY /legacy/{slug}/ | confidence is medium; Django re_path regex literal normalized as route path; risk is high |
+| [route_0033](#route-route_0033) | ANY /dashboard/ | risk is review_required |
+| [route_0035](#route-route_0035) | ANY /widgets/ | confidence is medium; Django re_path regex literal normalized as route path; risk is review_required |
+| [route_0036](#route-route_0036) | ANY /status/ | risk is high |
+| [route_0037](#route-route_0037) | ANY /status/ | risk is high |
+| [route_0038](#route-route_0038) | ANY /legacy/{slug}/ | confidence is medium; Django re_path regex literal normalized as route path; risk is high |
 | diagnostic | django_dynamic_include_helper | Django include helper could not be expanded statically: helper=get_urlconf; positional=\[\]; keywords=\[\] at tests/fixtures/django/project/urls.py:11:30 |
 | diagnostic | drf_dynamic_basename | DRF router basename is dynamic and could not be resolved at tests/fixtures/django/accounts/urls.py:13:1 |
 | diagnostic | drf_dynamic_router_prefix | DRF router registration prefix is dynamic and could not be resolved at tests/fixtures/django/accounts/urls.py:13:17 |
@@ -79,8 +82,12 @@
 | [route_0030](#route-route_0030) | django | ANY | &lt;dynamic&gt; | \`dynamic_view\` (tests/fixtures/django/accounts/views.py:37:5) | none | medium | unauthenticated | high |
 | [route_0031](#route-route_0031) | django | ANY | /accounts/generated | \`GeneratedAccountListView\` (tests/fixtures/django/accounts/views.py:55:7) | none | medium | permission_guarded | low |
 | [route_0032](#route-route_0032) | django | ANY | /accounts/generated/&lt;int:pk&gt;/edit | \`GeneratedAccountEditView\` (tests/fixtures/django/accounts/views.py:60:7) | none | medium | permission_guarded | low |
-| [route_0033](#route-route_0033) | django | ANY | /status/ | \`status\` (tests/fixtures/django/accounts/views.py:25:5) | none | high | unauthenticated | high |
-| [route_0034](#route-route_0034) | django | ANY | /legacy/{slug}/ | \`legacy_detail\` (tests/fixtures/django/accounts/views.py:29:5) | none | medium | unauthenticated | high |
+| [route_0033](#route-route_0033) | django | ANY | /dashboard/ | \`dashboard\` (tests/fixtures/django/legacy/views.py:7:5) | none | high | authn_only | review_required |
+| [route_0034](#route-route_0034) | django | ANY | /reports/ | \`reports\` (tests/fixtures/django/legacy/views.py:12:5) | none | high | permission_guarded | low |
+| [route_0035](#route-route_0035) | django | ANY | /widgets/ | \`widgets\` (tests/fixtures/django/legacy/views.py:18:5) | none | medium | authn_only | review_required |
+| [route_0036](#route-route_0036) | django | ANY | /status/ | \`public_status\` (tests/fixtures/django/legacy/views.py:22:5) | none | high | unauthenticated | high |
+| [route_0037](#route-route_0037) | django | ANY | /status/ | \`status\` (tests/fixtures/django/accounts/views.py:25:5) | none | high | unauthenticated | high |
+| [route_0038](#route-route_0038) | django | ANY | /legacy/{slug}/ | \`legacy_detail\` (tests/fixtures/django/accounts/views.py:29:5) | none | medium | unauthenticated | high |
 
 ## Data Mutations
 
@@ -915,7 +922,105 @@
 - Data mutations: none
 
 <a id="route-route_0033"></a>
-### route_0033 ANY `/status/`
+### route_0033 ANY `/dashboard/`
+
+- Framework: django
+- Handler: `dashboard` (tests/fixtures/django/legacy/views.py:7:5)
+- Route location: tests/fixtures/django/legacy/urls.py:7:5
+- Middleware: none
+- Declared protection: login_required
+- Confidence: high
+- Coverage: authn_only (review_required)
+- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): any_method, unsafe_method.
+- Coverage support: evidence: evidence_0029; policy cases: policy_case_0020; sensitivity: any_method, unsafe_method
+- Reviewer questions:
+  - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0020: effective_protection at tests/fixtures/django/legacy/views.py:6:1 (high)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0033
+    - Cites evidence: evidence_0029
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
+- Auth evidence:
+  - authn `django_login_required` at tests/fixtures/django/legacy/views.py:6:1 (high)
+    - Symbol: `login_required` (tests/fixtures/django/legacy/views.py:6:1)
+- Data mutations: none
+
+<a id="route-route_0034"></a>
+### route_0034 ANY `/reports/`
+
+- Framework: django
+- Handler: `reports` (tests/fixtures/django/legacy/views.py:12:5)
+- Route location: tests/fixtures/django/legacy/urls.py:8:5
+- Middleware: none
+- Declared protection: permission_required
+- Confidence: high
+- Coverage: permission_guarded (low)
+- Coverage rationale: 1 strong authorization evidence item(s) support permission_guarded coverage.; Sensitive route modifier(s): any_method, unsafe_method.
+- Coverage support: evidence: evidence_0030; policy cases: policy_case_0021; sensitivity: any_method, unsafe_method
+- Reviewer questions:
+  - Should this state-changing route require more than authentication?
+- PolicyLens:
+  - policy_case_0021: effective_protection at tests/fixtures/django/legacy/views.py:11:1 (high)
+    - Summary: 1 evidence support(s) route protection: permission_check.
+    - Cites coverage: route_0034
+    - Cites evidence: evidence_0030
+    - Inputs: permission
+    - Branch: static authorization evidence present -> allow (reachable)
+- Auth evidence:
+  - permission_check `django_permission_required` at tests/fixtures/django/legacy/views.py:11:1 (high)
+    - Symbol: `permission_required` (tests/fixtures/django/legacy/views.py:11:1)
+- Data mutations: none
+
+<a id="route-route_0035"></a>
+### route_0035 ANY `/widgets/`
+
+- Framework: django
+- Handler: `widgets` (tests/fixtures/django/legacy/views.py:18:5)
+- Route location: tests/fixtures/django/legacy/urls.py:9:5
+- Middleware: none
+- Declared protection: IsAuthenticated
+- Confidence: medium
+- Coverage: authn_only (review_required)
+- Coverage rationale: 1 strong authorization evidence item(s) support authn_only coverage.; Sensitive route modifier(s): any_method, unsafe_method.
+- Coverage support: evidence: evidence_0031; policy cases: policy_case_0022; sensitivity: any_method, unsafe_method
+- Reviewer questions:
+  - Should this state-changing route require more than authentication?
+- Coverage uncertainty:
+  - Route inventory confidence is not high.
+- PolicyLens:
+  - policy_case_0022: effective_protection at tests/fixtures/django/legacy/views.py:17:1 (high)
+    - Summary: 1 evidence support(s) route protection: authn.
+    - Cites coverage: route_0035
+    - Cites evidence: evidence_0031
+    - Inputs: identity
+    - Branch: static authorization evidence present -> allow (reachable)
+- Uncertainty notes:
+  - Django re_path regex literal normalized as route path
+- Auth evidence:
+  - authn `drf_permission_classes` at tests/fixtures/django/legacy/views.py:17:1 (high)
+    - Symbol: `IsAuthenticated` (tests/fixtures/django/legacy/views.py:17:1)
+- Data mutations: none
+
+<a id="route-route_0036"></a>
+### route_0036 ANY `/status/`
+
+- Framework: django
+- Handler: `public_status` (tests/fixtures/django/legacy/views.py:22:5)
+- Route location: tests/fixtures/django/legacy/urls.py:13:5
+- Middleware: none
+- Confidence: high
+- Coverage: unauthenticated (high)
+- Coverage rationale: No authorization evidence was detected.; Sensitive route modifier(s): any_method, unsafe_method.; No strong authorization evidence was found for a high-sensitivity route.
+- Coverage support: sensitivity: any_method, unsafe_method
+- Reviewer questions:
+  - Should this state-changing route require more than authentication?
+- Auth evidence: none
+- Data mutations: none
+
+<a id="route-route_0037"></a>
+### route_0037 ANY `/status/`
 
 - Framework: django
 - Handler: `status` (tests/fixtures/django/accounts/views.py:25:5)
@@ -930,8 +1035,8 @@
 - Auth evidence: none
 - Data mutations: none
 
-<a id="route-route_0034"></a>
-### route_0034 ANY `/legacy/{slug}/`
+<a id="route-route_0038"></a>
+### route_0038 ANY `/legacy/{slug}/`
 
 - Framework: django
 - Handler: `legacy_detail` (tests/fixtures/django/accounts/views.py:29:5)

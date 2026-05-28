@@ -5004,12 +5004,13 @@
     },
     {
       "route_id": "route_0003",
-      "class": "public_declared",
-      "risk": "low",
+      "class": "unknown_or_dynamic",
+      "risk": "review_required",
       "rationale": [
-        "2 strong authorization evidence item(s) support public_declared coverage."
+        "2 strong authorization evidence item(s) support unknown_or_dynamic coverage."
       ],
       "reviewer_questions": [
+        "Can the dynamic authorization path be confirmed?",
         "Is this route intentionally public and guarded?"
       ],
       "uncertainty_reasons": [

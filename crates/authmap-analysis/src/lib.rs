@@ -950,6 +950,15 @@ fn python_needs_syntax_tree(text: &str) -> bool {
 fn enabled_frameworks_for_sources(parsed_files: &[ParsedFile]) -> Vec<String> {
     let mut frameworks = BTreeSet::<String>::new();
     for parsed in parsed_files {
+        // Discovery records per-project `ProjectHint`s from manifests and imports.
+        // Union them in so an adapter still runs when the in-file text heuristic misses
+        // (aliased, wrapped, or re-exported framework imports).
+        for hint in &parsed.source.project_hints {
+            if let Some(name) = framework_name_for_hint(*hint) {
+                frameworks.insert(name.to_string());
+            }
+        }
+
         match parsed.language {
             authmap_core::Language::Python => {
                 if python_has_fastapi_route_indicators(&parsed.text) {
@@ -972,14 +981,41 @@ fn enabled_frameworks_for_sources(parsed_files: &[ParsedFile]) -> Vec<String> {
                 if js_has_nextjs_route_indicators(parsed, &parsed.text) {
                     frameworks.insert("nextjs".to_string());
                 }
-                if parsed.text.contains("Procedure") || parsed.text.contains("procedure") {
+                if js_has_trpc_route_indicators(&parsed.text) {
                     frameworks.insert("trpc".to_string());
+                }
+                if js_has_graphql_route_indicators(&parsed.text) {
+                    frameworks.insert("graphql".to_string());
                 }
             }
             authmap_core::Language::Unknown => {}
         }
     }
     frameworks.into_iter().collect()
+}
+
+/// Maps a discovery `ProjectHint` to the adapter `name()` it should enable, when any.
+/// ORM hints (SqlAlchemy, DjangoOrm, Prisma) do not map to a route adapter.
+fn framework_name_for_hint(hint: authmap_core::ProjectHint) -> Option<&'static str> {
+    match hint {
+        authmap_core::ProjectHint::FastApi => Some("fastapi"),
+        authmap_core::ProjectHint::Django | authmap_core::ProjectHint::DjangoRestFramework => {
+            Some("django")
+        }
+        authmap_core::ProjectHint::Express => Some("express"),
+        authmap_core::ProjectHint::NextJs => Some("nextjs"),
+        authmap_core::ProjectHint::SqlAlchemy
+        | authmap_core::ProjectHint::DjangoOrm
+        | authmap_core::ProjectHint::Prisma => None,
+    }
+}
+
+fn js_has_trpc_route_indicators(text: &str) -> bool {
+    text.contains("Procedure")
+        || text.contains("procedure")
+        || text.contains("@trpc/server")
+        || text.contains("createTRPCRouter")
+        || text.contains("initTRPC")
 }
 
 fn python_has_fastapi_route_indicators(text: &str) -> bool {
@@ -1022,6 +1058,20 @@ fn python_has_graphql_route_indicators(text: &str) -> bool {
             "DeprecatedModelMutation",
         ],
     )
+}
+
+fn js_has_graphql_route_indicators(text: &str) -> bool {
+    contains_any(
+        text,
+        &[
+            "@Resolver",
+            "type-graphql",
+            "@Mutation(",
+            "@Query(",
+            "makeExecutableSchema",
+            "ApolloServer",
+        ],
+    ) || (text.contains("resolvers") && (text.contains("Query:") || text.contains("Mutation:")))
 }
 
 fn js_has_express_route_indicators(text: &str) -> bool {
@@ -2205,7 +2255,9 @@ fn extract_prisma_mutations(parsed: &ParsedFile, root: Node<'_>) -> Vec<Mutation
             && let Some(function) = node.child_by_field_name("function")
         {
             let function_text = parsed.text_for(function).unwrap_or_default();
-            if let Some(mutation) = prisma_mutation_from_call(parsed, node, function_text) {
+            if let Some(mutation) = prisma_mutation_from_call(parsed, node, function_text)
+                .or_else(|| js_orm_mutation_from_call(parsed, node, function_text))
+            {
                 mutations.push(mutation);
             }
         }
@@ -2213,6 +2265,122 @@ fn extract_prisma_mutations(parsed: &ParsedFile, root: Node<'_>) -> Vec<Mutation
         stack.extend(node.children(&mut cursor));
     }
     mutations
+}
+
+/// JavaScript identifiers that are capitalized but are not ORM models, to keep
+/// the `Model.create(...)` heuristic from firing on built-ins like `Object.create`.
+const JS_NON_MODEL_RECEIVERS: &[&str] = &[
+    "Object", "Array", "Promise", "Map", "WeakMap", "Set", "WeakSet", "Date", "RegExp", "Proxy",
+    "Reflect", "JSON", "Math", "Number", "String", "Boolean", "Symbol", "BigInt", "Error",
+    "Buffer", "Response",
+];
+
+/// Detects mutations from the common non-Prisma Node ORMs (Sequelize, TypeORM,
+/// Mongoose). Conservative: only distinctive method names, repository-gated
+/// TypeORM calls, and capitalized-model `create/update/destroy` (excluding JS
+/// built-ins) are reported. Knex query-builder chains are not yet handled.
+fn js_orm_mutation_from_call(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    function_text: &str,
+) -> Option<Mutation> {
+    let parts = function_text.split('.').collect::<Vec<_>>();
+    if parts.len() < 2 {
+        return None;
+    }
+    let method = parts.last().copied().unwrap_or_default();
+    let receiver = terminal_symbol_name(parts[parts.len() - 2]);
+    let span = parsed.span_for(call);
+
+    // Distinctive Mongoose document/query methods.
+    let mongoose = match method {
+        "findByIdAndUpdate" | "findOneAndUpdate" | "updateOne" | "updateMany" | "replaceOne" => {
+            Some(MutationOperation::Update)
+        }
+        "findByIdAndDelete" | "findByIdAndRemove" | "findOneAndDelete" | "deleteOne"
+        | "deleteMany" => Some(MutationOperation::Delete),
+        _ => None,
+    };
+    if let Some(operation) = mongoose {
+        return Some(orm_mutation(
+            operation,
+            "mongoose",
+            Some(receiver),
+            span,
+            Confidence::Medium,
+        ));
+    }
+
+    // Sequelize-distinctive methods.
+    match method {
+        "bulkCreate" => {
+            return Some(orm_mutation(
+                MutationOperation::Create,
+                "sequelize",
+                Some(receiver),
+                span,
+                Confidence::Medium,
+            ));
+        }
+        "upsert" => {
+            return Some(raw_or_unknown_mutation(
+                MutationOperation::UnknownMutation,
+                "sequelize",
+                Some(receiver),
+                span,
+                "unknown_operation",
+                "Sequelize upsert may create or update data and requires review",
+            ));
+        }
+        _ => {}
+    }
+
+    // TypeORM repository methods (receiver looks like a repository).
+    let receiver_lower = receiver.to_ascii_lowercase();
+    if receiver_lower.contains("repo") || receiver_lower.ends_with("repository") {
+        let operation = match method {
+            "save" | "insert" => Some(MutationOperation::Create),
+            "update" => Some(MutationOperation::Update),
+            "delete" | "remove" | "softDelete" | "softRemove" => Some(MutationOperation::Delete),
+            _ => None,
+        };
+        if let Some(operation) = operation {
+            return Some(orm_mutation(
+                operation,
+                "typeorm",
+                Some(receiver),
+                span,
+                Confidence::Medium,
+            ));
+        }
+    }
+
+    // Capitalized model static methods (Sequelize/Mongoose/TypeORM), excluding
+    // JS built-ins. ORM is ambiguous, so report at low confidence for review.
+    let is_model = receiver
+        .chars()
+        .next()
+        .is_some_and(|ch| ch.is_ascii_uppercase())
+        && !JS_NON_MODEL_RECEIVERS.contains(&receiver.as_str());
+    if is_model {
+        let operation = match method {
+            "create" => Some(MutationOperation::Create),
+            "update" => Some(MutationOperation::Update),
+            "destroy" => Some(MutationOperation::Delete),
+            _ => None,
+        };
+        if let Some(operation) = operation {
+            return Some(orm_mutation(
+                operation,
+                "orm",
+                Some(receiver),
+                span,
+                Confidence::Low,
+            ));
+        }
+    }
+
+    None
 }
 
 fn prisma_mutation_from_call(
@@ -2225,8 +2393,12 @@ fn prisma_mutation_from_call(
         return None;
     }
     let method = parts.last().copied().unwrap_or_default();
-    if matches!(method, "$executeRaw" | "$executeRawUnsafe" | "$queryRaw") {
-        if method == "$queryRaw" && !call_has_mutating_sql(parsed, call) {
+    if matches!(
+        method,
+        "$executeRaw" | "$executeRawUnsafe" | "$queryRaw" | "$queryRawUnsafe"
+    ) {
+        if matches!(method, "$queryRaw" | "$queryRawUnsafe") && !call_has_mutating_sql(parsed, call)
+        {
             return None;
         }
         return Some(raw_or_unknown_mutation(
@@ -2401,7 +2573,7 @@ fn collect_python_session_symbols(parsed: &ParsedFile, function: Node<'_>) -> BT
         };
         if annotation
             .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
-            .any(|part| part == "Session")
+            .any(|part| matches!(part, "Session" | "AsyncSession"))
         {
             let symbol = clean_symbol(name.trim_start_matches('*'));
             if !symbol.is_empty() {
@@ -2534,6 +2706,26 @@ fn sqlalchemy_call_mutation(
                 Confidence::Medium,
             ))
         }
+        text if text.ends_with(".merge")
+            && is_sqlalchemy_session_receiver(&receiver, session_symbols) =>
+        {
+            // session.merge() is an upsert (INSERT or UPDATE).
+            let resource = call_argument_nodes(call)
+                .first()
+                .and_then(|arg| parsed.text_for(*arg))
+                .and_then(|text| {
+                    model_by_var
+                        .get(text.trim())
+                        .map(|binding| binding_model(binding))
+                });
+            Some(orm_mutation(
+                MutationOperation::Update,
+                "sqlalchemy",
+                resource,
+                parsed.span_for(call),
+                Confidence::Medium,
+            ))
+        }
         text if text.ends_with(".execute")
             && is_sqlalchemy_session_receiver(&receiver, session_symbols) =>
         {
@@ -2563,6 +2755,15 @@ fn is_sqlalchemy_session_receiver(receiver: &str, session_symbols: &BTreeSet<Str
 fn sqlalchemy_execute_mutation(parsed: &ParsedFile, call: Node<'_>) -> Option<Mutation> {
     let first_arg = call_argument_nodes(call).into_iter().next()?;
     let arg_text = parsed.text_for(first_arg).unwrap_or_default().trim();
+    if let Some(resource) = call_resource(arg_text, "insert") {
+        return Some(orm_mutation(
+            MutationOperation::Create,
+            "sqlalchemy",
+            Some(resource),
+            parsed.span_for(call),
+            Confidence::High,
+        ));
+    }
     if let Some(resource) = call_resource(arg_text, "update") {
         return Some(orm_mutation(
             MutationOperation::Update,
@@ -2623,7 +2824,9 @@ fn django_call_mutation(
 ) -> Option<Mutation> {
     if let Some((model, method)) = django_objects_call(function_text) {
         let operation = match method {
-            "create" => MutationOperation::Create,
+            "create" | "get_or_create" | "update_or_create" | "bulk_create" => {
+                MutationOperation::Create
+            }
             "update" => MutationOperation::BulkUpdate,
             "bulk_update" => MutationOperation::BulkUpdate,
             "delete" => MutationOperation::Delete,
@@ -2665,8 +2868,16 @@ fn django_call_mutation(
 fn django_objects_call(function_text: &str) -> Option<(String, &str)> {
     let (model, rest) = function_text.split_once(".objects.")?;
     let method = function_text.rsplit('.').next()?;
-    if matches!(method, "create" | "update" | "bulk_update" | "delete")
-        && (rest.starts_with(method) || rest.contains(&format!(".{method}")))
+    if matches!(
+        method,
+        "create"
+            | "update"
+            | "bulk_update"
+            | "delete"
+            | "get_or_create"
+            | "update_or_create"
+            | "bulk_create"
+    ) && (rest.starts_with(method) || rest.contains(&format!(".{method}")))
     {
         return Some((clean_symbol(model), method));
     }
@@ -3978,6 +4189,21 @@ fn builtin_rules() -> Vec<EvidenceRuleSpec> {
                 "ensureLoggedIn",
                 "session",
                 "auth",
+                // Next.js / Auth.js / NextAuth / Clerk session helpers.
+                "getServerSession",
+                "getToken",
+                "getAuth",
+                "currentUser",
+                "withAuth",
+                "clerkMiddleware",
+                "authMiddleware",
+                "updateSession",
+                "isAuthenticated",
+                // Passport / common Node auth middleware.
+                "authenticate",
+                "ensureAuthenticated",
+                "ensureLoggedIn",
+                "isLoggedIn",
             ],
             &["auth", "session", "authenticated", "logged"],
         ),
@@ -4174,8 +4400,18 @@ fn extract_django_route_evidence(
         return Vec::new();
     };
 
+    let is_function_handler = django_route_metadata(route)
+        .and_then(|metadata| metadata.handler_kind)
+        .is_none_or(|kind| kind == "function");
+
     let mut evidence = Vec::new();
     for node in django_handler_nodes(parsed, route, handler) {
+        if is_function_handler {
+            // Function-based views carry their guards as decorators
+            // (`@login_required`, `@permission_required`, DRF `@permission_classes`),
+            // which sit outside the function body scanned below.
+            evidence.extend(extract_django_fbv_decorator_evidence(parsed, node, route));
+        }
         evidence.extend(extract_calls_from_node(
             parsed,
             node,
@@ -4226,6 +4462,19 @@ fn extract_nextjs_route_evidence(
     };
 
     let mut evidence = Vec::new();
+    // `middleware.ts` protection: the adapter records the matching middleware in
+    // `route.middleware` named after the auth helper it delegates to. Match it
+    // against rules exactly like Express route-level middleware.
+    for middleware in &route.middleware {
+        if let Some(rule) = rules.match_symbol(&middleware.name) {
+            evidence.push(evidence_from_rule(
+                route,
+                rule,
+                Some(middleware.clone()),
+                middleware.span.clone(),
+            ));
+        }
+    }
     if let Some(metadata) = nextjs_route_metadata(route)
         && let Some(wrapper) = metadata.wrapper.as_deref()
         && let Some(wrapper_evidence) = evidence_from_nextjs_wrapper(route, wrapper)
@@ -4302,6 +4551,12 @@ fn extract_graphql_route_evidence(route: &authmap_core::Route) -> Vec<Evidence> 
     }
     let (evidence_type, mechanism) = if graphql_permissions_explicitly_public(permissions) {
         (EvidenceType::ExplicitPublic, "graphql_public_permissions")
+    } else if matches!(
+        permissions.trim().to_ascii_lowercase().as_str(),
+        "authenticated" | "authorized"
+    ) {
+        // type-graphql bare @Authorized() — authentication, no specific role.
+        (EvidenceType::Authn, "graphql_authorized")
     } else {
         (EvidenceType::PermissionCheck, "graphql_permissions")
     };
@@ -4966,6 +5221,7 @@ fn extract_django_class_evidence(
             "initial",
             "dispatch",
             "has_permission",
+            "has_object_permission",
             "get_permissions",
             "check_permissions",
             "get_queryset",
@@ -5054,36 +5310,8 @@ fn extract_django_class_attribute_evidence(
                 "django_authentication_classes",
                 "authentication_classes".to_string(),
             )
-        } else if lower.contains("allowany") {
-            (
-                EvidenceType::ExplicitPublic,
-                "drf_permission_classes",
-                "AllowAny".to_string(),
-            )
-        } else if lower.contains("isadminuser") || lower.contains("issuperuser") {
-            (
-                EvidenceType::AdminCheck,
-                "drf_permission_classes",
-                "IsAdminUser".to_string(),
-            )
-        } else if lower.contains("isauthenticated") {
-            (
-                EvidenceType::Authn,
-                "drf_permission_classes",
-                "IsAuthenticated".to_string(),
-            )
-        } else if lower.contains("permission") {
-            (
-                EvidenceType::PermissionCheck,
-                "drf_permission_classes",
-                "permission_classes".to_string(),
-            )
         } else {
-            (
-                EvidenceType::UnknownDynamicCheck,
-                "drf_permission_classes",
-                "permission_classes".to_string(),
-            )
+            classify_drf_permission_classes(&lower)
         };
         evidence.push(Evidence {
             id: String::new(),
@@ -5105,6 +5333,150 @@ fn extract_django_class_attribute_evidence(
         });
     }
     evidence
+}
+
+/// Classifies a DRF `permission_classes` value (lowercased) into evidence.
+/// Shared by class-attribute and function-based-view `@permission_classes`
+/// detection. `IsAuthenticatedOrReadOnly` is surfaced as dynamic/review since
+/// it makes the read path public while only authenticating writes.
+fn classify_drf_permission_classes(lower: &str) -> (EvidenceType, &'static str, String) {
+    if lower.contains("allowany") {
+        (
+            EvidenceType::ExplicitPublic,
+            "drf_permission_classes",
+            "AllowAny".to_string(),
+        )
+    } else if lower.contains("isadminuser") || lower.contains("issuperuser") {
+        (
+            EvidenceType::AdminCheck,
+            "drf_permission_classes",
+            "IsAdminUser".to_string(),
+        )
+    } else if lower.contains("isauthenticatedorreadonly") {
+        (
+            EvidenceType::UnknownDynamicCheck,
+            "drf_permission_classes",
+            "IsAuthenticatedOrReadOnly".to_string(),
+        )
+    } else if lower.contains("isauthenticated") {
+        (
+            EvidenceType::Authn,
+            "drf_permission_classes",
+            "IsAuthenticated".to_string(),
+        )
+    } else if lower.contains("permission") {
+        (
+            EvidenceType::PermissionCheck,
+            "drf_permission_classes",
+            "permission_classes".to_string(),
+        )
+    } else {
+        (
+            EvidenceType::UnknownDynamicCheck,
+            "drf_permission_classes",
+            "permission_classes".to_string(),
+        )
+    }
+}
+
+/// Extracts authorization evidence from the decorators of a function-based view.
+/// `function_node` is the `function_definition`; its `decorated_definition`
+/// parent holds the decorators (`@login_required`, `@permission_required(...)`,
+/// `@api_view([...])` + `@permission_classes([...])`, etc.).
+fn extract_django_fbv_decorator_evidence(
+    parsed: &ParsedFile,
+    function_node: Node<'_>,
+    route: &authmap_core::Route,
+) -> Vec<Evidence> {
+    let mut evidence = Vec::new();
+    let Some(parent) = function_node.parent() else {
+        return evidence;
+    };
+    if parent.kind() != "decorated_definition" {
+        return evidence;
+    }
+    let mut cursor = parent.walk();
+    for decorator in parent.children(&mut cursor) {
+        if decorator.kind() != "decorator" {
+            continue;
+        }
+        let Some(expr) = decorator.named_child(0) else {
+            continue;
+        };
+        let (name_node, args_text) = if expr.kind() == "call" {
+            let function = expr.child_by_field_name("function");
+            let args = expr
+                .child_by_field_name("arguments")
+                .and_then(|args| parsed.text_for(args))
+                .unwrap_or_default();
+            (function, args.to_string())
+        } else {
+            (Some(expr), String::new())
+        };
+        let Some(name) = name_node
+            .and_then(|node| parsed.text_for(node))
+            .map(terminal_symbol_name)
+        else {
+            continue;
+        };
+        if let Some(item) =
+            django_decorator_evidence(route, &name, &args_text, parsed.span_for(decorator))
+        {
+            evidence.push(item);
+        }
+    }
+    evidence
+}
+
+fn django_decorator_evidence(
+    route: &authmap_core::Route,
+    name: &str,
+    args_text: &str,
+    span: Span,
+) -> Option<Evidence> {
+    let (evidence_type, mechanism, symbol_name) = match name {
+        "login_required" => (
+            EvidenceType::Authn,
+            "django_login_required",
+            name.to_string(),
+        ),
+        "staff_member_required" => (
+            EvidenceType::AdminCheck,
+            "django_staff_member_required",
+            name.to_string(),
+        ),
+        "permission_required" => (
+            EvidenceType::PermissionCheck,
+            "django_permission_required",
+            name.to_string(),
+        ),
+        "user_passes_test" => (
+            EvidenceType::UnknownDynamicCheck,
+            "django_user_passes_test",
+            name.to_string(),
+        ),
+        "authentication_classes" => (
+            EvidenceType::Authn,
+            "django_authentication_classes",
+            "authentication_classes".to_string(),
+        ),
+        "permission_classes" => classify_drf_permission_classes(&args_text.to_ascii_lowercase()),
+        _ => return None,
+    };
+    Some(Evidence {
+        id: String::new(),
+        route_id: Some(route.id.clone()),
+        evidence_type,
+        mechanism: mechanism.to_string(),
+        symbol: Some(SymbolRef {
+            name: symbol_name,
+            span: Some(span.clone()),
+        }),
+        span: Some(span),
+        confidence: Confidence::High,
+        notes: Vec::new(),
+        extensions: authmap_core::ExtensionMap::new(),
+    })
 }
 
 fn extract_django_builtin_evidence_from_node(
@@ -5990,7 +6362,10 @@ fn terminal_symbol_name(text: &str) -> String {
 }
 
 fn is_fastapi_depends(function_text: &str) -> bool {
-    terminal_symbol_name(function_text) == "Depends"
+    matches!(
+        terminal_symbol_name(function_text).as_str(),
+        "Depends" | "Security"
+    )
 }
 
 fn is_framework_route_call(function_text: &str) -> bool {
@@ -6331,7 +6706,17 @@ fn tenant_review_reasons(
 
 fn coverage_class(strong: &[&Evidence], all_evidence: &[&Evidence]) -> CoverageClass {
     if has_type(strong, EvidenceType::ExplicitPublic) {
-        CoverageClass::PublicDeclared
+        // A public marker that coexists with real guard evidence is a conflict,
+        // not a confirmed-public route. Classify as unknown/dynamic so it is
+        // surfaced for review (ReviewRequired) instead of looking safe.
+        if strong
+            .iter()
+            .any(|item| middleware_evidence_is_auth_guard(item.evidence_type))
+        {
+            CoverageClass::UnknownOrDynamic
+        } else {
+            CoverageClass::PublicDeclared
+        }
     } else if has_type(strong, EvidenceType::AdminCheck) {
         CoverageClass::AdminGuarded
     } else if has_type(strong, EvidenceType::PermissionCheck) {
@@ -6716,9 +7101,9 @@ mod tests {
     use authmap_testkit::fixture_path;
 
     use super::{
-        classify_coverage, enabled_frameworks_for_sources, normalize_adapter_evidence,
-        normalize_module_path, resolve_python_module, route_id_remaps, run_scan,
-        run_scan_with_started_at, source_needs_syntax_tree, suggest_rules,
+        classify_coverage, enabled_frameworks_for_sources, framework_name_for_hint,
+        normalize_adapter_evidence, normalize_module_path, resolve_python_module, route_id_remaps,
+        run_scan, run_scan_with_started_at, source_needs_syntax_tree, suggest_rules,
         suggest_rules_with_started_at,
     };
 
@@ -6881,6 +7266,64 @@ class ProductCreate(BaseMutation):
             enabled_frameworks_for_sources(&[helper, next]),
             vec!["express".to_string(), "nextjs".to_string()]
         );
+    }
+
+    #[test]
+    fn adapter_gating_uses_project_hints_when_text_heuristics_miss() {
+        // Aliased import: the file has no `FastAPI(` literal, so the text heuristic
+        // alone would not enable the adapter. The discovery-provided hint must.
+        let parsed = ParsedFile {
+            source: SourceFile {
+                path: "main.py".to_string(),
+                language: authmap_core::Language::Python,
+                size_bytes: 0,
+                sha256: None,
+                project_hints: vec![authmap_core::ProjectHint::FastApi],
+                skipped: None,
+            },
+            language: authmap_core::Language::Python,
+            text: "\
+from fastapi import FastAPI as API
+
+app = API()
+
+
+@app.get(\"/items\")
+def list_items():
+    return []
+"
+            .to_string(),
+            tree: None,
+            status: ParseStatus::TextOnly,
+            diagnostics: Vec::new(),
+        };
+
+        assert!(
+            enabled_frameworks_for_sources(&[parsed]).contains(&"fastapi".to_string()),
+            "fastapi adapter should be enabled via project hint despite the aliased import"
+        );
+    }
+
+    #[test]
+    fn framework_name_for_hint_maps_route_adapters_and_ignores_orm_hints() {
+        use authmap_core::ProjectHint;
+        assert_eq!(
+            framework_name_for_hint(ProjectHint::FastApi),
+            Some("fastapi")
+        );
+        assert_eq!(framework_name_for_hint(ProjectHint::Django), Some("django"));
+        assert_eq!(
+            framework_name_for_hint(ProjectHint::DjangoRestFramework),
+            Some("django")
+        );
+        assert_eq!(
+            framework_name_for_hint(ProjectHint::Express),
+            Some("express")
+        );
+        assert_eq!(framework_name_for_hint(ProjectHint::NextJs), Some("nextjs"));
+        assert_eq!(framework_name_for_hint(ProjectHint::SqlAlchemy), None);
+        assert_eq!(framework_name_for_hint(ProjectHint::DjangoOrm), None);
+        assert_eq!(framework_name_for_hint(ProjectHint::Prisma), None);
     }
 
     #[test]
@@ -7884,7 +8327,9 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 34);
+        // 34 original fixture routes + 4 from the `legacy` app (FBV decorators,
+        // legacy `url()`, and `urlpatterns +=`).
+        assert_eq!(document.routes.len(), 38);
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::Django
                 && route.method == "ANY"
@@ -8244,6 +8689,20 @@ sensitivity:
                 || route.path == "/graphql/baseMutation"
                 || route.path == "/graphql/modelDeleteMutation"
         }));
+
+        // JS/TS GraphQL: type-graphql @Authorized mutation and a resolver-map field.
+        assert!(graphql_document.coverage.iter().any(|coverage| {
+            coverage.class == CoverageClass::PermissionGuarded
+                && graphql_document.routes.iter().any(|route| {
+                    route.id == coverage.route_id && route.path == "/graphql/deleteWidget"
+                })
+        }));
+        assert!(
+            graphql_document
+                .routes
+                .iter()
+                .any(|route| { route.method == "QUERY" && route.path == "/graphql/publicFeed" })
+        );
     }
 
     #[test]
@@ -8254,7 +8713,9 @@ sensitivity:
 
         assert_eq!(document.routes.len(), 0);
         assert_eq!(document.links.len(), 0);
-        assert_eq!(document.mutations.len(), 21);
+        // 21 original + 2 SQLAlchemy (insert-via-execute, merge) + 8 Node ORM
+        // (Sequelize/Mongoose/TypeORM).
+        assert_eq!(document.mutations.len(), 31);
 
         assert_mutation(
             &document.mutations,
@@ -8323,6 +8784,59 @@ sensitivity:
             "sqlalchemy",
             MutationOperation::RawSqlMutation,
             "raw_sql",
+        );
+        // session.execute(insert(User)...) is detected as a Create.
+        assert_mutation(
+            &document.mutations,
+            "sqlalchemy",
+            MutationOperation::Create,
+            Some("User"),
+            Confidence::High,
+        );
+        // db_conn.merge(token) where db_conn: AsyncSession is an upsert (Update).
+        assert_mutation(
+            &document.mutations,
+            "sqlalchemy",
+            MutationOperation::Update,
+            None,
+            Confidence::Medium,
+        );
+
+        // Node ORMs: Sequelize, Mongoose, TypeORM.
+        assert_mutation(
+            &document.mutations,
+            "sequelize",
+            MutationOperation::Create,
+            Some("User"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "mongoose",
+            MutationOperation::Update,
+            Some("Profile"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "mongoose",
+            MutationOperation::Delete,
+            Some("Session"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "typeorm",
+            MutationOperation::Create,
+            Some("repo"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "typeorm",
+            MutationOperation::Delete,
+            Some("repository"),
+            Confidence::Medium,
         );
 
         assert_mutation(
