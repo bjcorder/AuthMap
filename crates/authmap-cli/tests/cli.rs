@@ -793,7 +793,7 @@ fn action_metadata_defines_expected_wrapper_contract() {
     assert!(action.contains("using: composite"));
     assert!(action.contains(".github/actions/authmap/run.sh"));
     assert!(action.contains("AUTHMAP_DEFER_EXIT"));
-    assert!(action.contains("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"));
+    assert!(action.contains("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"));
     assert!(
         action
             .contains("github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e")
