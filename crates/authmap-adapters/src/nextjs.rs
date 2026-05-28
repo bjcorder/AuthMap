@@ -31,6 +31,8 @@ impl FrameworkAdapter for NextJsAdapter {
             .map(|parsed| (parsed.source.path.clone(), parsed))
             .collect::<BTreeMap<_, _>>();
 
+        let middleware = collect_middleware(parsed_files);
+
         for parsed in parsed_files.iter().filter(|file| is_js_like(file.language)) {
             if !is_next_route_file(&parsed.source.path) {
                 continue;
@@ -61,6 +63,39 @@ impl FrameworkAdapter for NextJsAdapter {
             }
         }
 
+        for parsed in parsed_files.iter().filter(|file| is_js_like(file.language)) {
+            if is_next_pages_api_file(&parsed.source.path)
+                && let Some(root) = parsed.root_node()
+                && let Some(route) = collect_pages_api_route(parsed, root)
+            {
+                let key = (
+                    parsed.source.path.clone(),
+                    route.method.clone(),
+                    route
+                        .handler
+                        .as_ref()
+                        .map_or_else(String::new, |handler| handler.name.clone()),
+                );
+                if seen.insert(key) {
+                    routes.push(route);
+                }
+            }
+            // Server Actions ('use server') are mutation entry points that are
+            // not yet analyzed as routes; signal rather than silently skip.
+            if !is_next_route_file(&parsed.source.path)
+                && !is_next_pages_api_file(&parsed.source.path)
+                && file_uses_server_directive(&parsed.text)
+            {
+                diagnostics.push(diagnostic(
+                    diagnostic_codes::NEXTJS_SERVER_ACTION_NOT_ANALYZED,
+                    span_for_path(&parsed.source.path),
+                    "Next.js Server Action file ('use server') was not analyzed for routes or authorization",
+                ));
+            }
+        }
+
+        attach_middleware(&mut routes, &middleware);
+
         routes.sort_by_key(route_sort_key);
         for (index, route) in routes.iter_mut().enumerate() {
             route.id = format!("route_{:04}", index + 1);
@@ -87,6 +122,46 @@ struct PathInfo {
 struct Definition {
     span: Span,
 }
+
+/// A parsed Next.js `middleware.ts` file: the representative middleware symbol
+/// (named after the auth helper it delegates to when one is detected, so the
+/// analysis layer's rule matcher can classify it) and the route prefixes its
+/// `config.matcher` covers. An empty `matchers` list means "all routes", which
+/// is Next.js's behavior when no matcher config is exported.
+#[derive(Clone, Debug)]
+struct MiddlewareInfo {
+    symbol: SymbolRef,
+    matchers: Vec<MatcherPattern>,
+    span: Span,
+}
+
+#[derive(Clone, Debug)]
+enum MatcherPattern {
+    /// Matches every route (no static prefix could be derived, e.g. a negative
+    /// lookahead matcher such as `/((?!_next).*)`, or the bare matcher `/`).
+    All,
+    /// Matches a route whose path equals the prefix or sits beneath it.
+    Prefix(String),
+}
+
+/// Auth helper names recognized inside a `middleware.ts`. When one of these is
+/// the middleware's delegate (re-export, default export, wrapper, or the first
+/// auth call in the body), the emitted `route.middleware` symbol is named after
+/// it so the analysis rule matcher produces auth evidence. Names not in this
+/// set leave the route's coverage unclaimed (conservative: i18n/logging
+/// middleware does not get treated as authorization).
+const NEXTJS_MIDDLEWARE_AUTH_HELPERS: &[&str] = &[
+    "auth",
+    "withAuth",
+    "clerkMiddleware",
+    "authMiddleware",
+    "getServerSession",
+    "getToken",
+    "getAuth",
+    "currentUser",
+    "updateSession",
+    "isAuthenticated",
+];
 
 #[derive(Clone, Debug)]
 struct RouteExport {
@@ -822,6 +897,461 @@ fn span_for_path(path: &str) -> Span {
         column: 1,
         byte_range: None,
     }
+}
+
+fn file_uses_server_directive(text: &str) -> bool {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .take(5)
+        .any(|line| {
+            line == "\"use server\";"
+                || line == "'use server';"
+                || line == "\"use server\""
+                || line == "'use server'"
+        })
+}
+
+fn is_next_pages_api_file(path: &str) -> bool {
+    let normalized = path.replace('\\', "/");
+    let parts = normalized.split('/').collect::<Vec<_>>();
+    let Some(filename) = parts.last() else {
+        return false;
+    };
+    if filename.starts_with('_') || !has_js_like_extension(filename) {
+        return false;
+    }
+    parts
+        .iter()
+        .position(|part| *part == "pages")
+        .and_then(|index| parts.get(index + 1))
+        .is_some_and(|next| *next == "api")
+}
+
+fn has_js_like_extension(filename: &str) -> bool {
+    [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"]
+        .iter()
+        .any(|extension| filename.ends_with(extension))
+}
+
+/// Derives the URL path for a Pages Router API file: segments after `pages`,
+/// with the file extension stripped and a trailing `index` collapsed.
+fn pages_api_route_path(path: &str) -> String {
+    let normalized = path.replace('\\', "/");
+    let parts = normalized.split('/').collect::<Vec<_>>();
+    let Some(pages_index) = parts.iter().position(|part| *part == "pages") else {
+        return "/".to_string();
+    };
+    let mut segments = parts
+        .iter()
+        .skip(pages_index + 1)
+        .map(|segment| segment.to_string())
+        .collect::<Vec<_>>();
+    if let Some(last) = segments.last_mut() {
+        *last = strip_js_extension(last)
+            .map(str::to_string)
+            .unwrap_or_else(|| last.clone());
+        if last == "index" {
+            segments.pop();
+        }
+    }
+    if segments.is_empty() {
+        "/".to_string()
+    } else {
+        format!("/{}", segments.join("/"))
+    }
+}
+
+fn collect_pages_api_route(parsed: &ParsedFile, root: Node<'_>) -> Option<Route> {
+    let (handler, wrapper, span) = pages_default_handler(parsed, root)?;
+    let path = pages_api_route_path(&parsed.source.path);
+    let mut notes = vec![
+        "Next.js Pages Router API route; HTTP method is handled dynamically via req.method"
+            .to_string(),
+    ];
+    let mut confidence = Confidence::High;
+    if wrapper.is_some() {
+        confidence = Confidence::Medium;
+        notes.push("Pages Router handler is wrapped; wrapper behavior requires review".to_string());
+    }
+    let mut extensions = authmap_core::ExtensionMap::new();
+    extensions.insert(
+        "authmap.nextjs".to_string(),
+        serde_json::json!({
+            "route_file": parsed.source.path,
+            "router": "pages",
+            "export_kind": "pages_api_default",
+            "wrapper": wrapper,
+        }),
+    );
+    let source_evidence = vec![SourceEvidence {
+        mechanism: "nextjs_pages_api_handler".to_string(),
+        symbol: Some(handler.clone()),
+        span: Some(span.clone()),
+        confidence,
+        notes: notes.clone(),
+        extensions: authmap_core::ExtensionMap::new(),
+    }];
+    Some(Route {
+        id: String::new(),
+        framework: Framework::NextJs,
+        method: "ANY".to_string(),
+        path,
+        name: None,
+        tags: Vec::new(),
+        middleware: Vec::new(),
+        params: Vec::new(),
+        declared_protection: Vec::new(),
+        handler: Some(handler),
+        span: Some(span),
+        source_evidence,
+        confidence,
+        notes,
+        extensions,
+    })
+}
+
+/// Finds the `export default` API handler and any wrapping function.
+fn pages_default_handler(
+    parsed: &ParsedFile,
+    root: Node<'_>,
+) -> Option<(SymbolRef, Option<String>, Span)> {
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "export_statement"
+            && parsed
+                .text_for(node)
+                .is_some_and(|text| text.trim_start().starts_with("export default"))
+        {
+            for child in named_children(node) {
+                match child.kind() {
+                    "function_declaration" => {
+                        let name = child
+                            .child_by_field_name("name")
+                            .and_then(|name| parsed.text_for(name))
+                            .unwrap_or("<default_handler>");
+                        return Some((
+                            SymbolRef {
+                                name: name.to_string(),
+                                span: Some(parsed.span_for(child)),
+                            },
+                            None,
+                            parsed.span_for(child),
+                        ));
+                    }
+                    "identifier" => {
+                        if let Some(name) = parsed.text_for(child) {
+                            return Some((
+                                SymbolRef {
+                                    name: terminal_symbol_name(name),
+                                    span: Some(parsed.span_for(child)),
+                                },
+                                None,
+                                parsed.span_for(child),
+                            ));
+                        }
+                    }
+                    "call_expression" => {
+                        let wrapper = child
+                            .child_by_field_name("function")
+                            .and_then(|function| parsed.text_for(function))
+                            .map(terminal_symbol_name);
+                        let handler = call_arguments(child)
+                            .first()
+                            .copied()
+                            .and_then(|arg| symbol_name(parsed, arg))
+                            .unwrap_or_else(|| "<default_handler>".to_string());
+                        return Some((
+                            SymbolRef {
+                                name: handler,
+                                span: Some(parsed.span_for(child)),
+                            },
+                            wrapper,
+                            parsed.span_for(child),
+                        ));
+                    }
+                    "arrow_function" | "function" | "function_expression" => {
+                        return Some((
+                            SymbolRef {
+                                name: "<default_handler>".to_string(),
+                                span: Some(parsed.span_for(child)),
+                            },
+                            None,
+                            parsed.span_for(child),
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    None
+}
+
+fn collect_middleware(parsed_files: &[ParsedFile]) -> Vec<MiddlewareInfo> {
+    let mut infos = Vec::new();
+    for parsed in parsed_files.iter().filter(|file| is_js_like(file.language)) {
+        if !is_next_middleware_file(&parsed.source.path) {
+            continue;
+        }
+        let Some(root) = parsed.root_node() else {
+            continue;
+        };
+        let symbol = middleware_symbol(parsed, root);
+        let matchers = extract_matcher_patterns(parsed, root);
+        infos.push(MiddlewareInfo {
+            symbol,
+            matchers,
+            span: span_for_path(&parsed.source.path),
+        });
+    }
+    infos
+}
+
+fn is_next_middleware_file(path: &str) -> bool {
+    let normalized = path.replace('\\', "/");
+    matches!(
+        normalized.rsplit('/').next(),
+        Some(
+            "middleware.ts"
+                | "middleware.tsx"
+                | "middleware.js"
+                | "middleware.jsx"
+                | "middleware.mjs"
+                | "middleware.cjs"
+        )
+    )
+}
+
+/// Picks the symbol that best represents what the middleware delegates to,
+/// preferring an auth helper name so the analysis rule matcher can classify it.
+fn middleware_symbol(parsed: &ParsedFile, root: Node<'_>) -> SymbolRef {
+    // 1. `export { X as middleware }` / `export { X as default }`.
+    // 2. `export default <ident>` / `export default <wrapper(...)>`.
+    // 3. `export (const) middleware = <ident | wrapper(...)>`.
+    // 4. first auth helper call found anywhere in the file body.
+    let mut fallback: Option<SymbolRef> = None;
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "export_statement"
+            && let Some(candidate) = middleware_symbol_from_export(parsed, node)
+        {
+            if NEXTJS_MIDDLEWARE_AUTH_HELPERS.contains(&candidate.name.as_str()) {
+                return candidate;
+            }
+            fallback.get_or_insert(candidate);
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+
+    if let Some(helper) = first_auth_helper_symbol(parsed, root) {
+        return helper;
+    }
+    fallback.unwrap_or_else(|| SymbolRef {
+        name: "middleware".to_string(),
+        span: Some(span_for_path(&parsed.source.path)),
+    })
+}
+
+fn middleware_symbol_from_export(parsed: &ParsedFile, node: Node<'_>) -> Option<SymbolRef> {
+    // Re-export form: `export { X as middleware }` / `export { X as default }`.
+    // Read the `export_clause` child directly; the shared `export_clause_text`
+    // fallback mis-slices `export const ... = { ... }` declaration exports.
+    if let Some(clause) = named_children(node)
+        .into_iter()
+        .find(|child| child.kind() == "export_clause")
+        && let Some(text) = parsed.text_for(clause)
+    {
+        let trimmed = text.trim();
+        let inner = trimmed
+            .strip_prefix('{')
+            .and_then(|rest| rest.strip_suffix('}'))
+            .unwrap_or(trimmed);
+        for specifier in inner.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+            if let Some((local, exported)) = specifier.split_once(" as ") {
+                let exported = exported.trim();
+                if exported == "middleware" || exported == "default" {
+                    return Some(SymbolRef {
+                        name: terminal_symbol_name(local.trim()),
+                        span: Some(parsed.span_for(node)),
+                    });
+                }
+            }
+        }
+    }
+
+    for child in named_children(node) {
+        match child.kind() {
+            // `export default <expr>`
+            "identifier" => {
+                if let Some(name) = parsed.text_for(child) {
+                    return Some(SymbolRef {
+                        name: terminal_symbol_name(name),
+                        span: Some(parsed.span_for(child)),
+                    });
+                }
+            }
+            "call_expression" => {
+                if let Some(function) = child.child_by_field_name("function")
+                    && let Some(name) = parsed.text_for(function)
+                {
+                    return Some(SymbolRef {
+                        name: terminal_symbol_name(name),
+                        span: Some(parsed.span_for(function)),
+                    });
+                }
+            }
+            // `export (const) middleware = <value>`
+            "lexical_declaration" | "variable_declaration" => {
+                for declarator in named_children(child) {
+                    if declarator.kind() != "variable_declarator" {
+                        continue;
+                    }
+                    let name = declarator
+                        .child_by_field_name("name")
+                        .and_then(|name| parsed.text_for(name));
+                    if name != Some("middleware") {
+                        continue;
+                    }
+                    if let Some(value) = declarator.child_by_field_name("value")
+                        && let Some(symbol) = symbol_name(parsed, value)
+                    {
+                        return Some(SymbolRef {
+                            name: symbol,
+                            span: Some(parsed.span_for(value)),
+                        });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn first_auth_helper_symbol(parsed: &ParsedFile, root: Node<'_>) -> Option<SymbolRef> {
+    let mut stack = vec![root];
+    let mut best: Option<SymbolRef> = None;
+    while let Some(node) = stack.pop() {
+        if node.kind() == "call_expression"
+            && let Some(function) = node.child_by_field_name("function")
+            && let Some(text) = parsed.text_for(function)
+        {
+            let name = terminal_symbol_name(text);
+            if NEXTJS_MIDDLEWARE_AUTH_HELPERS.contains(&name.as_str()) {
+                let candidate = SymbolRef {
+                    name,
+                    span: Some(parsed.span_for(function)),
+                };
+                // Prefer the earliest occurrence for stable spans.
+                match &best {
+                    Some(existing)
+                        if existing.span.as_ref().map(|s| s.line)
+                            <= candidate.span.as_ref().map(|s| s.line) => {}
+                    _ => best = Some(candidate),
+                }
+            }
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    best
+}
+
+fn extract_matcher_patterns(parsed: &ParsedFile, root: Node<'_>) -> Vec<MatcherPattern> {
+    let mut raw = Vec::new();
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node.kind() == "pair"
+            && let Some(key) = node.child_by_field_name("key")
+            && parsed
+                .text_for(key)
+                .map(|text| text.trim_matches(['"', '\'', '`']) == "matcher")
+                .unwrap_or(false)
+            && let Some(value) = node.child_by_field_name("value")
+        {
+            collect_string_literals(parsed, value, &mut raw);
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    raw.iter().map(|item| matcher_to_pattern(item)).collect()
+}
+
+fn collect_string_literals(parsed: &ParsedFile, node: Node<'_>, out: &mut Vec<String>) {
+    let mut stack = vec![node];
+    while let Some(current) = stack.pop() {
+        if current.kind() == "string"
+            && let Some(literal) = js_string_literal(parsed, current)
+        {
+            out.push(literal.to_string());
+        }
+        let mut cursor = current.walk();
+        stack.extend(current.children(&mut cursor));
+    }
+}
+
+/// Converts a Next.js matcher string into a conservative prefix test. Matchers
+/// with a negative-lookahead or no static leading segment match all routes.
+fn matcher_to_pattern(raw: &str) -> MatcherPattern {
+    if raw.contains("(?!") || raw.contains("(?:") {
+        return MatcherPattern::All;
+    }
+    // Static leading portion up to the first dynamic token.
+    let cut = raw.find([':', '*', '(']).unwrap_or(raw.len());
+    let prefix = raw[..cut].trim_end_matches('/');
+    if prefix.is_empty() || prefix == "/" {
+        MatcherPattern::All
+    } else {
+        MatcherPattern::Prefix(prefix.to_string())
+    }
+}
+
+fn matcher_matches(patterns: &[MatcherPattern], route_path: &str) -> bool {
+    if patterns.is_empty() {
+        // No `config.matcher`: Next.js runs the middleware on every request.
+        return true;
+    }
+    patterns.iter().any(|pattern| match pattern {
+        MatcherPattern::All => true,
+        MatcherPattern::Prefix(prefix) => {
+            route_path == prefix || route_path.starts_with(&format!("{prefix}/"))
+        }
+    })
+}
+
+fn attach_middleware(routes: &mut [Route], middleware: &[MiddlewareInfo]) {
+    if middleware.is_empty() {
+        return;
+    }
+    for route in routes.iter_mut() {
+        for info in middleware {
+            if !matcher_matches(&info.matchers, &route.path) {
+                continue;
+            }
+            if route
+                .middleware
+                .iter()
+                .any(|existing| existing.name == info.symbol.name)
+            {
+                continue;
+            }
+            route.middleware.push(info.symbol.clone());
+            route.notes.push(format!(
+                "Next.js middleware (`{}`) matches this route via `{}`; confirm matcher coverage",
+                info.symbol.name,
+                middleware_span_label(&info.span),
+            ));
+            route.confidence = weaker_confidence(route.confidence, Confidence::Medium);
+        }
+    }
+}
+
+fn middleware_span_label(span: &Span) -> String {
+    span.file.clone()
 }
 
 fn diagnostic(code: &str, span: Span, message: &str) -> Diagnostic {

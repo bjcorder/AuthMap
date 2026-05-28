@@ -10,8 +10,8 @@ use authmap_config::{
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticCategory,
     DiagnosticSeverity, Evidence, EvidenceType, Framework, Mutation, MutationOperation,
-    ReachabilityLink, Recoverability, RiskLevel, RouteParam, RouteProtection, RouteProtectionKind,
-    ScanMetadata, Span, SymbolRef,
+    PolicyBranch, PolicyCase, PolicyCaseKind, PolicyOutcome, ReachabilityLink, Recoverability,
+    RiskLevel, RouteParam, RouteProtection, RouteProtectionKind, ScanMetadata, Span, SymbolRef,
 };
 use authmap_discovery::discover_sources;
 use authmap_parsers::{
@@ -25,8 +25,9 @@ use tree_sitter::Node;
 mod drift;
 
 pub use drift::{
-    DriftChange, DriftChangeKind, DriftChangeSeverity, DriftComparison, DriftConfigMetadata,
-    DriftInputMetadata, DriftMetadata, DriftReport, DriftSummary, analyze_drift,
+    ControlDriftKind, ControlFinding, ControlReport, ControlSummary, DriftChange, DriftChangeKind,
+    DriftChangeSeverity, DriftComparison, DriftConfigMetadata, DriftInputMetadata, DriftMetadata,
+    DriftReport, DriftSummary, analyze_controls_with_config, analyze_drift,
     analyze_drift_with_config,
 };
 
@@ -284,6 +285,596 @@ pub fn run_scan(plan: &ScanPlan) -> Result<AuthMapDocument, ScanError> {
     run_scan_with_started_at(plan, Instant::now())
 }
 
+fn derive_policy_cases(
+    routes: &[authmap_core::Route],
+    evidence: &[Evidence],
+    mutations: &[Mutation],
+    links: &[ReachabilityLink],
+    parsed_files: &[ParsedFile],
+) -> (Vec<PolicyCase>, Vec<Diagnostic>) {
+    let mut cases = Vec::new();
+    let mut diagnostics = Vec::new();
+    let mut evidence_by_route = BTreeMap::<&str, Vec<&Evidence>>::new();
+    let evidence_by_id = evidence
+        .iter()
+        .map(|item| (item.id.as_str(), item))
+        .collect::<BTreeMap<_, _>>();
+    for item in evidence {
+        if let Some(route_id) = &item.route_id {
+            evidence_by_route
+                .entry(route_id.as_str())
+                .or_default()
+                .push(item);
+        }
+    }
+    for link in links {
+        if let Some(evidence_id) = &link.evidence_id
+            && let Some(item) = evidence_by_id.get(evidence_id.as_str())
+        {
+            evidence_by_route
+                .entry(link.route_id.as_str())
+                .or_default()
+                .push(item);
+        }
+    }
+    for route_evidence in evidence_by_route.values_mut() {
+        route_evidence.sort_by(|left, right| left.id.cmp(&right.id));
+        route_evidence.dedup_by(|left, right| left.id == right.id);
+    }
+    let mutation_by_id = mutations
+        .iter()
+        .map(|mutation| (mutation.id.as_str(), mutation))
+        .collect::<BTreeMap<_, _>>();
+    let mut links_by_route = BTreeMap::<&str, Vec<&ReachabilityLink>>::new();
+    for link in links {
+        links_by_route
+            .entry(link.route_id.as_str())
+            .or_default()
+            .push(link);
+    }
+    for route_links in links_by_route.values_mut() {
+        route_links.sort_by(|left, right| left.id.cmp(&right.id));
+    }
+
+    for route in routes {
+        let route_evidence = evidence_by_route
+            .get(route.id.as_str())
+            .cloned()
+            .unwrap_or_default();
+        let route_links = links_by_route
+            .get(route.id.as_str())
+            .cloned()
+            .unwrap_or_default();
+
+        if let Some(case) = effective_policy_case(route, &route_evidence, &route_links) {
+            cases.push(case);
+        }
+        if let Some(case) = linked_mutation_policy_case(route, &route_links, &mutation_by_id) {
+            cases.push(case);
+        }
+        if let Some((case, diagnostic)) = conflicting_policy_case(route, &route_evidence) {
+            cases.push(case);
+            diagnostics.push(diagnostic);
+        }
+        for (case, diagnostic) in duplicate_policy_cases(route, &route_evidence) {
+            cases.push(case);
+            diagnostics.push(diagnostic);
+        }
+        for case in dynamic_policy_cases(route, &route_evidence) {
+            diagnostics.push(policy_diagnostic(
+                authmap_core::diagnostic_codes::POLICY_DYNAMIC_BEHAVIOR,
+                case.span.clone(),
+                "Dynamic policy evidence requires review.".to_string(),
+            ));
+            cases.push(case);
+        }
+        for (case, diagnostic) in unreachable_policy_cases(route, &route_evidence, parsed_files) {
+            cases.push(case);
+            diagnostics.push(diagnostic);
+        }
+    }
+
+    cases.sort_by_key(policy_case_sort_key);
+    for (index, case) in cases.iter_mut().enumerate() {
+        case.id = format!("policy_case_{:04}", index + 1);
+    }
+    sort_diagnostics(&mut diagnostics);
+    diagnostics.dedup_by(|left, right| {
+        left.code == right.code && left.span == right.span && left.message == right.message
+    });
+    (cases, diagnostics)
+}
+
+fn effective_policy_case(
+    route: &authmap_core::Route,
+    evidence: &[&Evidence],
+    links: &[&ReachabilityLink],
+) -> Option<PolicyCase> {
+    let strong = evidence
+        .iter()
+        .copied()
+        .filter(|item| item.confidence != Confidence::Low)
+        .filter(|item| item.evidence_type != EvidenceType::UnknownDynamicCheck)
+        .collect::<Vec<_>>();
+    if strong
+        .iter()
+        .all(|item| item.evidence_type == EvidenceType::AuditLog)
+    {
+        return None;
+    }
+    let evidence_ids = sorted_ids(strong.iter().map(|item| item.id.as_str()));
+    let mut mutation_ids = links
+        .iter()
+        .filter_map(|link| link.mutation_id.as_deref())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    mutation_ids.sort();
+    mutation_ids.dedup();
+    let strongest = strong
+        .iter()
+        .map(|item| item.confidence)
+        .min()
+        .unwrap_or(Confidence::Low);
+    let labels = strong
+        .iter()
+        .map(|item| evidence_type_label(item.evidence_type).to_string())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let mut extensions = authmap_core::ExtensionMap::new();
+    if !mutation_ids.is_empty() {
+        extensions.insert(
+            "authmap.policy".to_string(),
+            serde_json::json!({ "mutation_ids": mutation_ids }),
+        );
+    }
+    Some(PolicyCase {
+        id: String::new(),
+        route_id: route.id.clone(),
+        kind: PolicyCaseKind::EffectiveProtection,
+        summary: format!(
+            "{} evidence support(s) route protection: {}.",
+            strong.len(),
+            labels.join(", ")
+        ),
+        evidence_ids: evidence_ids.clone(),
+        input_names: policy_input_names(&strong),
+        branches: vec![PolicyBranch {
+            condition: "static authorization evidence present".to_string(),
+            outcome: PolicyOutcome::Allow,
+            reachable: true,
+            evidence_ids,
+            span: first_span(&strong).cloned().or_else(|| route.span.clone()),
+            confidence: strongest,
+            notes: Vec::new(),
+        }],
+        span: first_span(&strong).cloned().or_else(|| route.span.clone()),
+        confidence: strongest,
+        reviewer_questions: Vec::new(),
+        uncertainty_reasons: Vec::new(),
+        extensions,
+    })
+}
+
+fn linked_mutation_policy_case(
+    route: &authmap_core::Route,
+    links: &[&ReachabilityLink],
+    mutation_by_id: &BTreeMap<&str, &Mutation>,
+) -> Option<PolicyCase> {
+    let mutation_ids = sorted_ids(links.iter().filter_map(|link| link.mutation_id.as_deref()));
+    if mutation_ids.is_empty() {
+        return None;
+    }
+    let link_ids = sorted_ids(links.iter().map(|link| link.id.as_str()));
+    let evidence_ids = sorted_ids(links.iter().filter_map(|link| link.evidence_id.as_deref()));
+    let resources = mutation_ids
+        .iter()
+        .filter_map(|id| mutation_by_id.get(id.as_str()))
+        .filter_map(|mutation| mutation.resource.as_deref())
+        .map(str::to_string)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let mut extensions = authmap_core::ExtensionMap::new();
+    extensions.insert(
+        "authmap.policy".to_string(),
+        serde_json::json!({ "mutation_ids": mutation_ids, "link_ids": link_ids }),
+    );
+    Some(PolicyCase {
+        id: String::new(),
+        route_id: route.id.clone(),
+        kind: PolicyCaseKind::LinkedMutationProtection,
+        summary: format!(
+            "Route reaches linked mutation(s): {}.",
+            if resources.is_empty() {
+                mutation_ids.join(", ")
+            } else {
+                format!("{} ({})", mutation_ids.join(", "), resources.join(", "))
+            }
+        ),
+        evidence_ids: evidence_ids.clone(),
+        input_names: resources,
+        branches: vec![PolicyBranch {
+            condition: "route-to-mutation reachability".to_string(),
+            outcome: PolicyOutcome::ReviewRequired,
+            reachable: true,
+            evidence_ids,
+            span: route.span.clone(),
+            confidence: links
+                .iter()
+                .map(|link| link.confidence)
+                .min()
+                .unwrap_or(Confidence::Low),
+            notes: Vec::new(),
+        }],
+        span: route.span.clone(),
+        confidence: links
+            .iter()
+            .map(|link| link.confidence)
+            .min()
+            .unwrap_or(Confidence::Low),
+        reviewer_questions: vec![
+            "Should linked data mutations have resource-specific authorization evidence?"
+                .to_string(),
+        ],
+        uncertainty_reasons: Vec::new(),
+        extensions,
+    })
+}
+
+fn conflicting_policy_case(
+    route: &authmap_core::Route,
+    evidence: &[&Evidence],
+) -> Option<(PolicyCase, Diagnostic)> {
+    let public = evidence
+        .iter()
+        .copied()
+        .filter(|item| item.evidence_type == EvidenceType::ExplicitPublic)
+        .collect::<Vec<_>>();
+    let protected = evidence
+        .iter()
+        .copied()
+        .filter(|item| {
+            matches!(
+                item.evidence_type,
+                EvidenceType::Authn
+                    | EvidenceType::RoleCheck
+                    | EvidenceType::PermissionCheck
+                    | EvidenceType::OwnershipCheck
+                    | EvidenceType::TenantCheck
+                    | EvidenceType::AdminCheck
+            )
+        })
+        .collect::<Vec<_>>();
+    if public.is_empty() || protected.is_empty() {
+        return None;
+    }
+    let combined = public
+        .iter()
+        .chain(protected.iter())
+        .copied()
+        .collect::<Vec<_>>();
+    let evidence_ids = sorted_ids(combined.iter().map(|item| item.id.as_str()));
+    let span = first_span(&combined)
+        .cloned()
+        .or_else(|| route.span.clone());
+    let message = "Route has explicit public evidence and authorization-required evidence; review intended behavior.".to_string();
+    Some((
+        PolicyCase {
+            id: String::new(),
+            route_id: route.id.clone(),
+            kind: PolicyCaseKind::Conflict,
+            summary: message.clone(),
+            evidence_ids: evidence_ids.clone(),
+            input_names: policy_input_names(&combined),
+            branches: vec![PolicyBranch {
+                condition: "explicit public marker conflicts with guard evidence".to_string(),
+                outcome: PolicyOutcome::ReviewRequired,
+                reachable: true,
+                evidence_ids,
+                span: span.clone(),
+                confidence: Confidence::Medium,
+                notes: Vec::new(),
+            }],
+            span: span.clone(),
+            confidence: Confidence::Medium,
+            reviewer_questions: vec!["Is this route intentionally public and guarded?".to_string()],
+            uncertainty_reasons: vec![
+                "Conflicting policy evidence requires reviewer confirmation.".to_string(),
+            ],
+            extensions: authmap_core::ExtensionMap::new(),
+        },
+        policy_diagnostic(
+            authmap_core::diagnostic_codes::POLICY_CONFLICTING_EVIDENCE,
+            span,
+            message,
+        ),
+    ))
+}
+
+fn duplicate_policy_cases(
+    route: &authmap_core::Route,
+    evidence: &[&Evidence],
+) -> Vec<(PolicyCase, Diagnostic)> {
+    let mut groups = BTreeMap::<(EvidenceType, String, Option<String>), Vec<&Evidence>>::new();
+    for item in evidence {
+        groups
+            .entry((
+                item.evidence_type,
+                item.mechanism.clone(),
+                item.symbol.as_ref().map(|symbol| symbol.name.clone()),
+            ))
+            .or_default()
+            .push(item);
+    }
+    let mut cases = Vec::new();
+    for ((evidence_type, mechanism, symbol), mut items) in groups {
+        if items.len() < 2 || evidence_type == EvidenceType::AuditLog {
+            continue;
+        }
+        items.sort_by(|left, right| left.id.cmp(&right.id));
+        let evidence_ids = sorted_ids(items.iter().map(|item| item.id.as_str()));
+        let span = first_span(&items).cloned().or_else(|| route.span.clone());
+        let label = symbol.unwrap_or(mechanism);
+        let message = format!("Duplicate policy evidence `{label}` appears on the same route.");
+        cases.push((
+            PolicyCase {
+                id: String::new(),
+                route_id: route.id.clone(),
+                kind: PolicyCaseKind::Duplicate,
+                summary: message.clone(),
+                evidence_ids: evidence_ids.clone(),
+                input_names: policy_input_names(&items),
+                branches: vec![PolicyBranch {
+                    condition: format!("duplicate {label} evidence"),
+                    outcome: PolicyOutcome::ReviewRequired,
+                    reachable: true,
+                    evidence_ids,
+                    span: span.clone(),
+                    confidence: Confidence::Medium,
+                    notes: Vec::new(),
+                }],
+                span: span.clone(),
+                confidence: Confidence::Medium,
+                reviewer_questions: vec![
+                    "Is duplicated guard evidence intentional or redundant?".to_string(),
+                ],
+                uncertainty_reasons: vec![
+                    "Duplicated policy evidence may be safe but should be reviewed.".to_string(),
+                ],
+                extensions: authmap_core::ExtensionMap::new(),
+            },
+            policy_diagnostic(
+                authmap_core::diagnostic_codes::POLICY_DUPLICATE_EVIDENCE,
+                span,
+                message,
+            ),
+        ));
+    }
+    cases
+}
+
+fn dynamic_policy_cases(route: &authmap_core::Route, evidence: &[&Evidence]) -> Vec<PolicyCase> {
+    evidence
+        .iter()
+        .copied()
+        .filter(|item| item.evidence_type == EvidenceType::UnknownDynamicCheck)
+        .map(|item| PolicyCase {
+            id: String::new(),
+            route_id: route.id.clone(),
+            kind: PolicyCaseKind::Dynamic,
+            summary: "Dynamic policy behavior requires review.".to_string(),
+            evidence_ids: vec![item.id.clone()],
+            input_names: item
+                .symbol
+                .as_ref()
+                .map(|symbol| vec![symbol.name.clone()])
+                .unwrap_or_default(),
+            branches: vec![PolicyBranch {
+                condition: "dynamic policy dispatch".to_string(),
+                outcome: PolicyOutcome::ReviewRequired,
+                reachable: true,
+                evidence_ids: vec![item.id.clone()],
+                span: item.span.clone(),
+                confidence: item.confidence,
+                notes: item.notes.clone(),
+            }],
+            span: item.span.clone(),
+            confidence: item.confidence,
+            reviewer_questions: vec![
+                "Can the dynamic authorization path be confirmed?".to_string(),
+            ],
+            uncertainty_reasons: vec![
+                "Dynamic authorization evidence requires review.".to_string(),
+            ],
+            extensions: authmap_core::ExtensionMap::new(),
+        })
+        .collect()
+}
+
+fn unreachable_policy_cases(
+    route: &authmap_core::Route,
+    evidence: &[&Evidence],
+    parsed_files: &[ParsedFile],
+) -> Vec<(PolicyCase, Diagnostic)> {
+    evidence
+        .iter()
+        .copied()
+        .filter_map(|item| {
+            let unreachable_span = item
+                .span
+                .as_ref()
+                .is_some_and(|span| span_has_unreachable_false_guard(span, parsed_files))
+                .then(|| item.span.clone())
+                .flatten()
+                .or_else(|| {
+                    route.span.as_ref().and_then(|span| {
+                        span_has_unreachable_false_guard(span, parsed_files).then(|| span.clone())
+                    })
+                });
+            unreachable_span.map(|span| (item, span))
+        })
+        .map(|(item, span)| {
+            let evidence_ids = vec![item.id.clone()];
+            let message =
+                "Policy evidence appears inside a statically unreachable branch.".to_string();
+            (
+                PolicyCase {
+                    id: String::new(),
+                    route_id: route.id.clone(),
+                    kind: PolicyCaseKind::Unreachable,
+                    summary: message.clone(),
+                    evidence_ids: evidence_ids.clone(),
+                    input_names: policy_input_names(&[item]),
+                    branches: vec![PolicyBranch {
+                        condition: "literal false branch".to_string(),
+                        outcome: PolicyOutcome::ReviewRequired,
+                        reachable: false,
+                        evidence_ids,
+                        span: Some(span.clone()),
+                        confidence: Confidence::High,
+                        notes: Vec::new(),
+                    }],
+                    span: Some(span.clone()),
+                    confidence: Confidence::High,
+                    reviewer_questions: vec![
+                        "Is this policy branch reachable in the deployed code?".to_string(),
+                    ],
+                    uncertainty_reasons: Vec::new(),
+                    extensions: authmap_core::ExtensionMap::new(),
+                },
+                policy_diagnostic(
+                    authmap_core::diagnostic_codes::POLICY_UNREACHABLE_BRANCH,
+                    Some(span),
+                    message,
+                ),
+            )
+        })
+        .collect()
+}
+
+fn span_has_unreachable_false_guard(span: &Span, parsed_files: &[ParsedFile]) -> bool {
+    let Some(parsed) = parsed_files
+        .iter()
+        .find(|parsed| parsed.source.path == span.file)
+    else {
+        return false;
+    };
+    let lines = parsed.text.lines().collect::<Vec<_>>();
+    let line_index = span.line.saturating_sub(1) as usize;
+    let start = line_index.saturating_sub(3);
+    lines
+        .get(start..=line_index.min(lines.len().saturating_sub(1)))
+        .unwrap_or(&[])
+        .iter()
+        .any(|line| {
+            let normalized = line
+                .chars()
+                .filter(|ch| !ch.is_whitespace())
+                .collect::<String>()
+                .to_ascii_lowercase();
+            normalized.contains("if(false)")
+                || normalized.contains("iffalse:")
+                || normalized.contains("if0:")
+                || normalized.contains("if(0)")
+        })
+}
+
+fn enrich_coverage_with_policy_cases(coverage: &mut [Coverage], policy_cases: &[PolicyCase]) {
+    let mut cases_by_route = BTreeMap::<&str, Vec<&PolicyCase>>::new();
+    for case in policy_cases {
+        cases_by_route
+            .entry(case.route_id.as_str())
+            .or_default()
+            .push(case);
+    }
+    for item in coverage {
+        let Some(cases) = cases_by_route.get(item.route_id.as_str()) else {
+            continue;
+        };
+        let policy_case_ids = sorted_ids(cases.iter().map(|case| case.id.as_str()));
+        let support = item
+            .extensions
+            .entry("authmap.coverage".to_string())
+            .or_insert_with(|| serde_json::json!({}));
+        if let Some(object) = support.as_object_mut() {
+            object.insert(
+                "policy_case_ids".to_string(),
+                serde_json::json!(policy_case_ids),
+            );
+        }
+        for case in cases {
+            item.reviewer_questions
+                .extend(case.reviewer_questions.iter().cloned());
+            item.uncertainty_reasons
+                .extend(case.uncertainty_reasons.iter().cloned());
+        }
+        item.reviewer_questions.sort();
+        item.reviewer_questions.dedup();
+        item.uncertainty_reasons.sort();
+        item.uncertainty_reasons.dedup();
+    }
+}
+
+fn policy_input_names(evidence: &[&Evidence]) -> Vec<String> {
+    let mut inputs = evidence
+        .iter()
+        .filter_map(|item| match item.evidence_type {
+            EvidenceType::Authn => Some("identity".to_string()),
+            EvidenceType::RoleCheck => Some("role".to_string()),
+            EvidenceType::PermissionCheck => Some("permission".to_string()),
+            EvidenceType::OwnershipCheck => Some("ownership".to_string()),
+            EvidenceType::TenantCheck => Some("tenant".to_string()),
+            EvidenceType::AdminCheck => Some("admin".to_string()),
+            EvidenceType::ExplicitPublic => Some("public_marker".to_string()),
+            EvidenceType::UnknownDynamicCheck => {
+                item.symbol.as_ref().map(|symbol| symbol.name.clone())
+            }
+            EvidenceType::AuditLog => None,
+        })
+        .collect::<Vec<_>>();
+    inputs.sort();
+    inputs.dedup();
+    inputs
+}
+
+fn first_span<'a>(evidence: &'a [&Evidence]) -> Option<&'a Span> {
+    evidence.iter().find_map(|item| item.span.as_ref())
+}
+
+fn policy_diagnostic(code: &str, span: Option<Span>, message: String) -> Diagnostic {
+    Diagnostic {
+        category: DiagnosticCategory::Policy,
+        code: code.to_string(),
+        severity: DiagnosticSeverity::Warning,
+        recoverability: Recoverability::Recoverable,
+        span,
+        message,
+    }
+}
+
+fn policy_case_sort_key(case: &PolicyCase) -> (String, u8, String, u32) {
+    (
+        case.route_id.clone(),
+        policy_case_kind_rank(case.kind),
+        case.span
+            .as_ref()
+            .map_or_else(String::new, |span| span.file.clone()),
+        case.span.as_ref().map_or(0, |span| span.line),
+    )
+}
+
+fn policy_case_kind_rank(kind: PolicyCaseKind) -> u8 {
+    match kind {
+        PolicyCaseKind::EffectiveProtection => 0,
+        PolicyCaseKind::LinkedMutationProtection => 1,
+        PolicyCaseKind::Conflict => 2,
+        PolicyCaseKind::Duplicate => 3,
+        PolicyCaseKind::Dynamic => 4,
+        PolicyCaseKind::Unreachable => 5,
+    }
+}
+
 fn source_needs_syntax_tree(
     language: authmap_core::Language,
     text: &str,
@@ -359,6 +950,15 @@ fn python_needs_syntax_tree(text: &str) -> bool {
 fn enabled_frameworks_for_sources(parsed_files: &[ParsedFile]) -> Vec<String> {
     let mut frameworks = BTreeSet::<String>::new();
     for parsed in parsed_files {
+        // Discovery records per-project `ProjectHint`s from manifests and imports.
+        // Union them in so an adapter still runs when the in-file text heuristic misses
+        // (aliased, wrapped, or re-exported framework imports).
+        for hint in &parsed.source.project_hints {
+            if let Some(name) = framework_name_for_hint(*hint) {
+                frameworks.insert(name.to_string());
+            }
+        }
+
         match parsed.language {
             authmap_core::Language::Python => {
                 if python_has_fastapi_route_indicators(&parsed.text) {
@@ -381,14 +981,41 @@ fn enabled_frameworks_for_sources(parsed_files: &[ParsedFile]) -> Vec<String> {
                 if js_has_nextjs_route_indicators(parsed, &parsed.text) {
                     frameworks.insert("nextjs".to_string());
                 }
-                if parsed.text.contains("Procedure") || parsed.text.contains("procedure") {
+                if js_has_trpc_route_indicators(&parsed.text) {
                     frameworks.insert("trpc".to_string());
+                }
+                if js_has_graphql_route_indicators(&parsed.text) {
+                    frameworks.insert("graphql".to_string());
                 }
             }
             authmap_core::Language::Unknown => {}
         }
     }
     frameworks.into_iter().collect()
+}
+
+/// Maps a discovery `ProjectHint` to the adapter `name()` it should enable, when any.
+/// ORM hints (SqlAlchemy, DjangoOrm, Prisma) do not map to a route adapter.
+fn framework_name_for_hint(hint: authmap_core::ProjectHint) -> Option<&'static str> {
+    match hint {
+        authmap_core::ProjectHint::FastApi => Some("fastapi"),
+        authmap_core::ProjectHint::Django | authmap_core::ProjectHint::DjangoRestFramework => {
+            Some("django")
+        }
+        authmap_core::ProjectHint::Express => Some("express"),
+        authmap_core::ProjectHint::NextJs => Some("nextjs"),
+        authmap_core::ProjectHint::SqlAlchemy
+        | authmap_core::ProjectHint::DjangoOrm
+        | authmap_core::ProjectHint::Prisma => None,
+    }
+}
+
+fn js_has_trpc_route_indicators(text: &str) -> bool {
+    text.contains("Procedure")
+        || text.contains("procedure")
+        || text.contains("@trpc/server")
+        || text.contains("createTRPCRouter")
+        || text.contains("initTRPC")
 }
 
 fn python_has_fastapi_route_indicators(text: &str) -> bool {
@@ -431,6 +1058,20 @@ fn python_has_graphql_route_indicators(text: &str) -> bool {
             "DeprecatedModelMutation",
         ],
     )
+}
+
+fn js_has_graphql_route_indicators(text: &str) -> bool {
+    contains_any(
+        text,
+        &[
+            "@Resolver",
+            "type-graphql",
+            "@Mutation(",
+            "@Query(",
+            "makeExecutableSchema",
+            "ApolloServer",
+        ],
+    ) || (text.contains("resolvers") && (text.contains("Query:") || text.contains("Mutation:")))
 }
 
 fn js_has_express_route_indicators(text: &str) -> bool {
@@ -554,6 +1195,21 @@ fn run_scan_with_started_at(
         return Ok(document);
     }
 
+    let (policy_cases, policy_diagnostics) = derive_policy_cases(
+        &document.routes,
+        &document.evidence,
+        &document.mutations,
+        &document.links,
+        &parse_output.parsed_files,
+    );
+    document.policy_cases = policy_cases;
+    document.diagnostics.extend(policy_diagnostics);
+    if budget.is_exceeded() {
+        push_runtime_limit_diagnostic(&mut document, plan);
+        finalize_diagnostics(&mut document);
+        return Ok(document);
+    }
+
     document.coverage = classify_coverage(
         &document.routes,
         &document.evidence,
@@ -561,6 +1217,7 @@ fn run_scan_with_started_at(
         &document.links,
         &plan.config,
     );
+    enrich_coverage_with_policy_cases(&mut document.coverage, &document.policy_cases);
     if budget.is_exceeded() {
         push_runtime_limit_diagnostic(&mut document, plan);
     }
@@ -820,6 +1477,9 @@ fn route_protection(route: &authmap_core::Route, evidence: &[&Evidence]) -> Vec<
                 .zip(item.symbol.as_ref())
                 .is_some_and(|(left, right)| left.name == right.name)
         }) {
+            continue;
+        }
+        if item.mechanism == "route_param_scope_signal" {
             continue;
         }
         let Some(kind) = protection_kind_for_evidence(item.evidence_type) else {
@@ -1595,7 +2255,9 @@ fn extract_prisma_mutations(parsed: &ParsedFile, root: Node<'_>) -> Vec<Mutation
             && let Some(function) = node.child_by_field_name("function")
         {
             let function_text = parsed.text_for(function).unwrap_or_default();
-            if let Some(mutation) = prisma_mutation_from_call(parsed, node, function_text) {
+            if let Some(mutation) = prisma_mutation_from_call(parsed, node, function_text)
+                .or_else(|| js_orm_mutation_from_call(parsed, node, function_text))
+            {
                 mutations.push(mutation);
             }
         }
@@ -1603,6 +2265,122 @@ fn extract_prisma_mutations(parsed: &ParsedFile, root: Node<'_>) -> Vec<Mutation
         stack.extend(node.children(&mut cursor));
     }
     mutations
+}
+
+/// JavaScript identifiers that are capitalized but are not ORM models, to keep
+/// the `Model.create(...)` heuristic from firing on built-ins like `Object.create`.
+const JS_NON_MODEL_RECEIVERS: &[&str] = &[
+    "Object", "Array", "Promise", "Map", "WeakMap", "Set", "WeakSet", "Date", "RegExp", "Proxy",
+    "Reflect", "JSON", "Math", "Number", "String", "Boolean", "Symbol", "BigInt", "Error",
+    "Buffer", "Response",
+];
+
+/// Detects mutations from the common non-Prisma Node ORMs (Sequelize, TypeORM,
+/// Mongoose). Conservative: only distinctive method names, repository-gated
+/// TypeORM calls, and capitalized-model `create/update/destroy` (excluding JS
+/// built-ins) are reported. Knex query-builder chains are not yet handled.
+fn js_orm_mutation_from_call(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    function_text: &str,
+) -> Option<Mutation> {
+    let parts = function_text.split('.').collect::<Vec<_>>();
+    if parts.len() < 2 {
+        return None;
+    }
+    let method = parts.last().copied().unwrap_or_default();
+    let receiver = terminal_symbol_name(parts[parts.len() - 2]);
+    let span = parsed.span_for(call);
+
+    // Distinctive Mongoose document/query methods.
+    let mongoose = match method {
+        "findByIdAndUpdate" | "findOneAndUpdate" | "updateOne" | "updateMany" | "replaceOne" => {
+            Some(MutationOperation::Update)
+        }
+        "findByIdAndDelete" | "findByIdAndRemove" | "findOneAndDelete" | "deleteOne"
+        | "deleteMany" => Some(MutationOperation::Delete),
+        _ => None,
+    };
+    if let Some(operation) = mongoose {
+        return Some(orm_mutation(
+            operation,
+            "mongoose",
+            Some(receiver),
+            span,
+            Confidence::Medium,
+        ));
+    }
+
+    // Sequelize-distinctive methods.
+    match method {
+        "bulkCreate" => {
+            return Some(orm_mutation(
+                MutationOperation::Create,
+                "sequelize",
+                Some(receiver),
+                span,
+                Confidence::Medium,
+            ));
+        }
+        "upsert" => {
+            return Some(raw_or_unknown_mutation(
+                MutationOperation::UnknownMutation,
+                "sequelize",
+                Some(receiver),
+                span,
+                "unknown_operation",
+                "Sequelize upsert may create or update data and requires review",
+            ));
+        }
+        _ => {}
+    }
+
+    // TypeORM repository methods (receiver looks like a repository).
+    let receiver_lower = receiver.to_ascii_lowercase();
+    if receiver_lower.contains("repo") || receiver_lower.ends_with("repository") {
+        let operation = match method {
+            "save" | "insert" => Some(MutationOperation::Create),
+            "update" => Some(MutationOperation::Update),
+            "delete" | "remove" | "softDelete" | "softRemove" => Some(MutationOperation::Delete),
+            _ => None,
+        };
+        if let Some(operation) = operation {
+            return Some(orm_mutation(
+                operation,
+                "typeorm",
+                Some(receiver),
+                span,
+                Confidence::Medium,
+            ));
+        }
+    }
+
+    // Capitalized model static methods (Sequelize/Mongoose/TypeORM), excluding
+    // JS built-ins. ORM is ambiguous, so report at low confidence for review.
+    let is_model = receiver
+        .chars()
+        .next()
+        .is_some_and(|ch| ch.is_ascii_uppercase())
+        && !JS_NON_MODEL_RECEIVERS.contains(&receiver.as_str());
+    if is_model {
+        let operation = match method {
+            "create" => Some(MutationOperation::Create),
+            "update" => Some(MutationOperation::Update),
+            "destroy" => Some(MutationOperation::Delete),
+            _ => None,
+        };
+        if let Some(operation) = operation {
+            return Some(orm_mutation(
+                operation,
+                "orm",
+                Some(receiver),
+                span,
+                Confidence::Low,
+            ));
+        }
+    }
+
+    None
 }
 
 fn prisma_mutation_from_call(
@@ -1615,8 +2393,12 @@ fn prisma_mutation_from_call(
         return None;
     }
     let method = parts.last().copied().unwrap_or_default();
-    if matches!(method, "$executeRaw" | "$executeRawUnsafe" | "$queryRaw") {
-        if method == "$queryRaw" && !call_has_mutating_sql(parsed, call) {
+    if matches!(
+        method,
+        "$executeRaw" | "$executeRawUnsafe" | "$queryRaw" | "$queryRawUnsafe"
+    ) {
+        if matches!(method, "$queryRaw" | "$queryRawUnsafe") && !call_has_mutating_sql(parsed, call)
+        {
             return None;
         }
         return Some(raw_or_unknown_mutation(
@@ -1791,7 +2573,7 @@ fn collect_python_session_symbols(parsed: &ParsedFile, function: Node<'_>) -> BT
         };
         if annotation
             .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
-            .any(|part| part == "Session")
+            .any(|part| matches!(part, "Session" | "AsyncSession"))
         {
             let symbol = clean_symbol(name.trim_start_matches('*'));
             if !symbol.is_empty() {
@@ -1924,6 +2706,26 @@ fn sqlalchemy_call_mutation(
                 Confidence::Medium,
             ))
         }
+        text if text.ends_with(".merge")
+            && is_sqlalchemy_session_receiver(&receiver, session_symbols) =>
+        {
+            // session.merge() is an upsert (INSERT or UPDATE).
+            let resource = call_argument_nodes(call)
+                .first()
+                .and_then(|arg| parsed.text_for(*arg))
+                .and_then(|text| {
+                    model_by_var
+                        .get(text.trim())
+                        .map(|binding| binding_model(binding))
+                });
+            Some(orm_mutation(
+                MutationOperation::Update,
+                "sqlalchemy",
+                resource,
+                parsed.span_for(call),
+                Confidence::Medium,
+            ))
+        }
         text if text.ends_with(".execute")
             && is_sqlalchemy_session_receiver(&receiver, session_symbols) =>
         {
@@ -1953,6 +2755,15 @@ fn is_sqlalchemy_session_receiver(receiver: &str, session_symbols: &BTreeSet<Str
 fn sqlalchemy_execute_mutation(parsed: &ParsedFile, call: Node<'_>) -> Option<Mutation> {
     let first_arg = call_argument_nodes(call).into_iter().next()?;
     let arg_text = parsed.text_for(first_arg).unwrap_or_default().trim();
+    if let Some(resource) = call_resource(arg_text, "insert") {
+        return Some(orm_mutation(
+            MutationOperation::Create,
+            "sqlalchemy",
+            Some(resource),
+            parsed.span_for(call),
+            Confidence::High,
+        ));
+    }
     if let Some(resource) = call_resource(arg_text, "update") {
         return Some(orm_mutation(
             MutationOperation::Update,
@@ -2013,7 +2824,9 @@ fn django_call_mutation(
 ) -> Option<Mutation> {
     if let Some((model, method)) = django_objects_call(function_text) {
         let operation = match method {
-            "create" => MutationOperation::Create,
+            "create" | "get_or_create" | "update_or_create" | "bulk_create" => {
+                MutationOperation::Create
+            }
             "update" => MutationOperation::BulkUpdate,
             "bulk_update" => MutationOperation::BulkUpdate,
             "delete" => MutationOperation::Delete,
@@ -2055,8 +2868,16 @@ fn django_call_mutation(
 fn django_objects_call(function_text: &str) -> Option<(String, &str)> {
     let (model, rest) = function_text.split_once(".objects.")?;
     let method = function_text.rsplit('.').next()?;
-    if matches!(method, "create" | "update" | "bulk_update" | "delete")
-        && (rest.starts_with(method) || rest.contains(&format!(".{method}")))
+    if matches!(
+        method,
+        "create"
+            | "update"
+            | "bulk_update"
+            | "delete"
+            | "get_or_create"
+            | "update_or_create"
+            | "bulk_create"
+    ) && (rest.starts_with(method) || rest.contains(&format!(".{method}")))
     {
         return Some((clean_symbol(model), method));
     }
@@ -3295,7 +4116,7 @@ fn builtin_rules() -> Vec<EvidenceRuleSpec> {
             EvidenceType::ExplicitPublic,
             "public_marker",
             Confidence::High,
-            &["allow_anonymous", "public_route", "no_auth"],
+            &["allow_anonymous", "public_route", "publicRoute", "no_auth"],
             &["public"],
         ),
         rule(
@@ -3368,8 +4189,36 @@ fn builtin_rules() -> Vec<EvidenceRuleSpec> {
                 "ensureLoggedIn",
                 "session",
                 "auth",
+                // Next.js / Auth.js / NextAuth / Clerk session helpers.
+                "getServerSession",
+                "getToken",
+                "getAuth",
+                "currentUser",
+                "withAuth",
+                "clerkMiddleware",
+                "authMiddleware",
+                "updateSession",
+                "isAuthenticated",
+                // Passport / common Node auth middleware.
+                "authenticate",
+                "ensureAuthenticated",
+                "ensureLoggedIn",
+                "isLoggedIn",
             ],
             &["auth", "session", "authenticated", "logged"],
+        ),
+        rule(
+            EvidenceType::AuditLog,
+            "audit_log",
+            Confidence::High,
+            &[
+                "audit",
+                "auditLog",
+                "audit_log",
+                "securityLog",
+                "security_log",
+            ],
+            &["audit", "securitylog", "security_log"],
         ),
         rule(
             EvidenceType::UnknownDynamicCheck,
@@ -3438,8 +4287,17 @@ fn extract_express_route_evidence(
             evidence.extend(extract_guard_condition_evidence(
                 parsed, node, route, handler,
             ));
+            evidence.extend(extract_scoping_evidence_from_node(
+                parsed,
+                node,
+                route,
+                handler,
+                "handler_scope",
+                Confidence::High,
+            ));
         }
     }
+    evidence.extend(extract_route_param_scoping_evidence(route));
     evidence
 }
 
@@ -3464,6 +4322,14 @@ fn extract_fastapi_route_evidence(
     evidence.extend(extract_guard_condition_evidence(
         parsed, node, route, handler,
     ));
+    evidence.extend(extract_scoping_evidence_from_node(
+        parsed,
+        node,
+        route,
+        handler,
+        "handler_scope",
+        Confidence::High,
+    ));
     for dependency in &route.middleware {
         if let Some(rule) = rules.match_symbol(&dependency.name) {
             push_fastapi_dependency_evidence(&mut evidence, route, rule, dependency.clone());
@@ -3487,6 +4353,7 @@ fn extract_fastapi_route_evidence(
             );
         }
     }
+    evidence.extend(extract_route_param_scoping_evidence(route));
     evidence
 }
 
@@ -3533,8 +4400,18 @@ fn extract_django_route_evidence(
         return Vec::new();
     };
 
+    let is_function_handler = django_route_metadata(route)
+        .and_then(|metadata| metadata.handler_kind)
+        .is_none_or(|kind| kind == "function");
+
     let mut evidence = Vec::new();
     for node in django_handler_nodes(parsed, route, handler) {
+        if is_function_handler {
+            // Function-based views carry their guards as decorators
+            // (`@login_required`, `@permission_required`, DRF `@permission_classes`),
+            // which sit outside the function body scanned below.
+            evidence.extend(extract_django_fbv_decorator_evidence(parsed, node, route));
+        }
         evidence.extend(extract_calls_from_node(
             parsed,
             node,
@@ -3544,6 +4421,14 @@ fn extract_django_route_evidence(
         ));
         evidence.extend(extract_guard_condition_evidence(
             parsed, node, route, handler,
+        ));
+        evidence.extend(extract_scoping_evidence_from_node(
+            parsed,
+            node,
+            route,
+            handler,
+            "handler_scope",
+            Confidence::High,
         ));
     }
     if let Some(metadata) = django_route_metadata(route)
@@ -3558,6 +4443,7 @@ fn extract_django_route_evidence(
             class_name,
         ));
     }
+    evidence.extend(extract_route_param_scoping_evidence(route));
     evidence
 }
 
@@ -3576,6 +4462,19 @@ fn extract_nextjs_route_evidence(
     };
 
     let mut evidence = Vec::new();
+    // `middleware.ts` protection: the adapter records the matching middleware in
+    // `route.middleware` named after the auth helper it delegates to. Match it
+    // against rules exactly like Express route-level middleware.
+    for middleware in &route.middleware {
+        if let Some(rule) = rules.match_symbol(&middleware.name) {
+            evidence.push(evidence_from_rule(
+                route,
+                rule,
+                Some(middleware.clone()),
+                middleware.span.clone(),
+            ));
+        }
+    }
     if let Some(metadata) = nextjs_route_metadata(route)
         && let Some(wrapper) = metadata.wrapper.as_deref()
         && let Some(wrapper_evidence) = evidence_from_nextjs_wrapper(route, wrapper)
@@ -3593,7 +4492,16 @@ fn extract_nextjs_route_evidence(
         evidence.extend(extract_guard_condition_evidence(
             parsed, node, route, handler,
         ));
+        evidence.extend(extract_scoping_evidence_from_node(
+            parsed,
+            node,
+            route,
+            handler,
+            "handler_scope",
+            Confidence::High,
+        ));
     }
+    evidence.extend(extract_route_param_scoping_evidence(route));
     evidence
 }
 
@@ -3643,6 +4551,12 @@ fn extract_graphql_route_evidence(route: &authmap_core::Route) -> Vec<Evidence> 
     }
     let (evidence_type, mechanism) = if graphql_permissions_explicitly_public(permissions) {
         (EvidenceType::ExplicitPublic, "graphql_public_permissions")
+    } else if matches!(
+        permissions.trim().to_ascii_lowercase().as_str(),
+        "authenticated" | "authorized"
+    ) {
+        // type-graphql bare @Authorized() — authentication, no specific role.
+        (EvidenceType::Authn, "graphql_authorized")
     } else {
         (EvidenceType::PermissionCheck, "graphql_permissions")
     };
@@ -3750,6 +4664,22 @@ fn extract_service_call_evidence(
                 ));
             }
             evidence.extend(service_evidence);
+            let mut scoping_evidence = extract_scoping_evidence_from_node(
+                resolved_parsed,
+                resolved.def.node,
+                route,
+                handler,
+                "service_scope",
+                resolved.confidence,
+            );
+            for item in &mut scoping_evidence {
+                item.notes.push(format!(
+                    "One-hop service call `{}` reaches `{}`",
+                    function_text.trim(),
+                    resolved.def.name
+                ));
+            }
+            evidence.extend(scoping_evidence);
         }
     }
     evidence
@@ -3936,6 +4866,338 @@ fn extract_guard_condition_evidence(
     evidence
 }
 
+fn extract_route_param_scoping_evidence(route: &authmap_core::Route) -> Vec<Evidence> {
+    route_params(&route.path)
+        .iter()
+        .filter_map(|param| {
+            let evidence_type = scope_evidence_type(&param.name)?;
+            Some(Evidence {
+                id: String::new(),
+                route_id: Some(route.id.clone()),
+                evidence_type,
+                mechanism: "route_param_scope_signal".to_string(),
+                symbol: Some(SymbolRef {
+                    name: param.name.clone(),
+                    span: param.span.clone().or_else(|| route.span.clone()),
+                }),
+                span: param.span.clone().or_else(|| route.span.clone()),
+                confidence: Confidence::Low,
+                notes: vec![
+                    "Route parameter name suggests tenant or ownership context but is not proof of scoping"
+                        .to_string(),
+                ],
+                extensions: authmap_core::ExtensionMap::new(),
+            })
+        })
+        .collect()
+}
+
+fn extract_scoping_evidence_from_node(
+    parsed: &ParsedFile,
+    node: Node<'_>,
+    route: &authmap_core::Route,
+    symbol: &SymbolRef,
+    fallback_mechanism: &str,
+    confidence_cap: Confidence,
+) -> Vec<Evidence> {
+    let mut evidence = Vec::new();
+    let mut stack = vec![node];
+    while let Some(current) = stack.pop() {
+        if node_is_untrusted_text(current.kind()) {
+            continue;
+        }
+        match current.kind() {
+            "if" | "if_statement" => {
+                if let Some(condition) = condition_node(current) {
+                    push_scoping_evidence_for_text(
+                        &mut evidence,
+                        parsed,
+                        route,
+                        symbol,
+                        condition,
+                        "condition_scope",
+                        confidence_cap,
+                    );
+                }
+            }
+            "call" | "call_expression" => {
+                let mechanism = parsed
+                    .text_for(current.child_by_field_name("function").unwrap_or(current))
+                    .map(scope_call_mechanism)
+                    .unwrap_or(fallback_mechanism);
+                if mechanism != fallback_mechanism {
+                    push_scoping_evidence_for_text(
+                        &mut evidence,
+                        parsed,
+                        route,
+                        symbol,
+                        current,
+                        mechanism,
+                        confidence_cap,
+                    );
+                }
+            }
+            "assignment"
+            | "assignment_expression"
+            | "augmented_assignment_expression"
+            | "pair"
+            | "property_identifier" => {
+                let mechanism = parsed
+                    .text_for(current)
+                    .map(|text| {
+                        if contains_any(&text.to_ascii_lowercase(), &["filter", "where", "query"]) {
+                            "query_scope"
+                        } else {
+                            "mutation_scope"
+                        }
+                    })
+                    .unwrap_or("mutation_scope");
+                push_scoping_evidence_for_text(
+                    &mut evidence,
+                    parsed,
+                    route,
+                    symbol,
+                    current,
+                    mechanism,
+                    confidence_cap,
+                );
+            }
+            _ => {}
+        }
+        let mut cursor = current.walk();
+        stack.extend(current.children(&mut cursor));
+    }
+    evidence
+}
+
+fn push_scoping_evidence_for_text(
+    evidence: &mut Vec<Evidence>,
+    parsed: &ParsedFile,
+    route: &authmap_core::Route,
+    _symbol: &SymbolRef,
+    node: Node<'_>,
+    mechanism: &str,
+    confidence_cap: Confidence,
+) {
+    let Some(text) = parsed.text_for(node) else {
+        return;
+    };
+    let lower = text.to_ascii_lowercase();
+    let Some(evidence_type) = scope_text_evidence_type(&lower) else {
+        return;
+    };
+    if !scope_text_has_structure(&lower, mechanism) {
+        return;
+    }
+    let confidence = std::cmp::min(Confidence::High, confidence_cap);
+    push_unique_symbol_evidence(
+        evidence,
+        Evidence {
+            id: String::new(),
+            route_id: Some(route.id.clone()),
+            evidence_type,
+            mechanism: mechanism.to_string(),
+            symbol: Some(SymbolRef {
+                name: scope_symbol_name(text, evidence_type),
+                span: Some(parsed.span_for(node)),
+            }),
+            span: Some(parsed.span_for(node)),
+            confidence,
+            notes: vec![scope_evidence_note(evidence_type, mechanism).to_string()],
+            extensions: authmap_core::ExtensionMap::new(),
+        },
+    );
+    if mechanism == "mutation_scope" && text.contains("owner") && text.contains("tenant") {
+        push_unique_symbol_evidence(
+            evidence,
+            Evidence {
+                id: String::new(),
+                route_id: Some(route.id.clone()),
+                evidence_type: EvidenceType::OwnershipCheck,
+                mechanism: mechanism.to_string(),
+                symbol: Some(SymbolRef {
+                    name: "owner".to_string(),
+                    span: Some(parsed.span_for(node)),
+                }),
+                span: Some(parsed.span_for(node)),
+                confidence,
+                notes: vec![
+                    scope_evidence_note(EvidenceType::OwnershipCheck, mechanism).to_string(),
+                ],
+                extensions: authmap_core::ExtensionMap::new(),
+            },
+        );
+    }
+}
+
+fn scope_call_mechanism(function_text: &str) -> &'static str {
+    let lower = function_text.to_ascii_lowercase();
+    if contains_any(
+        &lower,
+        &[
+            "update",
+            "delete",
+            "create",
+            "save",
+            "add",
+            "insert",
+            "bulk_update",
+        ],
+    ) {
+        "mutation_scope"
+    } else if contains_any(
+        &lower,
+        &[
+            "filter",
+            "where",
+            "find",
+            "findunique",
+            "findfirst",
+            "get",
+            "query",
+        ],
+    ) {
+        "query_scope"
+    } else {
+        "handler_scope"
+    }
+}
+
+fn scope_text_evidence_type(lower: &str) -> Option<EvidenceType> {
+    if contains_tenant_token(lower) {
+        Some(EvidenceType::TenantCheck)
+    } else if contains_ownership_token(lower) {
+        Some(EvidenceType::OwnershipCheck)
+    } else {
+        None
+    }
+}
+
+fn scope_evidence_type(name: &str) -> Option<EvidenceType> {
+    let lower = name.to_ascii_lowercase();
+    if contains_tenant_token(&lower)
+        || contains_any(
+            &lower,
+            &["account_id", "accountid", "project_id", "projectid"],
+        )
+    {
+        Some(EvidenceType::TenantCheck)
+    } else if contains_ownership_token(&lower) {
+        Some(EvidenceType::OwnershipCheck)
+    } else {
+        None
+    }
+}
+
+fn scope_text_has_structure(lower: &str, mechanism: &str) -> bool {
+    match mechanism {
+        "condition_scope" => {
+            contains_any(lower, &["==", "!=", "===", "!==", " in ", ".includes"])
+                && contains_subject_token(lower)
+        }
+        "query_scope" => {
+            contains_any(lower, &["filter", "where", "find", "get", "query"])
+                && contains_any(lower, &["=", ":", "=="])
+        }
+        "mutation_scope" => {
+            contains_any(
+                lower,
+                &[
+                    "=", ":", "where", "data", "update", "create", "delete", "add",
+                ],
+            ) && (contains_subject_token(lower)
+                || contains_any(lower, &["req.params", "params.", "_id", "id:"]))
+        }
+        _ => false,
+    }
+}
+
+fn contains_tenant_token(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            "tenant_id",
+            "tenantid",
+            "tenant",
+            "org_id",
+            "orgid",
+            "organization_id",
+            "organizationid",
+            "organisation_id",
+            "workspace_id",
+            "workspaceid",
+            "workspace",
+        ],
+    )
+}
+
+fn contains_ownership_token(lower: &str) -> bool {
+    contains_any(lower, &["owner_id", "ownerid", "owner", "ownership"])
+}
+
+fn contains_subject_token(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            "req.user",
+            "request.user",
+            "current_user",
+            "user.",
+            "user[",
+            "ctx.user",
+            "session.user",
+        ],
+    )
+}
+
+fn node_is_untrusted_text(kind: &str) -> bool {
+    matches!(
+        kind,
+        "comment" | "string" | "string_fragment" | "template_string"
+    )
+}
+
+fn scope_symbol_name(text: &str, evidence_type: EvidenceType) -> String {
+    for token in scope_symbol_tokens(evidence_type) {
+        if text.to_ascii_lowercase().contains(token) {
+            return token.to_string();
+        }
+    }
+    evidence_type_label(evidence_type).to_string()
+}
+
+fn scope_symbol_tokens(evidence_type: EvidenceType) -> &'static [&'static str] {
+    match evidence_type {
+        EvidenceType::TenantCheck => &[
+            "tenant_id",
+            "tenant",
+            "org_id",
+            "organization_id",
+            "workspace_id",
+        ],
+        EvidenceType::OwnershipCheck => &["owner_id", "owner"],
+        _ => &[],
+    }
+}
+
+fn scope_evidence_note(evidence_type: EvidenceType, mechanism: &str) -> &'static str {
+    match (evidence_type, mechanism) {
+        (EvidenceType::TenantCheck, "query_scope") => "Query filter includes tenant scoping",
+        (EvidenceType::OwnershipCheck, "query_scope") => "Query filter includes ownership scoping",
+        (EvidenceType::TenantCheck, "condition_scope") => {
+            "Condition compares tenant context before continuing"
+        }
+        (EvidenceType::OwnershipCheck, "condition_scope") => {
+            "Condition compares ownership context before continuing"
+        }
+        (EvidenceType::TenantCheck, "mutation_scope") => "Mutation input includes tenant scoping",
+        (EvidenceType::OwnershipCheck, "mutation_scope") => {
+            "Mutation input includes ownership scoping"
+        }
+        _ => "Tenant or ownership scoping evidence was detected",
+    }
+}
+
 fn extract_django_class_evidence(
     route: &authmap_core::Route,
     rules: &EvidenceRules,
@@ -3959,6 +5221,7 @@ fn extract_django_class_evidence(
             "initial",
             "dispatch",
             "has_permission",
+            "has_object_permission",
             "get_permissions",
             "check_permissions",
             "get_queryset",
@@ -4047,36 +5310,8 @@ fn extract_django_class_attribute_evidence(
                 "django_authentication_classes",
                 "authentication_classes".to_string(),
             )
-        } else if lower.contains("allowany") {
-            (
-                EvidenceType::ExplicitPublic,
-                "drf_permission_classes",
-                "AllowAny".to_string(),
-            )
-        } else if lower.contains("isadminuser") || lower.contains("issuperuser") {
-            (
-                EvidenceType::AdminCheck,
-                "drf_permission_classes",
-                "IsAdminUser".to_string(),
-            )
-        } else if lower.contains("isauthenticated") {
-            (
-                EvidenceType::Authn,
-                "drf_permission_classes",
-                "IsAuthenticated".to_string(),
-            )
-        } else if lower.contains("permission") {
-            (
-                EvidenceType::PermissionCheck,
-                "drf_permission_classes",
-                "permission_classes".to_string(),
-            )
         } else {
-            (
-                EvidenceType::UnknownDynamicCheck,
-                "drf_permission_classes",
-                "permission_classes".to_string(),
-            )
+            classify_drf_permission_classes(&lower)
         };
         evidence.push(Evidence {
             id: String::new(),
@@ -4098,6 +5333,150 @@ fn extract_django_class_attribute_evidence(
         });
     }
     evidence
+}
+
+/// Classifies a DRF `permission_classes` value (lowercased) into evidence.
+/// Shared by class-attribute and function-based-view `@permission_classes`
+/// detection. `IsAuthenticatedOrReadOnly` is surfaced as dynamic/review since
+/// it makes the read path public while only authenticating writes.
+fn classify_drf_permission_classes(lower: &str) -> (EvidenceType, &'static str, String) {
+    if lower.contains("allowany") {
+        (
+            EvidenceType::ExplicitPublic,
+            "drf_permission_classes",
+            "AllowAny".to_string(),
+        )
+    } else if lower.contains("isadminuser") || lower.contains("issuperuser") {
+        (
+            EvidenceType::AdminCheck,
+            "drf_permission_classes",
+            "IsAdminUser".to_string(),
+        )
+    } else if lower.contains("isauthenticatedorreadonly") {
+        (
+            EvidenceType::UnknownDynamicCheck,
+            "drf_permission_classes",
+            "IsAuthenticatedOrReadOnly".to_string(),
+        )
+    } else if lower.contains("isauthenticated") {
+        (
+            EvidenceType::Authn,
+            "drf_permission_classes",
+            "IsAuthenticated".to_string(),
+        )
+    } else if lower.contains("permission") {
+        (
+            EvidenceType::PermissionCheck,
+            "drf_permission_classes",
+            "permission_classes".to_string(),
+        )
+    } else {
+        (
+            EvidenceType::UnknownDynamicCheck,
+            "drf_permission_classes",
+            "permission_classes".to_string(),
+        )
+    }
+}
+
+/// Extracts authorization evidence from the decorators of a function-based view.
+/// `function_node` is the `function_definition`; its `decorated_definition`
+/// parent holds the decorators (`@login_required`, `@permission_required(...)`,
+/// `@api_view([...])` + `@permission_classes([...])`, etc.).
+fn extract_django_fbv_decorator_evidence(
+    parsed: &ParsedFile,
+    function_node: Node<'_>,
+    route: &authmap_core::Route,
+) -> Vec<Evidence> {
+    let mut evidence = Vec::new();
+    let Some(parent) = function_node.parent() else {
+        return evidence;
+    };
+    if parent.kind() != "decorated_definition" {
+        return evidence;
+    }
+    let mut cursor = parent.walk();
+    for decorator in parent.children(&mut cursor) {
+        if decorator.kind() != "decorator" {
+            continue;
+        }
+        let Some(expr) = decorator.named_child(0) else {
+            continue;
+        };
+        let (name_node, args_text) = if expr.kind() == "call" {
+            let function = expr.child_by_field_name("function");
+            let args = expr
+                .child_by_field_name("arguments")
+                .and_then(|args| parsed.text_for(args))
+                .unwrap_or_default();
+            (function, args.to_string())
+        } else {
+            (Some(expr), String::new())
+        };
+        let Some(name) = name_node
+            .and_then(|node| parsed.text_for(node))
+            .map(terminal_symbol_name)
+        else {
+            continue;
+        };
+        if let Some(item) =
+            django_decorator_evidence(route, &name, &args_text, parsed.span_for(decorator))
+        {
+            evidence.push(item);
+        }
+    }
+    evidence
+}
+
+fn django_decorator_evidence(
+    route: &authmap_core::Route,
+    name: &str,
+    args_text: &str,
+    span: Span,
+) -> Option<Evidence> {
+    let (evidence_type, mechanism, symbol_name) = match name {
+        "login_required" => (
+            EvidenceType::Authn,
+            "django_login_required",
+            name.to_string(),
+        ),
+        "staff_member_required" => (
+            EvidenceType::AdminCheck,
+            "django_staff_member_required",
+            name.to_string(),
+        ),
+        "permission_required" => (
+            EvidenceType::PermissionCheck,
+            "django_permission_required",
+            name.to_string(),
+        ),
+        "user_passes_test" => (
+            EvidenceType::UnknownDynamicCheck,
+            "django_user_passes_test",
+            name.to_string(),
+        ),
+        "authentication_classes" => (
+            EvidenceType::Authn,
+            "django_authentication_classes",
+            "authentication_classes".to_string(),
+        ),
+        "permission_classes" => classify_drf_permission_classes(&args_text.to_ascii_lowercase()),
+        _ => return None,
+    };
+    Some(Evidence {
+        id: String::new(),
+        route_id: Some(route.id.clone()),
+        evidence_type,
+        mechanism: mechanism.to_string(),
+        symbol: Some(SymbolRef {
+            name: symbol_name,
+            span: Some(span.clone()),
+        }),
+        span: Some(span),
+        confidence: Confidence::High,
+        notes: Vec::new(),
+        extensions: authmap_core::ExtensionMap::new(),
+    })
 }
 
 fn extract_django_builtin_evidence_from_node(
@@ -4983,7 +6362,10 @@ fn terminal_symbol_name(text: &str) -> String {
 }
 
 fn is_fastapi_depends(function_text: &str) -> bool {
-    terminal_symbol_name(function_text) == "Depends"
+    matches!(
+        terminal_symbol_name(function_text).as_str(),
+        "Depends" | "Security"
+    )
 }
 
 fn is_framework_route_call(function_text: &str) -> bool {
@@ -5160,13 +6542,18 @@ impl<'a> CoverageIndex<'a> {
 
 fn classify_route(route: &authmap_core::Route, facts: &CoverageRouteFacts<'_>) -> Coverage {
     let evidence = facts.evidence.as_slice();
-    let strong = evidence
+    let coverage_evidence = evidence
+        .iter()
+        .copied()
+        .filter(|item| item.evidence_type != EvidenceType::AuditLog)
+        .collect::<Vec<_>>();
+    let strong = coverage_evidence
         .iter()
         .copied()
         .filter(|item| item.confidence != Confidence::Low)
         .filter(|item| item.evidence_type != EvidenceType::UnknownDynamicCheck)
         .collect::<Vec<_>>();
-    let weak = evidence
+    let weak = coverage_evidence
         .iter()
         .copied()
         .filter(|item| {
@@ -5182,16 +6569,22 @@ fn classify_route(route: &authmap_core::Route, facts: &CoverageRouteFacts<'_>) -
     let sensitive = !sensitivity.is_empty();
     let has_linked_mutations = !facts.linked_mutations.is_empty();
 
-    let class = coverage_class(&strong, evidence);
+    let class = coverage_class(&strong, &coverage_evidence);
     let risk = coverage_risk(
         route,
         class,
-        evidence,
+        &coverage_evidence,
         &strong,
         &weak,
         sensitive,
         has_linked_mutations,
     );
+    let tenant_review_reasons = tenant_review_reasons(route, &strong, &weak, &sensitivity, facts);
+    let risk = if tenant_review_reasons.is_empty() {
+        risk
+    } else {
+        RiskLevel::ReviewRequired
+    };
     let mut reviewer_questions = reviewer_questions(
         route,
         class,
@@ -5199,32 +6592,131 @@ fn classify_route(route: &authmap_core::Route, facts: &CoverageRouteFacts<'_>) -
         has_linked_mutations,
         &facts.configured_reviewer_questions,
     );
+    if !tenant_review_reasons.is_empty() {
+        reviewer_questions
+            .push("Should this route require tenant or ownership scoping?".to_string());
+    }
     if risk == RiskLevel::High && reviewer_questions.is_empty() {
         reviewer_questions
             .push("Should this route have server-side authorization evidence?".to_string());
+    }
+    reviewer_questions.sort();
+    reviewer_questions.dedup();
+    let mut rationale = coverage_rationale(
+        class,
+        risk,
+        &strong,
+        &weak,
+        &sensitivity,
+        has_linked_mutations,
+    );
+    if !tenant_review_reasons.is_empty() {
+        rationale.push(format!(
+            "Tenant isolation review required: {}.",
+            tenant_review_reasons.join(", ")
+        ));
+    }
+    let mut extensions = coverage_extensions(evidence, &weak, facts, &sensitivity);
+    if !tenant_review_reasons.is_empty() {
+        extensions.insert(
+            "authmap.tenant_review".to_string(),
+            serde_json::json!({
+                "review_required": true,
+                "reasons": tenant_review_reasons,
+                "evidence_ids": sorted_ids(strong.iter().filter(|item| {
+                    matches!(
+                        item.evidence_type,
+                        EvidenceType::TenantCheck | EvidenceType::OwnershipCheck
+                    )
+                }).map(|item| item.id.as_str())),
+                "weak_evidence_ids": sorted_ids(weak.iter().filter(|item| {
+                    matches!(
+                        item.evidence_type,
+                        EvidenceType::TenantCheck | EvidenceType::OwnershipCheck
+                    )
+                }).map(|item| item.id.as_str())),
+            }),
+        );
     }
 
     Coverage {
         route_id: route.id.clone(),
         class,
         risk,
-        rationale: coverage_rationale(
-            class,
-            risk,
-            &strong,
-            &weak,
-            &sensitivity,
-            has_linked_mutations,
-        ),
+        rationale,
         reviewer_questions,
         uncertainty_reasons: uncertainty_reasons(route, evidence),
-        extensions: coverage_extensions(evidence, &weak, facts, &sensitivity),
+        extensions,
     }
+}
+
+fn tenant_review_reasons(
+    route: &authmap_core::Route,
+    strong: &[&Evidence],
+    weak: &[&Evidence],
+    sensitivity: &[String],
+    facts: &CoverageRouteFacts<'_>,
+) -> Vec<String> {
+    let has_strong_scope = strong.iter().any(|item| {
+        matches!(
+            item.evidence_type,
+            EvidenceType::TenantCheck | EvidenceType::OwnershipCheck
+        )
+    });
+    if has_strong_scope {
+        return Vec::new();
+    }
+
+    let mut reasons = Vec::new();
+    let has_scope_signal = weak.iter().any(|item| {
+        matches!(
+            item.evidence_type,
+            EvidenceType::TenantCheck | EvidenceType::OwnershipCheck
+        )
+    });
+    let tenant_like_path_param = route
+        .params
+        .iter()
+        .any(|param| scope_evidence_type(&param.name).is_some());
+    let has_path_param = !route.params.is_empty();
+    let sensitive_for_tenants = !sensitivity.is_empty()
+        || tenant_like_path_param
+        || !facts.linked_mutations.is_empty()
+        || unsafe_method(route);
+
+    if sensitive_for_tenants && (!facts.linked_mutations.is_empty() || tenant_like_path_param) {
+        reasons.push("missing_tenant_or_ownership_evidence".to_string());
+    }
+    if has_scope_signal {
+        reasons.push("only_weak_tenant_or_ownership_signal".to_string());
+    }
+    if has_path_param && !facts.linked_mutations.is_empty() {
+        reasons.push("route_param_mutation_without_scope".to_string());
+    }
+    if route.path.to_ascii_lowercase().contains("admin")
+        && (!facts.linked_mutations.is_empty() || tenant_like_path_param)
+    {
+        reasons.push("admin_bypass_requires_tenant_review".to_string());
+    }
+
+    reasons.sort();
+    reasons.dedup();
+    reasons
 }
 
 fn coverage_class(strong: &[&Evidence], all_evidence: &[&Evidence]) -> CoverageClass {
     if has_type(strong, EvidenceType::ExplicitPublic) {
-        CoverageClass::PublicDeclared
+        // A public marker that coexists with real guard evidence is a conflict,
+        // not a confirmed-public route. Classify as unknown/dynamic so it is
+        // surfaced for review (ReviewRequired) instead of looking safe.
+        if strong
+            .iter()
+            .any(|item| middleware_evidence_is_auth_guard(item.evidence_type))
+        {
+            CoverageClass::UnknownOrDynamic
+        } else {
+            CoverageClass::PublicDeclared
+        }
     } else if has_type(strong, EvidenceType::AdminCheck) {
         CoverageClass::AdminGuarded
     } else if has_type(strong, EvidenceType::PermissionCheck) {
@@ -5602,15 +7094,16 @@ mod tests {
     use authmap_config::{ScanConfig, ScanPlan};
     use authmap_core::{
         Confidence, CoverageClass, Evidence, EvidenceType, Framework, Mutation, MutationOperation,
-        ReachabilityLink, RiskLevel, Route, ScanMode, SourceFile, SymbolRef, diagnostic_codes,
+        PolicyCaseKind, ReachabilityLink, RiskLevel, Route, ScanMode, SourceFile, Span, SymbolRef,
+        diagnostic_codes,
     };
     use authmap_parsers::{ParseStatus, ParsedFile};
     use authmap_testkit::fixture_path;
 
     use super::{
-        classify_coverage, enabled_frameworks_for_sources, normalize_adapter_evidence,
-        normalize_module_path, resolve_python_module, route_id_remaps, run_scan,
-        run_scan_with_started_at, source_needs_syntax_tree, suggest_rules,
+        classify_coverage, enabled_frameworks_for_sources, framework_name_for_hint,
+        normalize_adapter_evidence, normalize_module_path, resolve_python_module, route_id_remaps,
+        run_scan, run_scan_with_started_at, source_needs_syntax_tree, suggest_rules,
         suggest_rules_with_started_at,
     };
 
@@ -5773,6 +7266,64 @@ class ProductCreate(BaseMutation):
             enabled_frameworks_for_sources(&[helper, next]),
             vec!["express".to_string(), "nextjs".to_string()]
         );
+    }
+
+    #[test]
+    fn adapter_gating_uses_project_hints_when_text_heuristics_miss() {
+        // Aliased import: the file has no `FastAPI(` literal, so the text heuristic
+        // alone would not enable the adapter. The discovery-provided hint must.
+        let parsed = ParsedFile {
+            source: SourceFile {
+                path: "main.py".to_string(),
+                language: authmap_core::Language::Python,
+                size_bytes: 0,
+                sha256: None,
+                project_hints: vec![authmap_core::ProjectHint::FastApi],
+                skipped: None,
+            },
+            language: authmap_core::Language::Python,
+            text: "\
+from fastapi import FastAPI as API
+
+app = API()
+
+
+@app.get(\"/items\")
+def list_items():
+    return []
+"
+            .to_string(),
+            tree: None,
+            status: ParseStatus::TextOnly,
+            diagnostics: Vec::new(),
+        };
+
+        assert!(
+            enabled_frameworks_for_sources(&[parsed]).contains(&"fastapi".to_string()),
+            "fastapi adapter should be enabled via project hint despite the aliased import"
+        );
+    }
+
+    #[test]
+    fn framework_name_for_hint_maps_route_adapters_and_ignores_orm_hints() {
+        use authmap_core::ProjectHint;
+        assert_eq!(
+            framework_name_for_hint(ProjectHint::FastApi),
+            Some("fastapi")
+        );
+        assert_eq!(framework_name_for_hint(ProjectHint::Django), Some("django"));
+        assert_eq!(
+            framework_name_for_hint(ProjectHint::DjangoRestFramework),
+            Some("django")
+        );
+        assert_eq!(
+            framework_name_for_hint(ProjectHint::Express),
+            Some("express")
+        );
+        assert_eq!(framework_name_for_hint(ProjectHint::NextJs), Some("nextjs"));
+        assert_eq!(framework_name_for_hint(ProjectHint::SqlAlchemy), None);
+        assert_eq!(framework_name_for_hint(ProjectHint::DjangoOrm), None);
+        assert_eq!(framework_name_for_hint(ProjectHint::Prisma), None);
     }
 
     #[test]
@@ -5966,6 +7517,217 @@ class ProductCreate(BaseMutation):
     }
 
     #[test]
+    fn policy_cases_flag_conflict_duplicate_dynamic_unreachable_and_linked_context() {
+        let routes = vec![
+            route("route_conflict", "POST", "/public/accounts/:id"),
+            route("route_duplicate", "GET", "/profile"),
+            route("route_dynamic", "GET", "/policy"),
+            route("route_unreachable", "GET", "/admin/disabled"),
+        ];
+        let mut public = evidence(
+            "evidence_public",
+            "route_conflict",
+            EvidenceType::ExplicitPublic,
+            Confidence::High,
+        );
+        public.mechanism = "public_marker".to_string();
+        let mut authn = evidence(
+            "evidence_authn",
+            "route_conflict",
+            EvidenceType::Authn,
+            Confidence::High,
+        );
+        authn.mechanism = "authn_guard".to_string();
+
+        let mut duplicate_one = evidence(
+            "evidence_duplicate_1",
+            "route_duplicate",
+            EvidenceType::Authn,
+            Confidence::High,
+        );
+        duplicate_one.mechanism = "authn_guard".to_string();
+        duplicate_one.symbol = Some(SymbolRef {
+            name: "requireAuth".to_string(),
+            span: Some(Span {
+                file: "src/routes.ts".to_string(),
+                line: 7,
+                column: 3,
+                byte_range: None,
+            }),
+        });
+        let mut duplicate_two = evidence(
+            "evidence_duplicate_2",
+            "route_duplicate",
+            EvidenceType::Authn,
+            Confidence::High,
+        );
+        duplicate_two.mechanism = "authn_guard".to_string();
+        duplicate_two.symbol = Some(SymbolRef {
+            name: "requireAuth".to_string(),
+            span: Some(Span {
+                file: "src/routes.ts".to_string(),
+                line: 8,
+                column: 3,
+                byte_range: None,
+            }),
+        });
+
+        let dynamic = evidence(
+            "evidence_dynamic",
+            "route_dynamic",
+            EvidenceType::UnknownDynamicCheck,
+            Confidence::Low,
+        );
+        let mut unreachable = evidence(
+            "evidence_unreachable",
+            "route_unreachable",
+            EvidenceType::AdminCheck,
+            Confidence::High,
+        );
+        unreachable.span = Some(Span {
+            file: "src/routes.ts".to_string(),
+            line: 3,
+            column: 5,
+            byte_range: None,
+        });
+
+        let mutations = vec![Mutation {
+            id: "mutation_account".to_string(),
+            operation: MutationOperation::Update,
+            library: Some("prisma".to_string()),
+            resource: Some("Account".to_string()),
+            span: None,
+            confidence: Confidence::High,
+            notes: Vec::new(),
+            extensions: authmap_core::ExtensionMap::new(),
+        }];
+        let links = vec![ReachabilityLink {
+            id: "link_account".to_string(),
+            route_id: "route_conflict".to_string(),
+            mutation_id: Some("mutation_account".to_string()),
+            evidence_id: Some("evidence_authn".to_string()),
+            confidence: Confidence::Medium,
+            notes: Vec::new(),
+            extensions: authmap_core::ExtensionMap::new(),
+        }];
+        let parsed_files = vec![ParsedFile {
+            source: SourceFile {
+                path: "src/routes.ts".to_string(),
+                language: authmap_core::Language::TypeScript,
+                size_bytes: 128,
+                sha256: None,
+                project_hints: Vec::new(),
+                skipped: None,
+            },
+            language: authmap_core::Language::TypeScript,
+            text: "router.get('/admin/disabled', (req, res) => {\n  if (false) {\n    requireAdmin(req)\n  }\n})\n".to_string(),
+            tree: None,
+            status: ParseStatus::TextOnly,
+            diagnostics: Vec::new(),
+        }];
+        let evidence = vec![
+            public,
+            authn,
+            duplicate_one,
+            duplicate_two,
+            dynamic,
+            unreachable,
+        ];
+
+        let (cases, diagnostics) =
+            super::derive_policy_cases(&routes, &evidence, &mutations, &links, &parsed_files);
+
+        assert!(cases.iter().any(|case| {
+            case.route_id == "route_conflict"
+                && case.kind == PolicyCaseKind::Conflict
+                && case.evidence_ids == vec!["evidence_authn", "evidence_public"]
+        }));
+        assert!(cases.iter().any(|case| {
+            case.route_id == "route_duplicate"
+                && case.kind == PolicyCaseKind::Duplicate
+                && case.evidence_ids == vec!["evidence_duplicate_1", "evidence_duplicate_2"]
+        }));
+        assert!(cases.iter().any(|case| {
+            case.route_id == "route_dynamic" && case.kind == PolicyCaseKind::Dynamic
+        }));
+        assert!(cases.iter().any(|case| {
+            case.route_id == "route_unreachable" && case.kind == PolicyCaseKind::Unreachable
+        }));
+        assert!(cases.iter().any(|case| {
+            case.route_id == "route_conflict"
+                && case.kind == PolicyCaseKind::LinkedMutationProtection
+                && case.summary.contains("mutation_account")
+        }));
+        assert_eq!(
+            cases
+                .iter()
+                .map(|case| case.id.as_str())
+                .collect::<Vec<_>>(),
+            (1..=cases.len())
+                .map(|index| format!("policy_case_{index:04}"))
+                .collect::<Vec<_>>()
+        );
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "policy.conflicting_evidence"
+                && diagnostic.message.contains("explicit public")
+        }));
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "policy.duplicate_evidence"
+                && diagnostic.message.contains("requireAuth")
+        }));
+    }
+
+    #[test]
+    fn policy_cases_include_audit_support_without_treating_audit_only_as_protection() {
+        let routes = vec![
+            route("route_auth_audit", "GET", "/profile"),
+            route("route_audit_only", "GET", "/audit"),
+        ];
+        let evidence = vec![
+            evidence(
+                "evidence_authn",
+                "route_auth_audit",
+                EvidenceType::Authn,
+                Confidence::High,
+            ),
+            evidence(
+                "evidence_audit",
+                "route_auth_audit",
+                EvidenceType::AuditLog,
+                Confidence::High,
+            ),
+            evidence(
+                "evidence_audit_only",
+                "route_audit_only",
+                EvidenceType::AuditLog,
+                Confidence::High,
+            ),
+        ];
+
+        let (cases, diagnostics) = super::derive_policy_cases(&routes, &evidence, &[], &[], &[]);
+
+        let auth_audit_case = cases
+            .iter()
+            .find(|case| {
+                case.route_id == "route_auth_audit"
+                    && case.kind == PolicyCaseKind::EffectiveProtection
+            })
+            .expect("auth plus audit evidence should produce an effective policy case");
+        assert_eq!(
+            auth_audit_case.evidence_ids,
+            vec!["evidence_audit", "evidence_authn"]
+        );
+        assert!(auth_audit_case.summary.contains("audit_log"));
+        assert!(auth_audit_case.summary.contains("authn"));
+        assert_eq!(auth_audit_case.input_names, vec!["identity"]);
+
+        assert!(!cases.iter().any(|case| {
+            case.route_id == "route_audit_only" && case.kind == PolicyCaseKind::EffectiveProtection
+        }));
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
     fn classifier_consumes_existing_linked_mutations_and_support_metadata() {
         let routes = vec![
             route("route_mutation", "GET", "/status"),
@@ -6020,7 +7782,7 @@ class ProductCreate(BaseMutation):
             .find(|coverage| coverage.route_id == "route_mutation")
             .expect("route should be classified");
         assert_eq!(item.class, CoverageClass::Unauthenticated);
-        assert_eq!(item.risk, RiskLevel::High);
+        assert_eq!(item.risk, RiskLevel::ReviewRequired);
         let support = item
             .extensions
             .get("authmap.coverage")
@@ -6034,6 +7796,7 @@ class ProductCreate(BaseMutation):
             support["sensitivity_reasons"],
             serde_json::json!(["linked_mutation"])
         );
+        assert!(item.extensions.contains_key("authmap.tenant_review"));
 
         let role_item = coverage
             .iter()
@@ -6140,13 +7903,14 @@ sensitivity:
             .expect("route should be classified");
 
         assert_eq!(item.class, CoverageClass::Unauthenticated);
-        assert_eq!(item.risk, RiskLevel::High);
+        assert_eq!(item.risk, RiskLevel::ReviewRequired);
         assert_eq!(
             item.reviewer_questions,
             vec![
                 "Should invoice writes require finance approval?".to_string(),
                 "Should linked data mutations have resource-specific authorization evidence?"
                     .to_string(),
+                "Should this route require tenant or ownership scoping?".to_string(),
             ]
         );
         let support = item
@@ -6376,7 +8140,7 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 26);
+        assert_eq!(document.routes.len(), 29);
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::Express
                 && route.method == "POST"
@@ -6410,6 +8174,70 @@ sensitivity:
                     .collect::<Vec<_>>()
                     == vec!["requireAuth"]
         }));
+        assert!(document.policy_cases.iter().any(|case| {
+            case.route_id
+                == document
+                    .routes
+                    .iter()
+                    .find(|route| route.method == "POST" && route.path == "/accounts")
+                    .expect("/accounts route should exist")
+                    .id
+                && case.kind == PolicyCaseKind::EffectiveProtection
+                && case.summary.contains("audit_log")
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.framework == authmap_core::Framework::Express
+                && route.method == "GET"
+                && route.path == "/public/status"
+                && route
+                    .middleware
+                    .iter()
+                    .map(|middleware| middleware.name.as_str())
+                    .collect::<Vec<_>>()
+                    == vec!["publicRoute"]
+        }));
+        assert!(document.policy_cases.iter().any(|case| {
+            case.kind == PolicyCaseKind::EffectiveProtection
+                && case.summary.contains("explicit_public")
+                && case.route_id
+                    == document
+                        .routes
+                        .iter()
+                        .find(|route| route.method == "GET" && route.path == "/public/status")
+                        .expect("/public/status route should exist")
+                        .id
+        }));
+        assert!(document.policy_cases.iter().any(|case| {
+            case.kind == PolicyCaseKind::Conflict
+                && case.route_id
+                    == document
+                        .routes
+                        .iter()
+                        .find(|route| route.method == "GET" && route.path == "/conflicting")
+                        .expect("/conflicting route should exist")
+                        .id
+        }));
+        assert!(document.policy_cases.iter().any(|case| {
+            case.kind == PolicyCaseKind::Unreachable
+                && case.route_id
+                    == document
+                        .routes
+                        .iter()
+                        .find(|route| route.method == "GET" && route.path == "/unreachable/admin")
+                        .expect("/unreachable/admin route should exist")
+                        .id
+        }));
+        let audit_only_route = document
+            .routes
+            .iter()
+            .find(|route| route.method == "GET" && route.path == "/child")
+            .expect("/child route should exist");
+        let audit_only_coverage = document
+            .coverage
+            .iter()
+            .find(|coverage| coverage.route_id == audit_only_route.id)
+            .expect("/child coverage should exist");
+        assert_eq!(audit_only_coverage.class, CoverageClass::Unauthenticated);
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::Express
                 && route.method == "GET"
@@ -6499,7 +8327,9 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 34);
+        // 34 original fixture routes + 4 from the `legacy` app (FBV decorators,
+        // legacy `url()`, and `urlpatterns +=`).
+        assert_eq!(document.routes.len(), 38);
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::Django
                 && route.method == "ANY"
@@ -6859,6 +8689,20 @@ sensitivity:
                 || route.path == "/graphql/baseMutation"
                 || route.path == "/graphql/modelDeleteMutation"
         }));
+
+        // JS/TS GraphQL: type-graphql @Authorized mutation and a resolver-map field.
+        assert!(graphql_document.coverage.iter().any(|coverage| {
+            coverage.class == CoverageClass::PermissionGuarded
+                && graphql_document.routes.iter().any(|route| {
+                    route.id == coverage.route_id && route.path == "/graphql/deleteWidget"
+                })
+        }));
+        assert!(
+            graphql_document
+                .routes
+                .iter()
+                .any(|route| { route.method == "QUERY" && route.path == "/graphql/publicFeed" })
+        );
     }
 
     #[test]
@@ -6869,7 +8713,9 @@ sensitivity:
 
         assert_eq!(document.routes.len(), 0);
         assert_eq!(document.links.len(), 0);
-        assert_eq!(document.mutations.len(), 21);
+        // 21 original + 2 SQLAlchemy (insert-via-execute, merge) + 8 Node ORM
+        // (Sequelize/Mongoose/TypeORM).
+        assert_eq!(document.mutations.len(), 31);
 
         assert_mutation(
             &document.mutations,
@@ -6938,6 +8784,59 @@ sensitivity:
             "sqlalchemy",
             MutationOperation::RawSqlMutation,
             "raw_sql",
+        );
+        // session.execute(insert(User)...) is detected as a Create.
+        assert_mutation(
+            &document.mutations,
+            "sqlalchemy",
+            MutationOperation::Create,
+            Some("User"),
+            Confidence::High,
+        );
+        // db_conn.merge(token) where db_conn: AsyncSession is an upsert (Update).
+        assert_mutation(
+            &document.mutations,
+            "sqlalchemy",
+            MutationOperation::Update,
+            None,
+            Confidence::Medium,
+        );
+
+        // Node ORMs: Sequelize, Mongoose, TypeORM.
+        assert_mutation(
+            &document.mutations,
+            "sequelize",
+            MutationOperation::Create,
+            Some("User"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "mongoose",
+            MutationOperation::Update,
+            Some("Profile"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "mongoose",
+            MutationOperation::Delete,
+            Some("Session"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "typeorm",
+            MutationOperation::Create,
+            Some("repo"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "typeorm",
+            MutationOperation::Delete,
+            Some("repository"),
+            Confidence::Medium,
         );
 
         assert_mutation(
@@ -7849,7 +9748,7 @@ function owningResource(req, res, next) { next(); }
 function workspaceGate(req, res, next) { next(); }
 function staffGate(req, res, next) { next(); }
 function anonymousAccess(req, res, next) { next(); }
-function securityLog(req, res, next) { next(); }
+function recordAuditTrail(req, res, next) { next(); }
 function authorizeRecord(req, res, next) { next(); }
 "#,
         );
@@ -7875,6 +9774,151 @@ function authorizeRecord(req, res, next) { next(); }
         ] {
             assert!(types.contains(&expected), "missing {expected:?}");
         }
+    }
+
+    #[test]
+    fn scan_pipeline_detects_structured_tenant_and_ownership_scoping() {
+        let temp = TestDir::new("tenant-structured-scoping");
+        write_file(
+            &temp.path().join("app.py"),
+            r#"
+from fastapi import Depends, FastAPI
+
+app = FastAPI()
+
+def require_user():
+    return {"id": "user_1", "org_id": "org_1"}
+
+def get_db():
+    return object()
+
+@app.patch("/orgs/{org_id}/projects/{project_id}")
+def update_project(org_id: str, project_id: str, user=Depends(require_user), db=Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id, Project.org_id == user["org_id"]).one()
+    project.owner_id = user["id"]
+    project.name = "renamed"
+    db.add(project)
+    return {"id": project_id}
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let document = run_scan(&plan).expect("scan should succeed");
+        let route = route_by_path(&document, "/orgs/{org_id}/projects/{project_id}");
+        let route_evidence = document
+            .evidence
+            .iter()
+            .filter(|item| item.route_id.as_deref() == Some(route.id.as_str()))
+            .collect::<Vec<_>>();
+
+        assert!(
+            route_evidence.iter().any(|item| {
+                item.evidence_type == EvidenceType::TenantCheck
+                    && item.confidence == Confidence::High
+                    && item.mechanism == "query_scope"
+            }),
+            "tenant query scoping evidence should be detected"
+        );
+        assert!(
+            route_evidence.iter().any(|item| {
+                item.evidence_type == EvidenceType::OwnershipCheck
+                    && item.confidence == Confidence::High
+                    && item.mechanism == "mutation_scope"
+            }),
+            "ownership mutation scoping evidence should be detected"
+        );
+        let coverage = coverage_for_route(&document, &route.id);
+        assert_eq!(coverage.class, CoverageClass::OwnershipGuarded);
+    }
+
+    #[test]
+    fn scan_pipeline_reviews_linked_mutations_without_tenant_scope() {
+        let temp = TestDir::new("tenant-missing-scope");
+        write_file(
+            &temp.path().join("app.ts"),
+            r#"
+import express from "express";
+
+const app = express();
+
+function requireUser(req, res, next) {
+  next();
+}
+
+async function updateProject(req, res) {
+  await prisma.project.update({
+    where: { id: req.params.projectId },
+    data: { name: req.body.name },
+  });
+  res.sendStatus(204);
+}
+
+app.patch("/orgs/:orgId/projects/:projectId", requireUser, updateProject);
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let document = run_scan(&plan).expect("scan should succeed");
+        let route = route_by_path(&document, "/orgs/:orgId/projects/:projectId");
+        let coverage = coverage_for_route(&document, &route.id);
+        let tenant_review = coverage
+            .extensions
+            .get("authmap.tenant_review")
+            .expect("missing tenant scope should add tenant review metadata");
+
+        assert!(document.evidence.iter().any(|item| {
+            item.route_id.as_deref() == Some(route.id.as_str())
+                && item.evidence_type == EvidenceType::TenantCheck
+                && item.mechanism == "route_param_scope_signal"
+                && item.confidence == Confidence::Low
+        }));
+        assert_eq!(coverage.risk, RiskLevel::ReviewRequired);
+        assert_eq!(tenant_review["review_required"], serde_json::json!(true));
+        assert!(tenant_review["reasons"].as_array().is_some_and(|items| {
+            items
+                .iter()
+                .any(|item| item == "missing_tenant_or_ownership_evidence")
+        }));
+        assert!(
+            coverage
+                .reviewer_questions
+                .iter()
+                .any(|question| question.contains("tenant or ownership"))
+        );
+    }
+
+    #[test]
+    fn scan_pipeline_keeps_tenant_names_in_comments_and_strings_out_of_evidence() {
+        let temp = TestDir::new("tenant-false-positives");
+        write_file(
+            &temp.path().join("app.js"),
+            r#"
+const express = require("express");
+const app = express();
+
+function requireUser(req, res, next) {
+  next();
+}
+
+function listProjects(req, res) {
+  // tenant_id owner_id org_id should not count from a comment
+  const message = "workspace_id account_id organization_id should not count from a string";
+  res.json({ message });
+}
+
+app.get("/projects", requireUser, listProjects);
+"#,
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let document = run_scan(&plan).expect("scan should succeed");
+
+        assert!(document.evidence.iter().all(|item| {
+            !matches!(
+                item.evidence_type,
+                EvidenceType::TenantCheck | EvidenceType::OwnershipCheck
+            )
+        }));
     }
 
     struct TestDir {

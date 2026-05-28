@@ -6,11 +6,11 @@ target app to start.
 
 ## Parser Strategy
 
-AuthMap v1.0.0 uses Tree-sitter as its parser layer:
+AuthMap v0.1.0 uses Tree-sitter as its parser layer:
 
-- Python: `tree-sitter-python`
-- JavaScript and JSX: `tree-sitter-javascript`
-- TypeScript and TSX: `tree-sitter-typescript`
+- Python (`.py`): `tree-sitter-python`
+- JavaScript and JSX (`.js`, `.jsx`, `.mjs`, `.cjs`): `tree-sitter-javascript`
+- TypeScript and TSX (`.ts`, `.tsx`, `.mts`, `.cts`): `tree-sitter-typescript`
 
 Tree-sitter is a good first fit because it is local, non-executing, incremental,
 and tolerant of partial syntax errors. It exposes byte ranges and source points
@@ -78,6 +78,58 @@ New adapters should include fixtures that cover:
 
 Fixture tests should avoid live services, dependency installation, network
 access, and executing the target application.
+
+## Detected Patterns And Known Limitations
+
+Adapters are conservative: they emit a route or evidence only when a pattern is
+statically recognizable, and emit diagnostics (or lower confidence) when it is
+not. The notable detections and current limitations per framework:
+
+**FastAPI** — route decorators (`get/post/put/patch/delete/options/head`),
+`@app.websocket` (method `WS`), `api_route`, `APIRouter`/`include_router` with
+prefix and `dependencies=`, and `Depends(...)`/`Security(...)` guards. SQLAlchemy
+mutations include `session.add/delete/merge`, `session.execute(insert|update|
+delete(...))`, raw SQL, and `AsyncSession` receivers. *Not yet:* `add_api_route`,
+`app.add_middleware` / `@app.middleware("http")`, and `app.mount` sub-apps.
+
+**Django / DRF** — `path`/`re_path`/legacy `url()`, `include()`, `urlpatterns =`
+and `urlpatterns += [...]`, DRF routers and `@action`, CBV mixins and
+`permission_classes`/`authentication_classes`, and function-based-view decorators
+(`@login_required`, `@permission_required`, `@user_passes_test`,
+`@staff_member_required`, `@api_view` + `@permission_classes`). Django ORM
+mutations include `create/get_or_create/update_or_create/bulk_create/update/
+bulk_update/delete/save`. *Not yet:* multi-line parenthesized imports,
+settings-level `DEFAULT_PERMISSION_CLASSES`, `@method_decorator` on CBVs, and
+per-`@action` `permission_classes` overrides.
+
+**Express** — `app`/`router` method calls, mounted routers with prefix
+composition, route-level and array middleware, route chaining, and
+`options`/`head`. *Not yet:* `app.all` catch-all routes with a terminal handler,
+prefix-less `router.use`/`app.use` propagation, `app.param`, and dynamic
+`app[method]` dispatch.
+
+**Next.js** — App Router `route.ts` handlers (all export forms), Pages Router
+`pages/api/**` default-export handlers, and `middleware.ts` whose `config.matcher`
+covers a route (the middleware is classified by the auth helper it delegates to;
+non-auth middleware leaves coverage unclaimed). *Not yet:* Server Actions
+(`'use server'`, flagged via `nextjs_server_action_not_analyzed`) and
+layout/page-level auth inheritance.
+
+**tRPC** — the standard procedure builders plus any project-specific
+`*Procedure`, and `query`/`mutation`/`subscription` operations. *Not yet:* `.use`
+middleware chains, `mergeRouters` path composition, and `ctx`-based guards inside
+handlers; tRPC routes are not yet linked to reachable mutations.
+
+**GraphQL** — Python Graphene mutation/query classes, and JS/TS type-graphql
+(`@Query`/`@Mutation`/`@Subscription` with `@Authorized`) and Apollo-style
+resolver maps. *Not yet:* `graphql-shield` rules, SDL (`.graphql`)
+`@auth`/`@hasRole` directives, and imperative resolver-body auth; GraphQL routes
+are not yet linked to reachable mutations.
+
+**ORM mutation evidence** — SQLAlchemy, Django ORM, and Prisma are first-class.
+Sequelize, Mongoose, and TypeORM are detected for common method shapes
+(capitalized-model `create`/`update`/`destroy` is reported at low confidence).
+*Not yet:* Knex query-builder chains and `prisma.$transaction` grouping.
 
 Issue #19 defines this shared contract. It does not add FastAPI, Express,
 Django/DRF, or Next.js analyzer behavior.

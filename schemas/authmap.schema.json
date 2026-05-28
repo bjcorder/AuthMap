@@ -41,6 +41,10 @@
       "type": "array",
       "items": { "$ref": "#/$defs/coverage" }
     },
+    "policy_cases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/policy_case" }
+    },
     "diagnostics": {
       "type": "array",
       "items": { "$ref": "#/$defs/diagnostic" }
@@ -377,6 +381,72 @@
       },
       "additionalProperties": false
     },
+    "policy_case": {
+      "type": "object",
+      "required": [
+        "id",
+        "route_id",
+        "kind",
+        "summary",
+        "evidence_ids",
+        "input_names",
+        "branches",
+        "span",
+        "confidence",
+        "reviewer_questions",
+        "uncertainty_reasons"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "route_id": { "$ref": "#/$defs/id" },
+        "kind": { "$ref": "#/$defs/policy_case_kind" },
+        "summary": { "type": "string", "minLength": 1 },
+        "evidence_ids": { "$ref": "#/$defs/string_list" },
+        "input_names": { "$ref": "#/$defs/string_list" },
+        "branches": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/policy_branch" }
+        },
+        "span": {
+          "anyOf": [
+            { "$ref": "#/$defs/span" },
+            { "type": "null" }
+          ]
+        },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "reviewer_questions": { "$ref": "#/$defs/string_list" },
+        "uncertainty_reasons": { "$ref": "#/$defs/string_list" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "policy_branch": {
+      "type": "object",
+      "required": [
+        "condition",
+        "outcome",
+        "reachable",
+        "evidence_ids",
+        "span",
+        "confidence",
+        "notes"
+      ],
+      "properties": {
+        "condition": { "type": "string", "minLength": 1 },
+        "outcome": { "$ref": "#/$defs/policy_outcome" },
+        "reachable": { "type": "boolean" },
+        "evidence_ids": { "$ref": "#/$defs/string_list" },
+        "span": {
+          "anyOf": [
+            { "$ref": "#/$defs/span" },
+            { "type": "null" }
+          ]
+        },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "notes": { "$ref": "#/$defs/string_list" }
+      },
+      "additionalProperties": false
+    },
     "diagnostic": {
       "type": "object",
       "required": [
@@ -550,6 +620,21 @@
         "admin_guarded",
         "unknown_or_dynamic"
       ]
+    },
+    "policy_case_kind": {
+      "type": "string",
+      "enum": [
+        "effective_protection",
+        "linked_mutation_protection",
+        "conflict",
+        "duplicate",
+        "unreachable",
+        "dynamic"
+      ]
+    },
+    "policy_outcome": {
+      "type": "string",
+      "enum": ["allow", "deny", "unknown", "review_required"]
     },
     "risk_level": {
       "type": "string",

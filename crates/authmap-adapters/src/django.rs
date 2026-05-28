@@ -533,7 +533,8 @@ impl<'a> DjangoCollector<'a> {
         };
         let function_name = terminal_name(self.parsed, function).unwrap_or_default();
         match function_name.as_str() {
-            "path" | "re_path" => {
+            // `url` is the legacy `django.conf.urls.url` helper (regex-based, like re_path).
+            "path" | "re_path" | "url" => {
                 if !self.is_django_url_helper(function, function_name.as_str()) {
                     return;
                 }
@@ -566,7 +567,7 @@ impl<'a> DjangoCollector<'a> {
                 "Django URL path is dynamic and could not be resolved",
             ));
         }
-        let kind = if function_name == "re_path" {
+        let kind = if function_name == "re_path" || function_name == "url" {
             UrlPatternKind::RePath
         } else {
             UrlPatternKind::Path
@@ -827,7 +828,7 @@ impl<'a> DjangoCollector<'a> {
         if function.kind() == "identifier" {
             return self
                 .resolve_import(function_name)
-                .is_some_and(|target| target.module.as_deref() == Some("django.urls"));
+                .is_some_and(|target| is_django_url_module(target.module.as_deref()));
         }
         if function.kind() == "attribute"
             && let Some((object, attr)) = attribute_target(self.parsed, function)
@@ -835,11 +836,11 @@ impl<'a> DjangoCollector<'a> {
             if attr != function_name {
                 return false;
             }
-            if object == "django.urls" {
+            if object == "django.urls" || object == "django.conf.urls" {
                 return true;
             }
             return self.resolve_import(&object).is_some_and(|target| {
-                target.module.as_deref() == Some("django.urls")
+                is_django_url_module(target.module.as_deref())
                     || (target.module.as_deref() == Some("django")
                         && target.name.as_deref() == Some("urls"))
             });
@@ -1900,11 +1901,16 @@ fn literal_summary(parsed: &ParsedFile, node: Node<'_>) -> Option<String> {
     }
 }
 
+fn is_django_url_module(module: Option<&str>) -> bool {
+    matches!(module, Some("django.urls" | "django.conf.urls"))
+}
+
 fn is_urlpatterns_context(parsed: &ParsedFile, call: Node<'_>) -> bool {
     let mut current = call;
     while let Some(parent) = current.parent() {
         match parent.kind() {
-            "assignment" => {
+            // `urlpatterns = [...]` and `urlpatterns += [...]` (augmented assignment).
+            "assignment" | "augmented_assignment" => {
                 return parent
                     .child_by_field_name("left")
                     .or_else(|| parent.child_by_field_name("target"))

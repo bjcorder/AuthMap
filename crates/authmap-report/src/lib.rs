@@ -6,13 +6,14 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use authmap_analysis::{
-    DriftChange, DriftChangeKind, DriftChangeSeverity, DriftComparison, DriftReport,
-    RuleSuggestionReport,
+    ControlDriftKind, ControlFinding, ControlReport, DriftChange, DriftChangeKind,
+    DriftChangeSeverity, DriftComparison, DriftReport, RuleSuggestionReport,
 };
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticSeverity, Evidence,
-    EvidenceType, Framework, Mutation, MutationOperation, ReachabilityLink, RiskLevel,
-    SCHEMA_VERSION, ScanMode, SourceFile, Span, SymbolRef,
+    EvidenceType, Framework, Mutation, MutationOperation, PolicyCase, PolicyCaseKind,
+    PolicyOutcome, ReachabilityLink, RiskLevel, SCHEMA_VERSION, ScanMode, SourceFile, Span,
+    SymbolRef,
 };
 use regex::{Captures, Regex};
 use serde_json::{Map, Value, json};
@@ -176,6 +177,222 @@ pub fn render_routes_markdown(document: &AuthMapDocument) -> String {
     output
 }
 
+pub fn render_tenants_json(document: &AuthMapDocument) -> Result<String, ReportError> {
+    let index = ReportIndex::new(document);
+    let routes = tenant_relevant_routes(document, &index)
+        .into_iter()
+        .map(|route| {
+            let coverage = index.coverage_by_route.get(route.id.as_str());
+            let evidence = tenant_route_evidence(route.id.as_str(), &index)
+                .into_iter()
+                .map(|item| {
+                    json!({
+                        "id": item.id,
+                        "evidence_type": evidence_type_label(item.evidence_type),
+                        "mechanism": item.mechanism,
+                        "symbol": item.symbol,
+                        "location": item.span,
+                        "confidence": confidence_label(item.confidence),
+                        "notes": item.notes,
+                    })
+                })
+                .collect::<Vec<_>>();
+            let mutations = index
+                .mutations_by_route
+                .get(route.id.as_str())
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|mutation| {
+                    json!({
+                        "id": mutation.id,
+                        "operation": mutation_operation_label(mutation.operation),
+                        "library": mutation.library,
+                        "resource": mutation.resource,
+                        "location": mutation.span,
+                        "confidence": confidence_label(mutation.confidence),
+                        "notes": mutation.notes,
+                    })
+                })
+                .collect::<Vec<_>>();
+            json!({
+                "id": route.id,
+                "framework": framework_label(route.framework),
+                "method": route.method,
+                "path": route.path,
+                "handler": route.handler,
+                "location": route.span,
+                "coverage": coverage.map(|item| coverage_class_label(item.class)),
+                "risk": coverage.map(|item| risk_label(item.risk)),
+                "rationale": coverage.map_or_else(Vec::new, |item| item.rationale.clone()),
+                "reviewer_questions": coverage.map_or_else(Vec::new, |item| item.reviewer_questions.clone()),
+                "uncertainty_reasons": coverage.map_or_else(Vec::new, |item| item.uncertainty_reasons.clone()),
+                "tenant_review": tenant_review_value(coverage.copied()),
+                "evidence": evidence,
+                "mutations": mutations,
+                "links": index.links_by_route.get(route.id.as_str()).cloned().unwrap_or_default(),
+            })
+        })
+        .collect::<Vec<_>>();
+    let mut value = json!({
+        "report_type": "authmap.tenants",
+        "schema_version": SCHEMA_VERSION,
+        "metadata": document.metadata,
+        "summary": {
+            "routes": document.routes.len(),
+            "relevant_routes": routes.len(),
+            "review_required": document.coverage.iter().filter(|coverage| {
+                coverage.extensions.contains_key("authmap.tenant_review")
+                    || matches!(coverage.risk, RiskLevel::High | RiskLevel::ReviewRequired)
+            }).count(),
+            "diagnostics": document.diagnostics.len(),
+        },
+        "routes": routes,
+        "diagnostics": document.diagnostics,
+    });
+    redact_json_value(&mut value);
+    serde_json::to_string_pretty(&value).map_err(ReportError::Json)
+}
+
+pub fn render_tenants_markdown(document: &AuthMapDocument) -> String {
+    let index = ReportIndex::new(document);
+    let routes = tenant_relevant_routes(document, &index);
+    let mut output = String::new();
+    let _ = writeln!(output, "# AuthMap Tenant Review");
+    let _ = writeln!(output);
+    let _ = writeln!(output, "- Schema version: {}", SCHEMA_VERSION);
+    let _ = writeln!(output, "- Routes: {}", document.routes.len());
+    let _ = writeln!(output, "- Relevant routes: {}", routes.len());
+    let _ = writeln!(output, "- Diagnostics: {}", document.diagnostics.len());
+    let _ = writeln!(output);
+
+    if routes.is_empty() {
+        let _ = writeln!(
+            output,
+            "No tenant or ownership review items were identified."
+        );
+        return output;
+    }
+
+    for route in routes {
+        let coverage = index.coverage_by_route.get(route.id.as_str());
+        let _ = writeln!(
+            output,
+            "## {} `{}`",
+            escape_inline(&route.method),
+            escape_inline(&route.path)
+        );
+        let _ = writeln!(output);
+        let _ = writeln!(output, "- Route ID: {}", escape_inline(&route.id));
+        let _ = writeln!(output, "- Framework: {}", framework_label(route.framework));
+        if let Some(coverage) = coverage {
+            let _ = writeln!(
+                output,
+                "- Coverage: {} ({})",
+                coverage_class_label(coverage.class),
+                risk_label(coverage.risk)
+            );
+            if !coverage.rationale.is_empty() {
+                let _ = writeln!(
+                    output,
+                    "- Rationale: {}",
+                    coverage
+                        .rationale
+                        .iter()
+                        .map(|item| escape_inline(item))
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                );
+            }
+            render_named_markdown_list(
+                &mut output,
+                "Reviewer questions",
+                &coverage.reviewer_questions,
+            );
+            render_named_markdown_list(&mut output, "Uncertainty", &coverage.uncertainty_reasons);
+        }
+        let evidence = tenant_route_evidence(route.id.as_str(), &index);
+        if evidence.is_empty() {
+            let _ = writeln!(output, "- Tenant evidence: none");
+        } else {
+            let _ = writeln!(output, "- Tenant evidence:");
+            for item in evidence {
+                let _ = writeln!(
+                    output,
+                    "  - {} `{}` at {} ({})",
+                    evidence_type_label(item.evidence_type),
+                    escape_inline(&item.mechanism),
+                    format_optional_span(item.span.as_ref()),
+                    confidence_label(item.confidence)
+                );
+            }
+        }
+        let mutations = index
+            .mutations_by_route
+            .get(route.id.as_str())
+            .cloned()
+            .unwrap_or_default();
+        if mutations.is_empty() {
+            let _ = writeln!(output, "- Linked mutations: none");
+        } else {
+            let _ = writeln!(output, "- Linked mutations:");
+            for mutation in mutations {
+                let _ = writeln!(
+                    output,
+                    "  - {} {} `{}`",
+                    escape_inline(&mutation.id),
+                    mutation_operation_label(mutation.operation),
+                    escape_inline(mutation.resource.as_deref().unwrap_or("unknown resource"))
+                );
+            }
+        }
+        let _ = writeln!(output);
+    }
+
+    output
+}
+
+fn tenant_relevant_routes<'a>(
+    document: &'a AuthMapDocument,
+    index: &ReportIndex<'a>,
+) -> Vec<&'a authmap_core::Route> {
+    sorted_routes(document)
+        .into_iter()
+        .filter(|route| {
+            index
+                .coverage_by_route
+                .get(route.id.as_str())
+                .is_some_and(|coverage| coverage.extensions.contains_key("authmap.tenant_review"))
+                || tenant_route_evidence(route.id.as_str(), index)
+                    .iter()
+                    .any(|item| item.confidence != Confidence::Low)
+        })
+        .collect()
+}
+
+fn tenant_route_evidence<'a>(route_id: &str, index: &ReportIndex<'a>) -> Vec<&'a Evidence> {
+    index
+        .evidence_by_route
+        .get(route_id)
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|item| {
+            matches!(
+                item.evidence_type,
+                EvidenceType::TenantCheck | EvidenceType::OwnershipCheck
+            )
+        })
+        .collect()
+}
+
+fn tenant_review_value(coverage: Option<&Coverage>) -> Value {
+    coverage
+        .and_then(|coverage| coverage.extensions.get("authmap.tenant_review"))
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({ "review_required": false, "reasons": [] }))
+}
+
 fn route_params_table(route: &authmap_core::Route) -> String {
     if route.params.is_empty() {
         return "none".to_string();
@@ -213,6 +430,7 @@ struct ReportIndex<'a> {
     evidence_by_route: BTreeMap<&'a str, Vec<&'a Evidence>>,
     mutations_by_route: BTreeMap<&'a str, Vec<&'a Mutation>>,
     links_by_route: BTreeMap<&'a str, Vec<&'a ReachabilityLink>>,
+    policy_cases_by_route: BTreeMap<&'a str, Vec<&'a PolicyCase>>,
 }
 
 impl<'a> ReportIndex<'a> {
@@ -282,6 +500,16 @@ impl<'a> ReportIndex<'a> {
         for links in links_by_route.values_mut() {
             dedup_links(links);
         }
+        let mut policy_cases_by_route: BTreeMap<&str, Vec<&PolicyCase>> = BTreeMap::new();
+        for case in &document.policy_cases {
+            policy_cases_by_route
+                .entry(case.route_id.as_str())
+                .or_default()
+                .push(case);
+        }
+        for cases in policy_cases_by_route.values_mut() {
+            cases.sort_by(|left, right| left.id.cmp(&right.id));
+        }
 
         Self {
             coverage_by_route,
@@ -291,6 +519,7 @@ impl<'a> ReportIndex<'a> {
             evidence_by_route,
             mutations_by_route,
             links_by_route,
+            policy_cases_by_route,
         }
     }
 }
@@ -336,6 +565,7 @@ fn render_summary(output: &mut String, document: &AuthMapDocument) {
     let _ = writeln!(output, "- Routes: {}", document.routes.len());
     let _ = writeln!(output, "- Evidence entries: {}", document.evidence.len());
     let _ = writeln!(output, "- Mutations: {}", document.mutations.len());
+    let _ = writeln!(output, "- Policy cases: {}", document.policy_cases.len());
     let _ = writeln!(output, "- Diagnostics: {}", document.diagnostics.len());
 
     let framework_counts = framework_counts(document);
@@ -618,6 +848,7 @@ fn render_route_details(output: &mut String, document: &AuthMapDocument, index: 
             let _ = writeln!(output, "- Coverage: not classified");
         }
 
+        render_policy_lens(output, route.id.as_str(), index);
         if !route.notes.is_empty() {
             let _ = writeln!(output, "- Uncertainty notes:");
             for note in &route.notes {
@@ -640,6 +871,7 @@ fn render_coverage_support(output: &mut String, coverage: &Coverage) {
         ("weak evidence", support_ids(support, "weak_evidence_ids")),
         ("mutations", support_ids(support, "mutation_ids")),
         ("links", support_ids(support, "link_ids")),
+        ("policy cases", support_ids(support, "policy_case_ids")),
         ("sensitivity", support_ids(support, "sensitivity_reasons")),
     ]
     .into_iter()
@@ -674,6 +906,109 @@ fn support_ids(value: &Value, key: &str) -> Vec<String> {
                 .map(str::to_string)
                 .collect::<Vec<_>>()
         })
+        .unwrap_or_default()
+}
+
+fn render_policy_lens(output: &mut String, route_id: &str, index: &ReportIndex<'_>) {
+    let Some(cases) = index.policy_cases_by_route.get(route_id) else {
+        return;
+    };
+    if cases.is_empty() {
+        return;
+    }
+
+    let _ = writeln!(output, "- PolicyLens:");
+    for case in cases {
+        render_policy_case(output, case, "  -");
+    }
+}
+
+fn render_policy_case(output: &mut String, case: &PolicyCase, prefix: &str) {
+    let _ = writeln!(
+        output,
+        "{prefix} {}: {} at {} ({})",
+        escape_inline(&case.id),
+        policy_case_kind_label(case.kind),
+        format_optional_span(case.span.as_ref()),
+        confidence_label(case.confidence)
+    );
+    let _ = writeln!(output, "    - Summary: {}", escape_inline(&case.summary));
+    let _ = writeln!(
+        output,
+        "    - Cites coverage: {}",
+        escape_inline(&case.route_id)
+    );
+    if !case.evidence_ids.is_empty() {
+        let _ = writeln!(
+            output,
+            "    - Cites evidence: {}",
+            case.evidence_ids
+                .iter()
+                .map(|id| escape_inline(id))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    let mutation_ids = policy_extension_ids(case, "mutation_ids");
+    if !mutation_ids.is_empty() {
+        let _ = writeln!(
+            output,
+            "    - Cites mutations: {}",
+            mutation_ids
+                .iter()
+                .map(|id| escape_inline(id))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    let link_ids = policy_extension_ids(case, "link_ids");
+    if !link_ids.is_empty() {
+        let _ = writeln!(
+            output,
+            "    - Cites links: {}",
+            link_ids
+                .iter()
+                .map(|id| escape_inline(id))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    if !case.input_names.is_empty() {
+        let _ = writeln!(
+            output,
+            "    - Inputs: {}",
+            case.input_names
+                .iter()
+                .map(|input| escape_inline(input))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    for branch in &case.branches {
+        let _ = writeln!(
+            output,
+            "    - Branch: {} -> {} ({})",
+            escape_inline(&branch.condition),
+            policy_outcome_label(branch.outcome),
+            if branch.reachable {
+                "reachable"
+            } else {
+                "unreachable"
+            }
+        );
+    }
+    for question in &case.reviewer_questions {
+        let _ = writeln!(output, "    - Question: {}", escape_inline(question));
+    }
+    for reason in &case.uncertainty_reasons {
+        let _ = writeln!(output, "    - Uncertainty: {}", escape_inline(reason));
+    }
+}
+
+fn policy_extension_ids(case: &PolicyCase, key: &str) -> Vec<String> {
+    case.extensions
+        .get("authmap.policy")
+        .map(|value| support_ids(value, key))
         .unwrap_or_default()
 }
 
@@ -948,6 +1283,108 @@ pub fn render_drift_json(report: &DriftReport) -> Result<String, ReportError> {
     serde_json::to_string_pretty(&value).map_err(ReportError::Json)
 }
 
+pub fn render_controls_json(report: &ControlReport) -> Result<String, ReportError> {
+    let mut value = serde_json::to_value(report).map_err(ReportError::Json)?;
+    redact_json_value(&mut value);
+    serde_json::to_string_pretty(&value).map_err(ReportError::Json)
+}
+
+pub fn render_controls_markdown(report: &ControlReport) -> String {
+    let mut output = String::new();
+    let _ = writeln!(output, "# AuthMap Controls Report");
+    let _ = writeln!(output);
+    let _ = writeln!(output, "- Mode: {}", scan_mode_label(report.metadata.mode));
+    let _ = writeln!(
+        output,
+        "- Base: {}",
+        escape_inline(&report.metadata.base.label)
+    );
+    let _ = writeln!(
+        output,
+        "- Head: {}",
+        escape_inline(&report.metadata.head.label)
+    );
+    let _ = writeln!(
+        output,
+        "- Enforce fail-on: {}",
+        list_or_none(
+            report
+                .metadata
+                .fail_on
+                .iter()
+                .map(enum_value)
+                .collect::<Vec<_>>()
+        )
+    );
+    let _ = writeln!(output);
+
+    let _ = writeln!(output, "## Summary");
+    let _ = writeln!(output);
+    let _ = writeln!(
+        output,
+        "- Total findings: {}",
+        report.summary.total_findings
+    );
+    let _ = writeln!(output, "- Guard changes: {}", report.summary.guard_changes);
+    let _ = writeln!(
+        output,
+        "- Route guard changes: {}",
+        report.summary.route_guard_changes
+    );
+    let _ = writeln!(
+        output,
+        "- Permission changes: {}",
+        report.summary.permission_changes
+    );
+    let _ = writeln!(
+        output,
+        "- Tenant changes: {}",
+        report.summary.tenant_changes
+    );
+    let _ = writeln!(output, "- Admin changes: {}", report.summary.admin_changes);
+    let _ = writeln!(
+        output,
+        "- Policy changes: {}",
+        report.summary.policy_changes
+    );
+    let _ = writeln!(
+        output,
+        "- Blocking findings: {}",
+        report.summary.blocking_findings
+    );
+    let _ = writeln!(output);
+
+    let _ = writeln!(output, "## Findings");
+    let _ = writeln!(output);
+    if report.findings.is_empty() {
+        let _ = writeln!(output, "No authorization-control drift was detected.");
+        let _ = writeln!(output);
+        return output;
+    }
+
+    let rows = report
+        .findings
+        .iter()
+        .map(control_finding_row)
+        .collect::<Vec<_>>();
+    render_table(
+        &mut output,
+        &[
+            "ID",
+            "Severity",
+            "Control",
+            "Route",
+            "Source Change",
+            "Fail Category",
+            "Blocking",
+            "Message",
+        ],
+        &rows,
+    );
+    let _ = writeln!(output);
+    output
+}
+
 pub fn render_drift_markdown(report: &DriftReport) -> String {
     let mut output = String::new();
     let _ = writeln!(output, "# AuthMap Drift Report");
@@ -1006,6 +1443,11 @@ pub fn render_drift_markdown(report: &DriftReport) -> String {
     );
     let _ = writeln!(
         output,
+        "- Removed evidence: {}",
+        report.summary.removed_evidence
+    );
+    let _ = writeln!(
+        output,
         "- Coverage changes: {}",
         report.summary.coverage_changes
     );
@@ -1013,6 +1455,11 @@ pub fn render_drift_markdown(report: &DriftReport) -> String {
         output,
         "- New linked mutations: {}",
         report.summary.new_linked_mutations
+    );
+    let _ = writeln!(
+        output,
+        "- Policy changes: {}",
+        report.summary.policy_changes
     );
     let _ = writeln!(
         output,
@@ -1052,6 +1499,29 @@ pub fn render_drift_markdown(report: &DriftReport) -> String {
     output
 }
 
+fn control_finding_row(finding: &ControlFinding) -> Vec<String> {
+    vec![
+        escape_table(&finding.id),
+        escape_table(drift_severity_label(finding.severity)),
+        escape_table(control_drift_kind_label(finding.control_type)),
+        escape_table(&finding.route_key),
+        escape_table(drift_kind_label(finding.source_change_kind)),
+        escape_table(
+            &finding
+                .fail_category
+                .as_ref()
+                .map(enum_value)
+                .unwrap_or_else(|| "none".to_string()),
+        ),
+        if finding.enforcement_blocking {
+            "yes".to_string()
+        } else {
+            "no".to_string()
+        },
+        escape_table(&finding.message),
+    ]
+}
+
 fn drift_change_row(change: &DriftChange) -> Vec<String> {
     vec![
         escape_table(&change.id),
@@ -1081,8 +1551,25 @@ fn drift_kind_label(kind: DriftChangeKind) -> &'static str {
         DriftChangeKind::RemovedRoute => "removed_route",
         DriftChangeKind::HandlerChanged => "handler_changed",
         DriftChangeKind::EvidenceChanged => "evidence_changed",
+        DriftChangeKind::RemovedEvidence => "removed_evidence",
         DriftChangeKind::CoverageChanged => "coverage_changed",
         DriftChangeKind::NewLinkedMutation => "new_linked_mutation",
+        DriftChangeKind::PolicyChanged => "policy_changed",
+        DriftChangeKind::ControlSourceChanged => "control_source_changed",
+    }
+}
+
+fn control_drift_kind_label(kind: ControlDriftKind) -> &'static str {
+    match kind {
+        ControlDriftKind::Guard => "guard",
+        ControlDriftKind::RouteGuard => "route_guard",
+        ControlDriftKind::PermissionMap => "permission_map",
+        ControlDriftKind::TenantHelper => "tenant_helper",
+        ControlDriftKind::OwnershipHelper => "ownership_helper",
+        ControlDriftKind::AdminGate => "admin_gate",
+        ControlDriftKind::AuditControl => "audit_control",
+        ControlDriftKind::PolicyHelper => "policy_helper",
+        ControlDriftKind::AuthRelevantHeader => "auth_relevant_header",
     }
 }
 
@@ -1351,6 +1838,7 @@ fn render_explain_route_context(
     );
     render_explain_source_evidence(output, route);
     render_explain_coverage(output, route.id.as_str(), index);
+    render_policy_lens(output, route.id.as_str(), index);
     render_explain_route_evidence(output, route.id.as_str(), index);
     render_explain_route_mutations(output, route.id.as_str(), index);
     render_explain_route_links(output, route.id.as_str(), index);
@@ -1966,6 +2454,26 @@ fn evidence_type_label(evidence_type: EvidenceType) -> &'static str {
         EvidenceType::ExplicitPublic => "explicit_public",
         EvidenceType::AuditLog => "audit_log",
         EvidenceType::UnknownDynamicCheck => "unknown_dynamic_check",
+    }
+}
+
+fn policy_case_kind_label(kind: PolicyCaseKind) -> &'static str {
+    match kind {
+        PolicyCaseKind::EffectiveProtection => "effective_protection",
+        PolicyCaseKind::LinkedMutationProtection => "linked_mutation_protection",
+        PolicyCaseKind::Conflict => "conflict",
+        PolicyCaseKind::Duplicate => "duplicate",
+        PolicyCaseKind::Unreachable => "unreachable",
+        PolicyCaseKind::Dynamic => "dynamic",
+    }
+}
+
+fn policy_outcome_label(outcome: PolicyOutcome) -> &'static str {
+    match outcome {
+        PolicyOutcome::Allow => "allow",
+        PolicyOutcome::Deny => "deny",
+        PolicyOutcome::Unknown => "unknown",
+        PolicyOutcome::ReviewRequired => "review_required",
     }
 }
 
@@ -2701,14 +3209,17 @@ pub enum ReportError {
 mod tests {
     use super::*;
     use authmap_analysis::{
-        RuleSuggestion, RuleSuggestionExample, RuleSuggestionMatch, RuleSuggestionReport,
+        ControlDriftKind, ControlFinding, ControlReport, ControlSummary, DriftConfigMetadata,
+        DriftInputMetadata, DriftMetadata, RuleSuggestion, RuleSuggestionExample,
+        RuleSuggestionMatch, RuleSuggestionReport,
     };
     use authmap_core::{
         AuthMapDocument, ByteRange, Confidence, Coverage, CoverageClass, Diagnostic,
         DiagnosticCategory, DiagnosticSeverity, Evidence, EvidenceType, ExtensionMap, Framework,
-        Mutation, MutationOperation, ReachabilityLink, Recoverability, RiskLevel, Route,
-        RouteParam, RouteProtection, RouteProtectionKind, ScanMetadata, SkipReason, SourceFile,
-        Span, SymbolRef, diagnostic_codes,
+        Mutation, MutationOperation, PolicyBranch, PolicyCase, PolicyCaseKind, PolicyOutcome,
+        ReachabilityLink, Recoverability, RiskLevel, Route, RouteParam, RouteProtection,
+        RouteProtectionKind, ScanMetadata, SkipReason, SourceFile, Span, SymbolRef,
+        diagnostic_codes,
     };
 
     #[test]
@@ -2973,10 +3484,56 @@ mod tests {
         suggestions.suggestions[0].mechanism = "api_key=sk-abcdefghijklmnopqrstuvwxyz".to_string();
         suggestions.suggestions[0].rationale =
             vec!["Authorization: Bearer abcdefghijklmnopqrstuvwxyz".to_string()];
+        let controls = ControlReport {
+            schema_version: SCHEMA_VERSION.to_string(),
+            report_type: "authmap.controls".to_string(),
+            metadata: DriftMetadata {
+                mode: ScanMode::Advisory,
+                base: DriftInputMetadata {
+                    label: "base".to_string(),
+                    schema_version: SCHEMA_VERSION.to_string(),
+                    target_roots: vec!["src".to_string()],
+                },
+                head: DriftInputMetadata {
+                    label: "head".to_string(),
+                    schema_version: SCHEMA_VERSION.to_string(),
+                    target_roots: vec!["src".to_string()],
+                },
+                config: DriftConfigMetadata::none(),
+                fail_on: Vec::new(),
+            },
+            summary: ControlSummary {
+                total_findings: 1,
+                ..ControlSummary::default()
+            },
+            findings: vec![ControlFinding {
+                id: "control_0001".to_string(),
+                control_type: ControlDriftKind::Guard,
+                source_change_id: "drift_0001".to_string(),
+                source_change_kind: DriftChangeKind::RemovedEvidence,
+                severity: DriftChangeSeverity::Warning,
+                route_key: "GET /callback?token=abcdef1234567890".to_string(),
+                base_route_id: Some("route_0001".to_string()),
+                head_route_id: Some("route_0001".to_string()),
+                message: "Authorization: Bearer abcdefghijklmnopqrstuvwxyz".to_string(),
+                confidence: Confidence::High,
+                location: None,
+                evidence_ids: Vec::new(),
+                weak_evidence_ids: Vec::new(),
+                mutation_ids: Vec::new(),
+                link_ids: Vec::new(),
+                reviewer_questions: Vec::new(),
+                fail_category: None,
+                enforcement_blocking: false,
+            }],
+            diagnostics: Vec::new(),
+        };
 
         let outputs = [
             render_drift_markdown(&drift),
             render_drift_json(&drift).expect("drift JSON should render"),
+            render_controls_markdown(&controls),
+            render_controls_json(&controls).expect("controls JSON should render"),
             render_rule_suggestions_markdown(&suggestions),
             render_rule_suggestions_json(&suggestions).expect("rule suggestion JSON should render"),
         ];
@@ -3005,6 +3562,11 @@ mod tests {
         assert!(rendered.contains("evidence_0001: admin_check `requires_admin`"));
         assert!(rendered.contains("mutation_0001: update `user.disabled` via `sqlalchemy`"));
         assert!(rendered.contains("link_0001: route=route_0001"));
+        assert!(rendered.contains("- PolicyLens:"));
+        assert!(rendered.contains("policy_case_0001: dynamic"));
+        assert!(rendered.contains("Cites coverage: route_0001"));
+        assert!(rendered.contains("Cites evidence: evidence_0001"));
+        assert!(rendered.contains("Cites mutations: mutation_0001"));
         assert!(rendered.contains("Should this require a tenant check?"));
         assert!(rendered.contains("warning dynamic_policy"));
         assert!(rendered.contains("not confirmed vulnerabilities"));
@@ -3370,6 +3932,38 @@ mod tests {
     }
 
     #[test]
+    fn focused_tenant_markdown_groups_relevant_routes_and_questions() {
+        let document = document_with_tenant_review_data();
+
+        let markdown = render_tenants_markdown(&document);
+
+        assert!(markdown.contains("# AuthMap Tenant Review"));
+        assert!(markdown.contains("- Relevant routes: 1"));
+        assert!(markdown.contains("DELETE `/accounts/:id`"));
+        assert!(markdown.contains("Should this route require tenant or ownership scoping?"));
+        assert!(markdown.contains("tenant_check"));
+    }
+
+    #[test]
+    fn focused_tenant_json_reports_review_metadata_without_canonical_schema_claim() {
+        let document = document_with_tenant_review_data();
+
+        let json: Value =
+            serde_json::from_str(&render_tenants_json(&document).expect("JSON should render"))
+                .expect("tenant report should parse");
+
+        assert_eq!(json["report_type"], "authmap.tenants");
+        assert_eq!(json["schema_version"], "0.1.0");
+        assert_eq!(json["summary"]["relevant_routes"], 1);
+        assert_eq!(json["routes"][0]["id"], "route.accounts.delete");
+        assert_eq!(json["routes"][0]["tenant_review"]["review_required"], true);
+        assert_eq!(
+            json["routes"][0]["evidence"][0]["evidence_type"],
+            "tenant_check"
+        );
+    }
+
+    #[test]
     fn write_atomic_refuses_preexisting_temp_path() {
         let dir = std::env::temp_dir().join(format!(
             "authmap-report-test-{}",
@@ -3457,6 +4051,45 @@ mod tests {
             extensions: ExtensionMap::new(),
         });
         document.diagnostics.push(diagnostic());
+        document
+    }
+
+    fn document_with_tenant_review_data() -> AuthMapDocument {
+        let mut document = document_with_review_data();
+        document.evidence.push(Evidence {
+            id: "evidence.tenant".to_string(),
+            route_id: Some("route.accounts.delete".to_string()),
+            evidence_type: EvidenceType::TenantCheck,
+            mechanism: "query_scope".to_string(),
+            symbol: Some(SymbolRef {
+                name: "tenant_id".to_string(),
+                span: Some(Span {
+                    file: "src/app.py".to_string(),
+                    line: 2,
+                    column: 10,
+                    byte_range: None,
+                }),
+            }),
+            span: Some(Span {
+                file: "src/app.py".to_string(),
+                line: 2,
+                column: 10,
+                byte_range: None,
+            }),
+            confidence: Confidence::High,
+            notes: vec!["Query filter includes tenant scoping".to_string()],
+            extensions: ExtensionMap::new(),
+        });
+        document.coverage[0]
+            .reviewer_questions
+            .push("Should this route require tenant or ownership scoping?".to_string());
+        document.coverage[0].extensions.insert(
+            "authmap.tenant_review".to_string(),
+            serde_json::json!({
+                "review_required": true,
+                "reasons": ["missing_tenant_or_ownership_evidence"]
+            }),
+        );
         document
     }
 
@@ -3787,6 +4420,38 @@ mod tests {
                 reviewer_questions: vec!["Should this require a tenant check?".to_string()],
                 uncertainty_reasons: Vec::new(),
                 extensions: ExtensionMap::new(),
+            }],
+            policy_cases: vec![PolicyCase {
+                id: "policy_case_0001".to_string(),
+                route_id: "route_0001".to_string(),
+                kind: PolicyCaseKind::Dynamic,
+                summary: "Dynamic policy behavior requires review.".to_string(),
+                evidence_ids: vec!["evidence_0001".to_string()],
+                input_names: vec!["user.role".to_string()],
+                branches: vec![PolicyBranch {
+                    condition: "policy runtime dispatch".to_string(),
+                    outcome: PolicyOutcome::ReviewRequired,
+                    reachable: true,
+                    evidence_ids: vec!["evidence_0001".to_string()],
+                    span: Some(span.clone()),
+                    confidence: Confidence::Low,
+                    notes: vec!["Runtime policy target is not statically known.".to_string()],
+                }],
+                span: Some(span.clone()),
+                confidence: Confidence::Low,
+                reviewer_questions: vec!["Can the dynamic policy path be confirmed?".to_string()],
+                uncertainty_reasons: vec!["Dynamic policy dispatch was detected.".to_string()],
+                extensions: {
+                    let mut extensions = ExtensionMap::new();
+                    extensions.insert(
+                        "authmap.policy".to_string(),
+                        json!({
+                            "mutation_ids": ["mutation_0001"],
+                            "link_ids": ["link_0001"]
+                        }),
+                    );
+                    extensions
+                },
             }],
             diagnostics: vec![Diagnostic {
                 category: DiagnosticCategory::Policy,

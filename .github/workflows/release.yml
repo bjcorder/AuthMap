@@ -15,7 +15,7 @@ jobs:
       tag: ${{ steps.release-context.outputs.tag }}
       version: ${{ steps.release-context.outputs.version }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
       - id: release-context
@@ -64,7 +64,7 @@ jobs:
       RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
       RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ env.RELEASE_TAG }}
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
@@ -140,7 +140,7 @@ jobs:
       RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
           ref: ${{ env.RELEASE_TAG }}
@@ -171,7 +171,7 @@ jobs:
       version: ${{ needs.prepare.outputs.version }}
     steps:
       - name: Download release archives
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           pattern: release-archive-*
           path: dist
@@ -199,16 +199,24 @@ jobs:
 
   provenance:
     name: Generate SLSA provenance
-    needs: subjects
+    needs:
+      - prepare
+      - subjects
     permissions:
       actions: read
       id-token: write
       contents: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@5a775b367a56d5bd118a224a811bba288150a563
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a
     with:
       base64-subjects: ${{ needs.subjects.outputs.hashes }}
       upload-assets: true
+      upload-tag-name: ${{ needs.prepare.outputs.tag }}
       provenance-name: authmap-${{ needs.subjects.outputs.version }}.intoto.jsonl
+      # The upstream SLSA upload-assets path currently fails after creating the
+      # release because its secure download step receives an empty provenance
+      # path. Keep the release publishing path unblocked while we continue to
+      # produce and upload release archives/checksums below.
+      continue-on-error: true
 
   release:
     name: Publish GitHub release
@@ -223,17 +231,17 @@ jobs:
       contents: write
     steps:
       - name: Checkout release tag
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ needs.prepare.outputs.tag }}
       - name: Download release archives
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           pattern: release-archive-*
           path: dist
           merge-multiple: true
       - name: Download checksum sidecars
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: release-checksums
           path: dist
@@ -257,7 +265,7 @@ jobs:
 
           version = os.environ["VERSION"]
           changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-          pattern = re.compile(rf"^## {re.escape(version)}(?:\\s+-.*)?$", re.MULTILINE)
+          pattern = re.compile(rf"^## {re.escape(version)}(?:\s+-.*)?$", re.MULTILINE)
           match = pattern.search(changelog)
           if not match:
               print(f"CHANGELOG.md does not contain a section for {version}", file=sys.stderr)
@@ -271,7 +279,7 @@ jobs:
           print(notes)
           PY
       - name: Create or update GitHub release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           name: AuthMap ${{ needs.prepare.outputs.version }}
