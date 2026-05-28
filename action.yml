@@ -101,7 +101,7 @@ runs:
 
     - name: Upload AuthMap SARIF
       if: ${{ always() && inputs.upload-sarif == 'true' && steps.run-authmap.outputs.sarif-path != '' && (steps.run-authmap.outputs.exit-code == '0' || steps.run-authmap.outputs.exit-code == '20') }}
-      uses: github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e
+      uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa
       with:
         sarif_file: ${{ steps.run-authmap.outputs.sarif-path }}
         category: ${{ inputs.sarif-category }}
