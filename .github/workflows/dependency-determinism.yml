@@ -15,14 +15,14 @@ jobs:
   deterministic-deps:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       - id: deterministic-deps
         uses: Ozark-Security-Labs/deterministic-deps@838ba7893ec59d17e7883fbc1629a222dacb431b
         with:
           mode: advisory
           sarif: true
           remote-validation: true
-      - uses: github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e
+      - uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa
         if: always() && steps.deterministic-deps.outputs.sarif-path != ''
         with:
           sarif_file: ${{ steps.deterministic-deps.outputs.sarif-path }}
