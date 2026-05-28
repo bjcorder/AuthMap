@@ -539,7 +539,7 @@ fn ci_workflow_defines_cross_platform_rust_matrix_and_install_smoke() {
     assert!(workflow.contains("contents: read"));
     assert!(workflow.contains("toolchain: ${{ matrix.rust }}"));
     assert!(workflow.contains("components: rustfmt"));
-    assert!(workflow.contains("actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830"));
+    assert!(workflow.contains("actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae"));
     assert!(workflow.contains("~/.cargo/registry"));
     assert!(workflow.contains("~/.cargo/git"));
     assert!(!workflow.contains("target/"));
