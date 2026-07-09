@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [blacksmith-4vcpu-ubuntu-2404, blacksmith-6vcpu-macos-latest, blacksmith-4vcpu-windows-2025]
+        os: [ubuntu-24.04, macos-latest, windows-2025]
         rust: ["1.95", stable]
     runs-on: ${{ matrix.os }}
     env:
@@ -35,14 +35,14 @@ jobs:
           restore-keys: |
             cargo-${{ runner.os }}-${{ matrix.rust }}-
       - name: Check formatting
-        if: matrix.os == 'blacksmith-4vcpu-ubuntu-2404' && matrix.rust == 'stable'
+        if: matrix.os == 'ubuntu-24.04' && matrix.rust == 'stable'
         run: cargo fmt --all -- --check
       - name: Check workspace
         run: cargo check --workspace --locked
       - name: Test workspace
         run: cargo test --workspace --all-targets --locked
       - name: Check CLI package contents
-        if: matrix.os == 'blacksmith-4vcpu-ubuntu-2404' && matrix.rust == 'stable'
+        if: matrix.os == 'ubuntu-24.04' && matrix.rust == 'stable'
         run: |
           cargo package --list --manifest-path crates/authmap-cli/Cargo.toml --locked
           cargo metadata --no-deps --format-version 1
