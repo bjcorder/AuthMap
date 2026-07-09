@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   prepare:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.release-context.outputs.tag }}
       version: ${{ steps.release-context.outputs.version }}
@@ -55,9 +55,9 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - blacksmith-4vcpu-ubuntu-2404
-          - blacksmith-6vcpu-macos-latest
-          - blacksmith-4vcpu-windows-2025
+          - ubuntu-24.04
+          - macos-latest
+          - windows-2025
     runs-on: ${{ matrix.os }}
     env:
       CARGO_TERM_COLOR: always
@@ -135,7 +135,7 @@ jobs:
   source:
     name: Build source archive
     needs: prepare
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     env:
       RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
       VERSION: ${{ needs.prepare.outputs.version }}
@@ -165,7 +165,7 @@ jobs:
       - prepare
       - build
       - source
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     outputs:
       hashes: ${{ steps.hash.outputs.hashes }}
       version: ${{ needs.prepare.outputs.version }}
@@ -226,7 +226,7 @@ jobs:
       - source
       - subjects
       - provenance
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
