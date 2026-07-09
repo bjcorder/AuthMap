@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
 use std::time::Instant;
 
@@ -15,7 +15,7 @@ use authmap_core::{
 };
 use authmap_discovery::discover_sources;
 use authmap_parsers::{
-    ParseError, ParsedFile, TreeSitterBackend, parse_files_in_parallel,
+    ParseError, ParseOutput, ParsedFile, TreeSitterBackend, parse_files_in_parallel,
     parse_files_in_parallel_selective,
 };
 use serde::Serialize;
@@ -23,6 +23,8 @@ use thiserror::Error;
 use tree_sitter::Node;
 
 mod drift;
+
+const PARSE_RUNTIME_CHECK_BATCH_SIZE: usize = 32;
 
 pub use drift::{
     ControlDriftKind, ControlFinding, ControlReport, ControlSummary, DriftChange, DriftChangeKind,
@@ -1108,7 +1110,6 @@ fn run_scan_with_started_at(
 ) -> Result<AuthMapDocument, ScanError> {
     let budget = RuntimeBudget::new(started_at, plan.config.limits.max_runtime_ms);
     let discovery = discover_sources(plan)?;
-    let backend = TreeSitterBackend;
     let mut document = empty_document(plan);
     document.source_files = discovery.files.clone();
     document.diagnostics = discovery.diagnostics;
@@ -1118,17 +1119,7 @@ fn run_scan_with_started_at(
         return Ok(document);
     }
 
-    let parse_output = parse_files_in_parallel_selective(
-        &backend,
-        &document.source_files,
-        |file| {
-            fs::read_to_string(&file.path).map_err(|source| ParseError::Read {
-                path: file.path.clone(),
-                message: source.to_string(),
-            })
-        },
-        |file, text| source_needs_syntax_tree(file.language, text, &plan.config),
-    );
+    let parse_output = parse_sources_until_runtime_budget(plan, &document.source_files, budget);
     document.diagnostics.extend(parse_output.diagnostics);
     if budget.is_exceeded() {
         push_runtime_limit_diagnostic(&mut document, plan);
@@ -1223,6 +1214,34 @@ fn run_scan_with_started_at(
     }
     finalize_diagnostics(&mut document);
     Ok(document)
+}
+
+fn parse_sources_until_runtime_budget(
+    plan: &ScanPlan,
+    files: &[authmap_core::SourceFile],
+    budget: RuntimeBudget,
+) -> ParseOutput {
+    let backend = TreeSitterBackend;
+    let mut output = ParseOutput::default();
+    for chunk in files.chunks(PARSE_RUNTIME_CHECK_BATCH_SIZE) {
+        if budget.is_exceeded() {
+            break;
+        }
+        let chunk_output = parse_files_in_parallel_selective(
+            &backend,
+            chunk,
+            |file| {
+                fs::read_to_string(&file.path).map_err(|source| ParseError::Read {
+                    path: file.path.clone(),
+                    message: source.to_string(),
+                })
+            },
+            |file, text| source_needs_syntax_tree(file.language, text, &plan.config),
+        );
+        output.parsed_files.extend(chunk_output.parsed_files);
+        output.diagnostics.extend(chunk_output.diagnostics);
+    }
+    output
 }
 
 fn empty_document(plan: &ScanPlan) -> AuthMapDocument {
@@ -3042,7 +3061,7 @@ fn review_required_extension(detection: &str, reason: &str) -> authmap_core::Ext
 }
 
 fn dedup_mutations(mutations: &mut Vec<Mutation>) {
-    let mut seen = BTreeSet::new();
+    let mut seen = HashSet::new();
     mutations.retain(|item| {
         seen.insert((
             item.operation,
@@ -3932,7 +3951,7 @@ fn strip_js_extension(path: &str) -> Option<&str> {
 }
 
 fn dedup_links(links: &mut Vec<ReachabilityLink>) {
-    let mut seen = BTreeSet::new();
+    let mut seen = HashSet::new();
     links.retain(|item| {
         seen.insert((
             item.route_id.clone(),
@@ -6393,7 +6412,7 @@ fn looks_dynamic_policy(function_text: &str) -> bool {
 }
 
 fn dedup_evidence(evidence: &mut Vec<Evidence>) {
-    let mut seen = BTreeSet::new();
+    let mut seen = HashSet::new();
     evidence.retain(|item| {
         seen.insert((
             item.route_id.clone(),

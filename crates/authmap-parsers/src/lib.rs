@@ -1,3 +1,6 @@
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+
 use authmap_core::{
     ByteRange, Diagnostic, DiagnosticCategory, DiagnosticSeverity, Language, Recoverability,
     SourceFile, Span, diagnostic_codes,
@@ -5,6 +8,10 @@ use authmap_core::{
 use rayon::prelude::*;
 use thiserror::Error;
 use tree_sitter::{Node, Parser, Tree};
+
+thread_local! {
+    static TREE_SITTER_PARSERS: RefCell<BTreeMap<Language, Parser>> = RefCell::new(BTreeMap::new());
+}
 
 #[derive(Debug)]
 pub struct ParsedFile {
@@ -184,18 +191,7 @@ impl ParserBackend for TreeSitterBackend {
             });
         };
 
-        let mut parser = Parser::new();
-        parser
-            .set_language(&language)
-            .map_err(|source_error| ParseError::Parse {
-                path: source.path.clone(),
-                message: format!("failed to initialize parser grammar: {source_error}"),
-            })?;
-
-        let tree = parser.parse(text, None).ok_or_else(|| ParseError::Parse {
-            path: source.path.clone(),
-            message: "tree-sitter did not return a parse tree".to_string(),
-        })?;
+        let tree = parse_with_thread_local_parser(source, language, text)?;
         let mut diagnostics = Vec::new();
         let status = if tree.root_node().has_error() {
             let span = first_error_node(tree.root_node()).map(|node| span_for_node(source, node));
@@ -220,6 +216,35 @@ impl ParserBackend for TreeSitterBackend {
             diagnostics,
         })
     }
+}
+
+fn parse_with_thread_local_parser(
+    source: &SourceFile,
+    grammar: tree_sitter::Language,
+    text: &str,
+) -> Result<Tree, ParseError> {
+    TREE_SITTER_PARSERS.with(|parsers| {
+        let mut parsers = parsers.borrow_mut();
+        if !parsers.contains_key(&source.language) {
+            let mut parser = Parser::new();
+            parser
+                .set_language(&grammar)
+                .map_err(|source_error| ParseError::Parse {
+                    path: source.path.clone(),
+                    message: format!("failed to initialize parser grammar: {source_error}"),
+                })?;
+            parsers.insert(source.language, parser);
+        }
+
+        parsers
+            .get_mut(&source.language)
+            .expect("parser should be initialized")
+            .parse(text, None)
+            .ok_or_else(|| ParseError::Parse {
+                path: source.path.clone(),
+                message: "tree-sitter did not return a parse tree".to_string(),
+            })
+    })
 }
 
 pub fn span_for_node(source: &SourceFile, node: Node<'_>) -> Span {
