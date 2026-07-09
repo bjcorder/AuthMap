@@ -623,11 +623,7 @@ fn ci_workflow_defines_cross_platform_rust_matrix_and_install_smoke() {
     let workflow = fs::read_to_string(root.join(".github/workflows/rust.yml"))
         .expect("rust workflow should exist");
 
-    for runner in [
-        "blacksmith-4vcpu-ubuntu-2404",
-        "blacksmith-6vcpu-macos-latest",
-        "blacksmith-4vcpu-windows-2025",
-    ] {
+    for runner in ["ubuntu-24.04", "macos-latest", "windows-2025"] {
         assert!(workflow.contains(runner), "missing runner {runner}");
     }
     for rust in ["\"1.95\"", "stable"] {
