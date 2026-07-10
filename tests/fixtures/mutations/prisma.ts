@@ -58,3 +58,16 @@ export async function rawDeleteSessions(userId: string) {
 export async function rawQueryReadOnly() {
   return prisma.$queryRaw`select * from users`;
 }
+
+export async function transactionArray(id: string) {
+  return prisma.$transaction([
+    prisma.user.update({ where: { id }, data: { disabled: true } }),
+    prisma.session.delete({ where: { id } }),
+  ]);
+}
+
+export async function transactionCallback(email: string) {
+  return prisma.$transaction(async (tx) => {
+    return tx.user.create({ data: { email } });
+  });
+}
