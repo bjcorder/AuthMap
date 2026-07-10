@@ -4,8 +4,8 @@ use std::time::Instant;
 
 use authmap_adapters::{AdapterContext, AdapterRegistry};
 use authmap_config::{
-    AuthorizationRule, AuthorizationRuleMatch, ResourceSensitivityRule, RouteSensitivityRule,
-    ScanConfig, ScanPlan,
+    AuthorizationRule, AuthorizationRuleMatch, AuthorizationSynonyms, ResourceSensitivityRule,
+    RouteSensitivityRule, ScanConfig, ScanPlan,
 };
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticCategory,
@@ -146,7 +146,7 @@ impl EvidenceExtractor for BuiltInEvidenceExtractor {
                     }
                 }
                 Framework::NextJs => extract_nextjs_route_evidence(route, &parsed_by_path, &rules),
-                Framework::Trpc => extract_trpc_route_evidence(route),
+                Framework::Trpc => extract_trpc_route_evidence(route, &rules),
                 Framework::Graphql => extract_graphql_route_evidence(route),
                 _ => Vec::new(),
             };
@@ -2039,7 +2039,7 @@ fn should_skip_rule_candidate(
     if symbol.is_empty()
         || symbol.starts_with('<')
         || route_handlers.contains(symbol)
-        || rules.match_symbol(symbol).is_some()
+        || rules.matches_configured_symbol(symbol)
         || path.contains("/tests/")
         || path.contains("/models/")
         || path.contains("/tables/")
@@ -4037,17 +4037,30 @@ struct EvidenceRules {
 enum EvidenceRuleOrigin {
     BuiltIn,
     Config,
+    ConfigSynonym,
+    TokenHeuristic,
 }
 
 impl EvidenceRules {
     fn new(config: &ScanConfig) -> Self {
         let mut rules = builtin_rules();
         rules.extend(config.authorization.rules.iter().map(config_rule_to_spec));
+        rules.extend(config_synonym_specs(&config.authorization.synonyms));
+        rules.extend(token_heuristic_rules());
         Self { rules }
     }
 
     fn match_symbol(&self, symbol: &str) -> Option<&EvidenceRuleSpec> {
         self.rules.iter().find(|rule| rule.matches(symbol))
+    }
+
+    fn matches_configured_symbol(&self, symbol: &str) -> bool {
+        self.rules.iter().any(|rule| {
+            matches!(
+                rule.origin,
+                EvidenceRuleOrigin::Config | EvidenceRuleOrigin::ConfigSynonym
+            ) && rule.matches(symbol)
+        })
     }
 }
 
@@ -4063,6 +4076,25 @@ impl EvidenceRuleSpec {
                         .iter()
                         .any(|item| symbol_lower.contains(&item.to_ascii_lowercase()))
             }
+            EvidenceRuleOrigin::ConfigSynonym => {
+                let terminal = terminal_symbol_name(symbol);
+                self.exact.iter().any(|pattern| {
+                    pattern.strip_suffix('*').map_or_else(
+                        || pattern == &terminal,
+                        |prefix| terminal.starts_with(prefix),
+                    )
+                })
+            }
+            EvidenceRuleOrigin::TokenHeuristic => {
+                let terminal = terminal_symbol_name(symbol);
+                let tokens = symbol_tokens(&terminal);
+                let lower = terminal.to_ascii_lowercase();
+                (looks_guard_like(&lower) || tokens.first().is_some_and(|token| token == "can"))
+                    && self
+                        .contains
+                        .iter()
+                        .any(|token| tokens.iter().any(|item| item == token))
+            }
         }
     }
 
@@ -4075,19 +4107,7 @@ impl EvidenceRuleSpec {
         {
             return true;
         }
-        let lower = terminal.to_ascii_lowercase();
-        if !looks_guard_like(&lower)
-            && !lower.contains("middleware")
-            && !lower.contains("decorator")
-            && !lower.ends_with("required")
-        {
-            return false;
-        }
-        let tokens = symbol_tokens(&terminal);
-        self.contains.iter().any(|item| {
-            let item_lower = item.to_ascii_lowercase();
-            tokens.iter().any(|token| token == &item_lower)
-        })
+        false
     }
 }
 
@@ -4127,6 +4147,90 @@ fn config_rule_to_spec(rule: &AuthorizationRule) -> EvidenceRuleSpec {
         notes: rule.notes.clone(),
         origin: EvidenceRuleOrigin::Config,
     }
+}
+
+fn config_synonym_specs(synonyms: &AuthorizationSynonyms) -> Vec<EvidenceRuleSpec> {
+    synonyms
+        .iter()
+        .into_iter()
+        .flat_map(|(class, patterns)| {
+            let (evidence_type, mechanism) = synonym_classification(class);
+            patterns.iter().map(move |pattern| EvidenceRuleSpec {
+                evidence_type,
+                mechanism: mechanism.to_string(),
+                confidence: Confidence::High,
+                exact: vec![pattern.clone()],
+                contains: Vec::new(),
+                notes: vec![format!("configured guard synonym matched: {pattern}")],
+                origin: EvidenceRuleOrigin::ConfigSynonym,
+            })
+        })
+        .collect()
+}
+
+fn synonym_classification(class: &str) -> (EvidenceType, &'static str) {
+    match class {
+        "authn_only" => (EvidenceType::Authn, "configured_authn_synonym"),
+        "role_guarded" => (EvidenceType::RoleCheck, "configured_role_synonym"),
+        "permission_guarded" => (
+            EvidenceType::PermissionCheck,
+            "configured_permission_synonym",
+        ),
+        "ownership_guarded" => (EvidenceType::OwnershipCheck, "configured_ownership_synonym"),
+        "tenant_guarded" => (EvidenceType::TenantCheck, "configured_tenant_synonym"),
+        "admin_guarded" => (EvidenceType::AdminCheck, "configured_admin_synonym"),
+        _ => unreachable!("AuthorizationSynonyms only yields known classes"),
+    }
+}
+
+fn token_heuristic_rules() -> Vec<EvidenceRuleSpec> {
+    [
+        (
+            EvidenceType::OwnershipCheck,
+            "ownership_guard_heuristic",
+            &["owner"][..],
+        ),
+        (
+            EvidenceType::TenantCheck,
+            "tenant_guard_heuristic",
+            &["tenant", "org"][..],
+        ),
+        (
+            EvidenceType::AdminCheck,
+            "admin_guard_heuristic",
+            &["admin", "staff", "superuser"][..],
+        ),
+        (
+            EvidenceType::RoleCheck,
+            "role_guard_heuristic",
+            &["role"][..],
+        ),
+        (
+            EvidenceType::PermissionCheck,
+            "permission_guard_heuristic",
+            &["perm", "permission", "can"][..],
+        ),
+        (
+            EvidenceType::Authn,
+            "authn_guard_heuristic",
+            &["auth", "login", "authenticated"][..],
+        ),
+    ]
+    .into_iter()
+    .flat_map(|(evidence_type, mechanism, tokens)| {
+        tokens.iter().map(move |token| EvidenceRuleSpec {
+            evidence_type,
+            mechanism: mechanism.to_string(),
+            confidence: Confidence::Low,
+            exact: Vec::new(),
+            contains: vec![(*token).to_string()],
+            notes: vec![format!(
+                "low-confidence guard token heuristic matched: {token}"
+            )],
+            origin: EvidenceRuleOrigin::TokenHeuristic,
+        })
+    })
+    .collect()
 }
 
 fn builtin_rules() -> Vec<EvidenceRuleSpec> {
@@ -4429,7 +4533,9 @@ fn extract_django_route_evidence(
             // Function-based views carry their guards as decorators
             // (`@login_required`, `@permission_required`, DRF `@permission_classes`),
             // which sit outside the function body scanned below.
-            evidence.extend(extract_django_fbv_decorator_evidence(parsed, node, route));
+            evidence.extend(extract_django_fbv_decorator_evidence(
+                parsed, node, route, rules,
+            ));
         }
         evidence.extend(extract_calls_from_node(
             parsed,
@@ -4524,7 +4630,10 @@ fn extract_nextjs_route_evidence(
     evidence
 }
 
-fn extract_trpc_route_evidence(route: &authmap_core::Route) -> Vec<Evidence> {
+fn extract_trpc_route_evidence(
+    route: &authmap_core::Route,
+    rules: &EvidenceRules,
+) -> Vec<Evidence> {
     let Some(value) = route.extensions.get("authmap.trpc") else {
         return Vec::new();
     };
@@ -4533,6 +4642,17 @@ fn extract_trpc_route_evidence(route: &authmap_core::Route) -> Vec<Evidence> {
         .and_then(serde_json::Value::as_str)
         .unwrap_or_default();
     let lower = root.to_ascii_lowercase();
+    if let Some(rule) = rules.match_symbol(root) {
+        return vec![evidence_from_rule(
+            route,
+            rule,
+            Some(SymbolRef {
+                name: root.to_string(),
+                span: route.span.clone(),
+            }),
+            route.span.clone(),
+        )];
+    }
     let (evidence_type, mechanism) = if lower.contains("admin") {
         (EvidenceType::RoleCheck, "trpc_procedure")
     } else if lower.contains("authed") || lower.contains("protected") {
@@ -5234,7 +5354,7 @@ fn extract_django_class_evidence(
         let inherited = class.file != route_class.file || class.name != route_class.name;
         evidence.extend(extract_django_base_evidence(route, class, inherited));
         evidence.extend(extract_django_class_attribute_evidence(
-            route, class, inherited,
+            route, class, inherited, rules,
         ));
         for method_name in [
             "initial",
@@ -5312,6 +5432,7 @@ fn extract_django_class_attribute_evidence(
     route: &authmap_core::Route,
     class: &PythonClassDef<'_>,
     inherited: bool,
+    rules: &EvidenceRules,
 ) -> Vec<Evidence> {
     let mut evidence = Vec::new();
     for assignment in direct_class_assignments(class.node) {
@@ -5323,6 +5444,20 @@ fn extract_django_class_attribute_evidence(
             continue;
         }
         let lower = right.to_ascii_lowercase();
+        if attr == "permission_classes"
+            && let Some((symbol, rule)) = match_custom_or_heuristic_symbol_in_text(&right, rules)
+        {
+            evidence.push(evidence_from_rule(
+                route,
+                rule,
+                Some(SymbolRef {
+                    name: symbol.to_string(),
+                    span: Some(class.parsed.span_for(assignment)),
+                }),
+                Some(class.parsed.span_for(assignment)),
+            ));
+            continue;
+        }
         let (evidence_type, mechanism, symbol_name) = if attr == "authentication_classes" {
             (
                 EvidenceType::Authn,
@@ -5352,6 +5487,25 @@ fn extract_django_class_attribute_evidence(
         });
     }
     evidence
+}
+
+fn match_custom_or_heuristic_symbol_in_text<'text, 'rule>(
+    text: &'text str,
+    rules: &'rule EvidenceRules,
+) -> Option<(&'text str, &'rule EvidenceRuleSpec)> {
+    text.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+        .filter(|symbol| !symbol.is_empty())
+        .find_map(|symbol| {
+            rules
+                .match_symbol(symbol)
+                .filter(|rule| {
+                    matches!(
+                        rule.origin,
+                        EvidenceRuleOrigin::Config | EvidenceRuleOrigin::ConfigSynonym
+                    )
+                })
+                .map(|rule| (symbol, rule))
+        })
 }
 
 /// Classifies a DRF `permission_classes` value (lowercased) into evidence.
@@ -5406,6 +5560,7 @@ fn extract_django_fbv_decorator_evidence(
     parsed: &ParsedFile,
     function_node: Node<'_>,
     route: &authmap_core::Route,
+    rules: &EvidenceRules,
 ) -> Vec<Evidence> {
     let mut evidence = Vec::new();
     let Some(parent) = function_node.parent() else {
@@ -5439,7 +5594,7 @@ fn extract_django_fbv_decorator_evidence(
             continue;
         };
         if let Some(item) =
-            django_decorator_evidence(route, &name, &args_text, parsed.span_for(decorator))
+            django_decorator_evidence(route, &name, &args_text, parsed.span_for(decorator), rules)
         {
             evidence.push(item);
         }
@@ -5452,8 +5607,9 @@ fn django_decorator_evidence(
     name: &str,
     args_text: &str,
     span: Span,
+    rules: &EvidenceRules,
 ) -> Option<Evidence> {
-    let (evidence_type, mechanism, symbol_name) = match name {
+    let builtin = match name {
         "login_required" => (
             EvidenceType::Authn,
             "django_login_required",
@@ -5480,8 +5636,20 @@ fn django_decorator_evidence(
             "authentication_classes".to_string(),
         ),
         "permission_classes" => classify_drf_permission_classes(&args_text.to_ascii_lowercase()),
-        _ => return None,
+        _ => {
+            let rule = rules.match_symbol(name)?;
+            return Some(evidence_from_rule(
+                route,
+                rule,
+                Some(SymbolRef {
+                    name: name.to_string(),
+                    span: Some(span.clone()),
+                }),
+                Some(span),
+            ));
+        }
     };
+    let (evidence_type, mechanism, symbol_name) = builtin;
     Some(Evidence {
         id: String::new(),
         route_id: Some(route.id.clone()),
@@ -7120,7 +7288,7 @@ mod tests {
     use authmap_testkit::fixture_path;
 
     use super::{
-        classify_coverage, enabled_frameworks_for_sources, framework_name_for_hint,
+        EvidenceRules, classify_coverage, enabled_frameworks_for_sources, framework_name_for_hint,
         normalize_adapter_evidence, normalize_module_path, resolve_python_module, route_id_remaps,
         run_scan, run_scan_with_started_at, source_needs_syntax_tree, suggest_rules,
         suggest_rules_with_started_at,
@@ -9242,6 +9410,64 @@ def update_account(account_id: str):
         assert!(report.diagnostics.iter().any(|diagnostic| {
             diagnostic.code == diagnostic_codes::INTERNAL_RUNTIME_LIMIT_REACHED
         }));
+    }
+
+    #[test]
+    fn configured_guard_synonyms_classify_python_and_javascript_routes() {
+        let temp = TestDir::new("guard-synonyms");
+        write_file(
+            &temp.path().join("app.js"),
+            "const express = require('express');\nconst app = express();\napp.get('/accounts', require_account_owner, (req, res) => res.json({}));\n",
+        );
+        write_file(
+            &temp.path().join("urls.py"),
+            "from django.urls import path\nfrom .views import secured\nurlpatterns = [path('secured/', secured)]\n",
+        );
+        write_file(
+            &temp.path().join("views.py"),
+            "@require_account_owner\ndef secured(request):\n    return None\n",
+        );
+        let mut config = ScanConfig::default();
+        config.authorization.synonyms.ownership_guarded = vec!["require_account_owner".to_string()];
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, config);
+
+        let document = run_scan(&plan).expect("scan should succeed");
+        let matches = document
+            .evidence
+            .iter()
+            .filter(|evidence| {
+                evidence
+                    .symbol
+                    .as_ref()
+                    .is_some_and(|symbol| symbol.name == "require_account_owner")
+            })
+            .collect::<Vec<_>>();
+
+        assert!(
+            matches.len() >= 2,
+            "both Python and JavaScript guards should match"
+        );
+        assert!(matches.iter().all(|evidence| {
+            evidence.evidence_type == EvidenceType::OwnershipCheck
+                && evidence.confidence == Confidence::High
+                && evidence
+                    .notes
+                    .iter()
+                    .any(|note| note.contains("configured guard synonym"))
+        }));
+    }
+
+    #[test]
+    fn token_heuristics_use_whole_identifier_tokens() {
+        let rules = EvidenceRules::new(&ScanConfig::default());
+        let owner = rules
+            .match_symbol("require_account_owner")
+            .expect("owner token should match");
+        assert_eq!(owner.evidence_type, EvidenceType::OwnershipCheck);
+        assert_eq!(owner.confidence, Confidence::Low);
+        assert!(owner.notes.iter().any(|note| note.contains("owner")));
+        assert!(rules.match_symbol("unadministered").is_none());
+        assert!(rules.match_symbol("PermissionError").is_none());
     }
 
     #[test]

@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 
 use authmap_analysis::{
     ControlDriftKind, ControlFinding, ControlReport, DriftChange, DriftChangeKind,
-    DriftChangeSeverity, DriftComparison, DriftReport, RuleSuggestionReport,
+    DriftChangeSeverity, DriftComparison, DriftReport, RuleSuggestion, RuleSuggestionReport,
 };
 use authmap_core::{
     AuthMapDocument, Confidence, Coverage, CoverageClass, Diagnostic, DiagnosticSeverity, Evidence,
@@ -1214,6 +1214,21 @@ pub fn render_rule_suggestions_markdown(report: &RuleSuggestionReport) -> String
             }
         }
     }
+    let synonym_groups = suggested_synonym_groups(&report.suggestions);
+    if !synonym_groups.is_empty() {
+        let _ = writeln!(output, "  synonyms:");
+        for (class, symbols) in synonym_groups {
+            let _ = writeln!(
+                output,
+                "    {class}: [{}]",
+                symbols
+                    .iter()
+                    .map(|symbol| yaml_string(symbol))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+    }
     let _ = writeln!(output, "```");
     let _ = writeln!(output);
 
@@ -1269,6 +1284,44 @@ pub fn render_rule_suggestions_markdown(report: &RuleSuggestionReport) -> String
 
     render_rule_suggestion_diagnostics(&mut output, report);
     output
+}
+
+fn suggested_synonym_groups(suggestions: &[RuleSuggestion]) -> Vec<(&'static str, Vec<&str>)> {
+    let mut groups = [
+        ("authn_only", Vec::new()),
+        ("role_guarded", Vec::new()),
+        ("permission_guarded", Vec::new()),
+        ("ownership_guarded", Vec::new()),
+        ("tenant_guarded", Vec::new()),
+        ("admin_guarded", Vec::new()),
+    ];
+    for suggestion in suggestions {
+        let Some(class) = (match suggestion.evidence_type {
+            authmap_core::EvidenceType::Authn => Some("authn_only"),
+            authmap_core::EvidenceType::RoleCheck => Some("role_guarded"),
+            authmap_core::EvidenceType::PermissionCheck => Some("permission_guarded"),
+            authmap_core::EvidenceType::OwnershipCheck => Some("ownership_guarded"),
+            authmap_core::EvidenceType::TenantCheck => Some("tenant_guarded"),
+            authmap_core::EvidenceType::AdminCheck => Some("admin_guarded"),
+            _ => None,
+        }) else {
+            continue;
+        };
+        let Some(symbol) = suggestion.matcher.exact.first() else {
+            continue;
+        };
+        if let Some((_, symbols)) = groups.iter_mut().find(|(name, _)| *name == class) {
+            symbols.push(symbol.as_str());
+        }
+    }
+    groups
+        .into_iter()
+        .filter_map(|(class, mut symbols)| {
+            symbols.sort_unstable();
+            symbols.dedup();
+            (!symbols.is_empty()).then_some((class, symbols))
+        })
+        .collect()
 }
 
 pub fn render_rule_suggestions_json(report: &RuleSuggestionReport) -> Result<String, ReportError> {
@@ -3258,6 +3311,8 @@ mod tests {
         assert!(markdown.contains("Suggestions are local heuristics"));
         assert!(markdown.contains("authorization:"));
         assert!(markdown.contains("exact: [\"ensurePaidPlan\"]"));
+        assert!(markdown.contains("synonyms:"));
+        assert!(markdown.contains("permission_guarded: [\"ensurePaidPlan\"]"));
         assert!(markdown.contains("name suggests a permission"));
         assert!(markdown.contains("src/app.js:4:10"));
 
