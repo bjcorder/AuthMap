@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+- Added configurable authorization guard synonym families and low-confidence,
+  token-boundary guard classification heuristics.
 - Added a Criterion performance benchmark harness and a CI performance
   regression guard for representative AuthMap scans.
 - Added `authmap routes` for focused route inventory review with JSON and

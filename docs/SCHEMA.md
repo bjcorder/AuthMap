@@ -132,6 +132,12 @@ unchanged. The complete config format and CLI helpers are documented in
 [`docs/CONFIGURATION.md`](CONFIGURATION.md), including `authmap explain` and
 the read-only `authmap rules suggest` workflow.
 
+Projects can also group user-asserted guard names under
+`authorization.synonyms` (for example, `ownership_guarded` or
+`tenant_guarded`). Synonym matches emit the same canonical evidence entries at
+high confidence; this is configuration behavior and does not change the
+versioned AuthMap JSON schema.
+
 ## Project Sensitivity Rules
 
 Projects can label sensitive route families and linked mutation resources in

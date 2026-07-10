@@ -158,6 +158,32 @@ Matching is intentionally conservative:
 Rule names, mechanisms, and matcher entries must be nonempty. Unknown fields are
 rejected.
 
+### Guard Synonyms
+
+Use `authorization.synonyms` to classify a family of local guard names without
+repeating full rule definitions. Keys use coverage-oriented names and map to the
+canonical evidence types shown above:
+
+```yaml
+authorization:
+  synonyms:
+    ownership_guarded: [require_account_owner, "IsOwner*"]
+    tenant_guarded: [withTenantScope]
+    admin_guarded: [StaffOnly]
+```
+
+Synonyms are user-asserted and therefore emit high-confidence evidence. Entries
+match the terminal symbol exactly, except for an optional trailing `*` prefix
+match. Other wildcard placement, regexes, and substring matching are rejected.
+
+When no configured synonym matches, AuthMap applies low-confidence token
+heuristics to guard symbols. It recognizes whole identifier tokens only:
+`owner`, `tenant`/`org`, `admin`/`staff`/`superuser`, `role`,
+`perm`/`permission`/`can`, and `auth`/`login`/`authenticated`. The emitted
+evidence records the matched token so reviewers can distinguish a heuristic from
+a configured guard. `authmap rules suggest` includes a ready-to-paste synonym
+section for suggested symbols; review these suggestions before adding them.
+
 ## Sensitivity Rules
 
 Sensitivity rules label routes or linked mutation resources so coverage scoring

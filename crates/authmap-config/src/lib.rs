@@ -36,6 +36,18 @@ impl Default for ScanConfig {
 #[serde(default, deny_unknown_fields)]
 pub struct AuthorizationConfig {
     pub rules: Vec<AuthorizationRule>,
+    pub synonyms: AuthorizationSynonyms,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AuthorizationSynonyms {
+    pub authn_only: Vec<String>,
+    pub role_guarded: Vec<String>,
+    pub permission_guarded: Vec<String>,
+    pub ownership_guarded: Vec<String>,
+    pub tenant_guarded: Vec<String>,
+    pub admin_guarded: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -237,6 +249,35 @@ impl ScanConfig {
                 &rule.matcher,
             )?;
         }
+        for (name, patterns) in self.authorization.synonyms.iter() {
+            for (index, pattern) in patterns.iter().enumerate() {
+                let trimmed = pattern.trim();
+                if trimmed.is_empty() {
+                    return Err(ConfigError::Validate {
+                        path: path.to_path_buf(),
+                        message: format!(
+                            "authorization.synonyms.{name}[{index}] must not be empty"
+                        ),
+                    });
+                }
+                if trimmed == "*" {
+                    return Err(ConfigError::Validate {
+                        path: path.to_path_buf(),
+                        message: format!(
+                            "authorization.synonyms.{name}[{index}] wildcard prefixes must not be empty"
+                        ),
+                    });
+                }
+                if trimmed[..trimmed.len() - usize::from(trimmed.ends_with('*'))].contains('*') {
+                    return Err(ConfigError::Validate {
+                        path: path.to_path_buf(),
+                        message: format!(
+                            "authorization.synonyms.{name}[{index}] only supports a trailing * wildcard"
+                        ),
+                    });
+                }
+            }
+        }
         for (index, rule) in self.sensitivity.routes.iter().enumerate() {
             validate_name(
                 path,
@@ -314,6 +355,19 @@ impl ScanConfig {
             )?;
         }
         Ok(())
+    }
+}
+
+impl AuthorizationSynonyms {
+    pub fn iter(&self) -> [(&'static str, &Vec<String>); 6] {
+        [
+            ("authn_only", &self.authn_only),
+            ("role_guarded", &self.role_guarded),
+            ("permission_guarded", &self.permission_guarded),
+            ("ownership_guarded", &self.ownership_guarded),
+            ("tenant_guarded", &self.tenant_guarded),
+            ("admin_guarded", &self.admin_guarded),
+        ]
     }
 }
 
@@ -513,6 +567,51 @@ authorization:
         assert_eq!(rule.confidence, Some(Confidence::Medium));
         assert_eq!(rule.matcher.exact, vec!["can_edit_account"]);
         assert_eq!(rule.matcher.contains, vec!["permission"]);
+    }
+
+    #[test]
+    fn authorization_synonyms_parse_and_support_trailing_wildcards() {
+        let config: ScanConfig = serde_yaml::from_str(
+            r#"
+authorization:
+  synonyms:
+    ownership_guarded: [require_account_owner, "IsOwner*"]
+    tenant_guarded: [withTenantScope]
+"#,
+        )
+        .expect("authorization synonyms should parse");
+
+        assert_eq!(
+            config.authorization.synonyms.ownership_guarded,
+            vec!["require_account_owner", "IsOwner*"]
+        );
+        assert_eq!(
+            config.authorization.synonyms.tenant_guarded,
+            vec!["withTenantScope"]
+        );
+    }
+
+    #[test]
+    fn authorization_synonyms_reject_non_trailing_wildcards() {
+        let temp = std::env::temp_dir().join("authmap-config-invalid-synonym.yml");
+        std::fs::write(
+            &temp,
+            r#"
+authorization:
+  synonyms:
+    ownership_guarded: ["owner*guard"]
+"#,
+        )
+        .expect("test config should be written");
+
+        let error = load_config(Some(temp.clone())).expect_err("wildcard should be invalid");
+        let _ = std::fs::remove_file(temp);
+
+        assert!(
+            error
+                .to_string()
+                .contains("only supports a trailing * wildcard")
+        );
     }
 
     #[test]
