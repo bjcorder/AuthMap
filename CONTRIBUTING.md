@@ -45,6 +45,23 @@ unrelated feature work when practical, include intentional `Cargo.lock`
 changes, and review licenses, advisories, build behavior, and GitHub Actions
 permissions before merge.
 
+## Performance checks
+
+AuthMap includes a Criterion benchmark harness for parser throughput, full-pipeline
+fixture scans, and analysis-only extraction/linking:
+
+```sh
+cargo bench -p authmap-cli --bench performance
+```
+
+Pull requests also run a lightweight Ubuntu performance guard defined in
+`.github/workflows/performance.yml`. The guard builds the release CLI, scans the
+fixture configured in `ci/perf-baseline.env`, and fails if wall time exceeds the
+stored baseline plus its threshold. The threshold is intentionally generous to
+absorb hosted-runner variance; update the baseline only after reviewing local
+`cargo bench` output and confirming the new number represents intentional
+behavior.
+
 Update [CHANGELOG.md](CHANGELOG.md) for user-visible CLI, schema,
 configuration, report, GitHub Action, documentation, or release-process
 changes. Call out schema compatibility notes when the AuthMap JSON contract or
