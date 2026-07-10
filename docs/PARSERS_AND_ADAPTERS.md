@@ -128,8 +128,12 @@ are not yet linked to reachable mutations.
 
 **ORM mutation evidence** — SQLAlchemy, Django ORM, and Prisma are first-class.
 Sequelize, Mongoose, and TypeORM are detected for common method shapes
-(capitalized-model `create`/`update`/`destroy` is reported at low confidence).
-*Not yet:* Knex query-builder chains and `prisma.$transaction` grouping.
+(capitalized-model `create`/`update`/`destroy` and repository-pattern receiver
+names are reported at low confidence). Knex query-builder `insert`/`update`/
+`del` chains are detected when rooted at a known Knex instance (or conservative
+`knex`/`db` fallback), and Prisma transaction array/callback mutations retain a
+shared transaction-group identifier. *Not yet:* transaction behavior beyond
+directly analyzable Prisma client aliases.
 
 Issue #19 defines this shared contract. It does not add FastAPI, Express,
 Django/DRF, or Next.js analyzer behavior.

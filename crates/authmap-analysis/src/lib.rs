@@ -2268,15 +2268,27 @@ fn call_argument_nodes(call: Node<'_>) -> Vec<Node<'_>> {
 
 fn extract_prisma_mutations(parsed: &ParsedFile, root: Node<'_>) -> Vec<Mutation> {
     let mut mutations = Vec::new();
+    let knex_symbols = knex_instance_symbols(parsed);
     let mut stack = vec![root];
     while let Some(node) = stack.pop() {
         if matches!(node.kind(), "call_expression" | "call")
             && let Some(function) = node.child_by_field_name("function")
         {
             let function_text = parsed.text_for(function).unwrap_or_default();
-            if let Some(mutation) = prisma_mutation_from_call(parsed, node, function_text)
-                .or_else(|| js_orm_mutation_from_call(parsed, node, function_text))
+            let transaction = prisma_transaction_context(parsed, node);
+            if let Some(mut mutation) = prisma_mutation_from_call(
+                parsed,
+                node,
+                function_text,
+                transaction
+                    .as_ref()
+                    .and_then(|context| context.alias.as_deref()),
+            )
+            .or_else(|| js_orm_mutation_from_call(parsed, node, function_text, &knex_symbols))
             {
+                if let Some(transaction) = transaction {
+                    add_transaction_group(&mut mutation, &transaction.group_id);
+                }
                 mutations.push(mutation);
             }
         }
@@ -2297,11 +2309,13 @@ const JS_NON_MODEL_RECEIVERS: &[&str] = &[
 /// Detects mutations from the common non-Prisma Node ORMs (Sequelize, TypeORM,
 /// Mongoose). Conservative: only distinctive method names, repository-gated
 /// TypeORM calls, and capitalized-model `create/update/destroy` (excluding JS
-/// built-ins) are reported. Knex query-builder chains are not yet handled.
+/// built-ins) are reported. Knex query-builder chains are recognized when their
+/// root is a known Knex instance or a conservative `knex`/`db` fallback.
 fn js_orm_mutation_from_call(
     parsed: &ParsedFile,
     call: Node<'_>,
     function_text: &str,
+    knex_symbols: &BTreeSet<String>,
 ) -> Option<Mutation> {
     let parts = function_text.split('.').collect::<Vec<_>>();
     if parts.len() < 2 {
@@ -2310,6 +2324,12 @@ fn js_orm_mutation_from_call(
     let method = parts.last().copied().unwrap_or_default();
     let receiver = terminal_symbol_name(parts[parts.len() - 2]);
     let span = parsed.span_for(call);
+
+    if let Some(mutation) =
+        knex_mutation_from_call(parsed, call, function_text, &receiver, method, knex_symbols)
+    {
+        return Some(mutation);
+    }
 
     // Distinctive Mongoose document/query methods.
     let mongoose = match method {
@@ -2354,9 +2374,9 @@ fn js_orm_mutation_from_call(
         _ => {}
     }
 
-    // TypeORM repository methods (receiver looks like a repository).
-    let receiver_lower = receiver.to_ascii_lowercase();
-    if receiver_lower.contains("repo") || receiver_lower.ends_with("repository") {
+    // TypeORM repository methods retain medium confidence when the receiver
+    // explicitly identifies as a repo/repository.
+    if receiver_has_token(&receiver, &["repo", "repository"]) {
         let operation = match method {
             "save" | "insert" => Some(MutationOperation::Create),
             "update" => Some(MutationOperation::Update),
@@ -2370,6 +2390,27 @@ fn js_orm_mutation_from_call(
                 Some(receiver),
                 span,
                 Confidence::Medium,
+            ));
+        }
+    }
+
+    // Repository-pattern receivers are common but naming alone is ambiguous.
+    // Keep these facts low confidence for review rather than claiming a model.
+    if receiver_has_token(&receiver, &["store", "dao", "manager"]) {
+        let operation = match method {
+            "save" | "insert" | "create" => Some(MutationOperation::Create),
+            "persist" => Some(MutationOperation::Save),
+            "update" => Some(MutationOperation::Update),
+            "delete" | "remove" | "softDelete" | "softRemove" => Some(MutationOperation::Delete),
+            _ => None,
+        };
+        if let Some(operation) = operation {
+            return Some(orm_mutation(
+                operation,
+                "repository",
+                Some(receiver),
+                span,
+                Confidence::Low,
             ));
         }
     }
@@ -2402,13 +2443,178 @@ fn js_orm_mutation_from_call(
     None
 }
 
+fn knex_instance_symbols(parsed: &ParsedFile) -> BTreeSet<String> {
+    parsed
+        .text
+        .lines()
+        .filter_map(|line| {
+            let (left, right) = line.split_once('=')?;
+            let right = right.trim();
+            (right.contains("knex(")
+                || right.contains("require('knex')")
+                || right.contains("require(\"knex\")"))
+            .then(|| {
+                left.split_whitespace()
+                    .last()
+                    .map(terminal_symbol_name)
+                    .unwrap_or_default()
+            })
+        })
+        .filter(|symbol| !symbol.is_empty())
+        .collect()
+}
+
+fn knex_mutation_from_call(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    function_text: &str,
+    receiver: &str,
+    method: &str,
+    knex_symbols: &BTreeSet<String>,
+) -> Option<Mutation> {
+    let root = function_text
+        .split(['.', '('])
+        .next()
+        .map(terminal_symbol_name)?;
+    let known_instance = knex_symbols.contains(&root);
+    let fallback_instance = matches!(root.as_str(), "knex" | "db");
+    if !known_instance && !fallback_instance {
+        return None;
+    }
+    let operation = match method {
+        "insert" => MutationOperation::Create,
+        "update" => MutationOperation::Update,
+        "del" | "delete" => MutationOperation::Delete,
+        "upsert" => MutationOperation::UnknownMutation,
+        _ => return None,
+    };
+    let confidence = if known_instance {
+        Confidence::Medium
+    } else {
+        Confidence::Low
+    };
+    let resource = knex_table_name(function_text);
+    let mut mutation = orm_mutation(
+        operation,
+        "knex",
+        resource,
+        parsed.span_for(call),
+        confidence,
+    );
+    if !known_instance {
+        mutation.notes.push(format!(
+            "Knex-like receiver `{receiver}` was inferred from its conventional name"
+        ));
+    }
+    if operation == MutationOperation::UnknownMutation {
+        mutation.confidence = Confidence::Low;
+        mutation
+            .notes
+            .push("Knex upsert may create or update data and requires review".to_string());
+        mutation.extensions = review_required_extension(
+            "unknown_operation",
+            "Knex upsert may create or update data and requires review",
+        );
+    }
+    Some(mutation)
+}
+
+fn knex_table_name(function_text: &str) -> Option<String> {
+    let table_call = function_text
+        .find(".table(")
+        .map(|index| &function_text[index + ".table".len()..])
+        .or_else(|| function_text.find('(').map(|index| &function_text[index..]))?;
+    first_static_string_like(table_call)
+}
+
+fn receiver_has_token(receiver: &str, expected: &[&str]) -> bool {
+    let tokens = symbol_tokens(receiver);
+    expected
+        .iter()
+        .any(|item| tokens.iter().any(|token| token == item))
+}
+
+#[derive(Clone, Debug)]
+struct PrismaTransactionContext {
+    group_id: String,
+    alias: Option<String>,
+}
+
+fn prisma_transaction_context(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+) -> Option<PrismaTransactionContext> {
+    let mut ancestor = call.parent();
+    while let Some(node) = ancestor {
+        if matches!(node.kind(), "call" | "call_expression")
+            && let Some(function) = node.child_by_field_name("function")
+            && parsed.text_for(function) == Some("prisma.$transaction")
+        {
+            let group_id = format!(
+                "prisma_transaction:{}:{}",
+                parsed.source.path,
+                node.start_byte()
+            );
+            return Some(PrismaTransactionContext {
+                group_id,
+                alias: transaction_callback_alias(parsed, node, call),
+            });
+        }
+        ancestor = node.parent();
+    }
+    None
+}
+
+fn transaction_callback_alias(
+    parsed: &ParsedFile,
+    transaction: Node<'_>,
+    call: Node<'_>,
+) -> Option<String> {
+    call_argument_nodes(transaction)
+        .into_iter()
+        .find(|argument| {
+            matches!(argument.kind(), "arrow_function" | "function_expression")
+                && argument.start_byte() <= call.start_byte()
+                && argument.end_byte() >= call.end_byte()
+        })
+        .and_then(|callback| {
+            callback
+                .child_by_field_name("parameters")
+                .and_then(|parameters| parsed.text_for(parameters))
+                .and_then(first_identifier)
+        })
+}
+
+fn first_identifier(text: &str) -> Option<String> {
+    text.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+        .find(|item| !item.is_empty() && !matches!(*item, "async"))
+        .map(str::to_string)
+}
+
+fn add_transaction_group(mutation: &mut Mutation, group_id: &str) {
+    let metadata = mutation
+        .extensions
+        .entry("authmap.mutation".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    if let Some(metadata) = metadata.as_object_mut() {
+        metadata.insert(
+            "transaction_group_id".to_string(),
+            serde_json::Value::String(group_id.to_string()),
+        );
+    }
+}
+
 fn prisma_mutation_from_call(
     parsed: &ParsedFile,
     call: Node<'_>,
     function_text: &str,
+    transaction_alias: Option<&str>,
 ) -> Option<Mutation> {
     let parts = function_text.split('.').collect::<Vec<_>>();
-    if parts.len() < 2 || parts.first().copied() != Some("prisma") {
+    if parts.len() < 2
+        || !matches!(parts.first().copied(), Some("prisma"))
+            && transaction_alias.is_none_or(|alias| parts.first().copied() != Some(alias))
+    {
         return None;
     }
     let method = parts.last().copied().unwrap_or_default();
@@ -3490,10 +3696,46 @@ fn mutation_inside_node_excluding_nested_scopes(
     if !mutation_inside_node(file, node, mutation) {
         return false;
     }
+    mutation.span.as_ref().is_none_or(|span| {
+        !span_is_inside_nested_scope(parsed, node, span)
+            || (mutation_transaction_group(mutation).is_some()
+                && span_is_inside_prisma_transaction_callback(parsed, node, span))
+    })
+}
+
+fn mutation_transaction_group(mutation: &Mutation) -> Option<&str> {
     mutation
-        .span
-        .as_ref()
-        .is_none_or(|span| !span_is_inside_nested_scope(parsed, node, span))
+        .extensions
+        .get("authmap.mutation")
+        .and_then(|metadata| metadata.get("transaction_group_id"))
+        .and_then(serde_json::Value::as_str)
+}
+
+fn span_is_inside_prisma_transaction_callback(
+    parsed: &ParsedFile,
+    root: Node<'_>,
+    span: &Span,
+) -> bool {
+    let Some(range) = span.byte_range.as_ref() else {
+        return false;
+    };
+    let mut stack = vec![root];
+    while let Some(current) = stack.pop() {
+        if matches!(current.kind(), "call" | "call_expression")
+            && let Some(function) = current.child_by_field_name("function")
+            && parsed.text_for(function) == Some("prisma.$transaction")
+            && call_argument_nodes(current).into_iter().any(|argument| {
+                matches!(argument.kind(), "arrow_function" | "function_expression")
+                    && range.start >= argument.start_byte() as u64
+                    && range.end <= argument.end_byte() as u64
+            })
+        {
+            return true;
+        }
+        let mut cursor = current.walk();
+        stack.extend(current.children(&mut cursor));
+    }
+    false
 }
 
 fn span_is_inside_nested_scope(parsed: &ParsedFile, root: Node<'_>, span: &Span) -> bool {
@@ -7274,7 +7516,7 @@ impl ScanError {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::path::{Path, PathBuf};
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -7289,9 +7531,9 @@ mod tests {
 
     use super::{
         EvidenceRules, classify_coverage, enabled_frameworks_for_sources, framework_name_for_hint,
-        normalize_adapter_evidence, normalize_module_path, resolve_python_module, route_id_remaps,
-        run_scan, run_scan_with_started_at, source_needs_syntax_tree, suggest_rules,
-        suggest_rules_with_started_at,
+        mutation_transaction_group, normalize_adapter_evidence, normalize_module_path,
+        resolve_python_module, route_id_remaps, run_scan, run_scan_with_started_at,
+        source_needs_syntax_tree, suggest_rules, suggest_rules_with_started_at,
     };
 
     #[test]
@@ -8900,9 +9142,10 @@ sensitivity:
 
         assert_eq!(document.routes.len(), 0);
         assert_eq!(document.links.len(), 0);
-        // 21 original + 2 SQLAlchemy (insert-via-execute, merge) + 8 Node ORM
-        // (Sequelize/Mongoose/TypeORM).
-        assert_eq!(document.mutations.len(), 31);
+        // 21 original + 2 SQLAlchemy (insert-via-execute, merge) + 15 Node ORM
+        // (Sequelize/Mongoose/TypeORM, Knex, repository patterns) + 3 Prisma
+        // transaction mutations.
+        assert_eq!(document.mutations.len(), 41);
 
         assert_mutation(
             &document.mutations,
@@ -9017,6 +9260,77 @@ sensitivity:
             MutationOperation::Create,
             Some("repo"),
             Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "knex",
+            MutationOperation::Create,
+            Some("audit_logs"),
+            Confidence::Medium,
+        );
+        assert_review_required_mutation(
+            &document.mutations,
+            "knex",
+            MutationOperation::UnknownMutation,
+            "unknown_operation",
+        );
+        assert_mutation(
+            &document.mutations,
+            "knex",
+            MutationOperation::Update,
+            Some("accounts"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "knex",
+            MutationOperation::Delete,
+            Some("sessions"),
+            Confidence::Medium,
+        );
+        assert_mutation(
+            &document.mutations,
+            "repository",
+            MutationOperation::Create,
+            Some("userStore"),
+            Confidence::Low,
+        );
+        assert_mutation(
+            &document.mutations,
+            "repository",
+            MutationOperation::Create,
+            Some("orderDao"),
+            Confidence::Low,
+        );
+        assert_mutation(
+            &document.mutations,
+            "repository",
+            MutationOperation::Save,
+            Some("entityManager"),
+            Confidence::Low,
+        );
+        assert!(!document.mutations.iter().any(|mutation| {
+            mutation.library.as_deref() == Some("knex")
+                && mutation.resource.as_deref() == Some("events")
+        }));
+        let transaction_groups = document
+            .mutations
+            .iter()
+            .filter_map(|mutation| {
+                mutation
+                    .extensions
+                    .get("authmap.mutation")
+                    .and_then(|metadata| metadata.get("transaction_group_id"))
+                    .and_then(serde_json::Value::as_str)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(transaction_groups.len(), 3);
+        assert_eq!(
+            transaction_groups
+                .iter()
+                .filter(|group| group.contains("prisma_transaction"))
+                .count(),
+            3
         );
         assert_mutation(
             &document.mutations,
@@ -9163,6 +9477,51 @@ sensitivity:
                 "{path} should retain uncertainty link support"
             );
         }
+    }
+
+    #[test]
+    fn links_prisma_transaction_mutations_to_enclosing_express_handlers() {
+        let temp = TestDir::new("prisma-transaction-links");
+        write_file(
+            &temp.path().join("app.js"),
+            "const express = require('express');\nconst app = express();\n\nasync function arrayHandler(req, res) {\n  await prisma.$transaction([\n    prisma.user.update({ where: { id: req.params.id }, data: { active: false } }),\n    prisma.session.delete({ where: { id: req.params.id } }),\n  ]);\n  res.sendStatus(204);\n}\n\nasync function callbackHandler(req, res) {\n  await prisma.$transaction(async (tx) => {\n    await tx.user.create({ data: { email: req.body.email } });\n  });\n  res.sendStatus(201);\n}\n\napp.post('/array/:id', arrayHandler);\napp.post('/callback', callbackHandler);\n",
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let document = run_scan(&plan).expect("scan should succeed");
+        assert_eq!(
+            document
+                .mutations
+                .iter()
+                .filter(|mutation| mutation.library.as_deref() == Some("prisma"))
+                .count(),
+            3
+        );
+        assert!(document.links.iter().any(|link| {
+            document.routes.iter().any(|route| {
+                route.id == link.route_id
+                    && route.path == "/array/:id"
+                    && link.mutation_id.is_some()
+            })
+        }));
+        assert!(document.links.iter().any(|link| {
+            document.routes.iter().any(|route| {
+                route.id == link.route_id && route.path == "/callback" && link.mutation_id.is_some()
+            })
+        }));
+        assert!(document.mutations.iter().all(|mutation| {
+            mutation.library.as_deref() != Some("prisma")
+                || mutation_transaction_group(mutation).is_some()
+        }));
+        let mut mutations_by_group = BTreeMap::<&str, usize>::new();
+        for mutation in &document.mutations {
+            if let Some(group) = mutation_transaction_group(mutation) {
+                *mutations_by_group.entry(group).or_default() += 1;
+            }
+        }
+        assert_eq!(mutations_by_group.len(), 2);
+        assert!(mutations_by_group.values().any(|count| *count == 2));
+        assert!(mutations_by_group.values().any(|count| *count == 1));
     }
 
     #[test]

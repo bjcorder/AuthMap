@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+- Added Knex query-builder, Prisma transaction-group, and repository-pattern
+  mutation evidence for improved route-to-mutation analysis.
 - Added configurable authorization guard synonym families and low-confidence,
   token-boundary guard classification heuristics.
 - Added a Criterion performance benchmark harness and a CI performance
