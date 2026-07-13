@@ -4810,8 +4810,133 @@ fn extract_django_route_evidence(
             class_name,
         ));
     }
+    if route.framework == Framework::DjangoRestFramework {
+        let metadata = route.extensions.get("authmap.django");
+        let action_permissions = metadata
+            .and_then(|value| value.get("action_permission_classes"))
+            .and_then(serde_json::Value::as_str);
+        let action_authentication = metadata
+            .and_then(|value| value.get("action_authentication_classes"))
+            .and_then(serde_json::Value::as_str);
+        if action_permissions.is_some() || action_authentication.is_some() {
+            evidence.retain(|item| {
+                !matches!(
+                    item.mechanism.as_str(),
+                    "drf_permission_classes" | "django_authentication_classes"
+                )
+            });
+            if let Some(value) = action_permissions {
+                evidence.push(django_permission_value_evidence(
+                    route,
+                    value,
+                    handler.span.clone(),
+                    "drf_action_permission_classes",
+                    Confidence::High,
+                ));
+            }
+            if let Some(value) = action_authentication {
+                evidence.push(django_authentication_value_evidence(
+                    route,
+                    value,
+                    handler.span.clone(),
+                    "drf_action_authentication_classes",
+                    Confidence::High,
+                ));
+            }
+        } else if !evidence.iter().any(|item| {
+            matches!(
+                item.mechanism.as_str(),
+                "drf_permission_classes" | "django_authentication_classes"
+            )
+        }) {
+            let default_permissions = metadata
+                .and_then(|value| value.get("default_permission_classes"))
+                .and_then(serde_json::Value::as_str);
+            let default_authentication = metadata
+                .and_then(|value| value.get("default_authentication_classes"))
+                .and_then(serde_json::Value::as_str);
+            let dynamic = metadata
+                .and_then(|value| value.get("default_permissions_dynamic"))
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
+            if let Some(value) = default_permissions {
+                evidence.push(django_permission_value_evidence(
+                    route,
+                    value,
+                    handler.span.clone(),
+                    "drf_settings_default_permission_classes",
+                    if dynamic {
+                        Confidence::Low
+                    } else {
+                        Confidence::High
+                    },
+                ));
+            }
+            if let Some(value) = default_authentication {
+                evidence.push(django_authentication_value_evidence(
+                    route,
+                    value,
+                    handler.span.clone(),
+                    "drf_settings_default_authentication_classes",
+                    if dynamic {
+                        Confidence::Low
+                    } else {
+                        Confidence::High
+                    },
+                ));
+            }
+        }
+    }
     evidence.extend(extract_route_param_scoping_evidence(route));
     evidence
+}
+
+fn django_permission_value_evidence(
+    route: &authmap_core::Route,
+    value: &str,
+    span: Option<Span>,
+    mechanism: &str,
+    confidence: Confidence,
+) -> Evidence {
+    let (evidence_type, _, symbol_name) =
+        classify_drf_permission_classes(&value.to_ascii_lowercase());
+    Evidence {
+        id: String::new(),
+        route_id: Some(route.id.clone()),
+        evidence_type,
+        mechanism: mechanism.to_string(),
+        symbol: Some(SymbolRef {
+            name: symbol_name,
+            span: span.clone(),
+        }),
+        span,
+        confidence,
+        notes: vec![format!("DRF permission declaration: {value}")],
+        extensions: authmap_core::ExtensionMap::new(),
+    }
+}
+
+fn django_authentication_value_evidence(
+    route: &authmap_core::Route,
+    value: &str,
+    span: Option<Span>,
+    mechanism: &str,
+    confidence: Confidence,
+) -> Evidence {
+    Evidence {
+        id: String::new(),
+        route_id: Some(route.id.clone()),
+        evidence_type: EvidenceType::Authn,
+        mechanism: mechanism.to_string(),
+        symbol: Some(SymbolRef {
+            name: value.to_string(),
+            span: span.clone(),
+        }),
+        span,
+        confidence,
+        notes: vec![format!("DRF authentication declaration: {value}")],
+        extensions: authmap_core::ExtensionMap::new(),
+    }
 }
 
 fn extract_nextjs_route_evidence(
@@ -5598,6 +5723,9 @@ fn extract_django_class_evidence(
         evidence.extend(extract_django_class_attribute_evidence(
             route, class, inherited, rules,
         ));
+        evidence.extend(extract_django_method_decorator_evidence(
+            route, class, rules, inherited,
+        ));
         for method_name in [
             "initial",
             "dispatch",
@@ -5626,6 +5754,47 @@ fn extract_django_class_evidence(
         }
     }
     evidence
+}
+
+fn extract_django_method_decorator_evidence(
+    route: &authmap_core::Route,
+    class: &PythonClassDef<'_>,
+    rules: &EvidenceRules,
+    inherited: bool,
+) -> Vec<Evidence> {
+    let Some(decorated) = class
+        .node
+        .parent()
+        .filter(|node| node.kind() == "decorated_definition")
+    else {
+        return Vec::new();
+    };
+    let mut cursor = decorated.walk();
+    decorated
+        .children(&mut cursor)
+        .filter(|node| node.kind() == "decorator")
+        .filter_map(|decorator| {
+            let text = class.parsed.text_for(decorator)?;
+            let stripped = text.trim_start_matches('@').trim();
+            let args = stripped.strip_prefix("method_decorator(")?;
+            let guard = args.split(',').next()?.trim();
+            let guard = terminal_symbol_name(guard);
+            let mut evidence = django_decorator_evidence(
+                route,
+                &guard,
+                "",
+                class.parsed.span_for(decorator),
+                rules,
+            )?;
+            if inherited && evidence.confidence == Confidence::High {
+                evidence.confidence = Confidence::Medium;
+            }
+            evidence
+                .notes
+                .push("Django method_decorator applies to class dispatch".to_string());
+            Some(evidence)
+        })
+        .collect()
 }
 
 fn extract_django_base_evidence(
@@ -9871,6 +10040,61 @@ def update_account(account_id: str):
                 .as_ref()
                 .is_some_and(|symbol| symbol.name == "observeRequests")
         }));
+    }
+
+    #[test]
+    fn django_permission_defaults_action_overrides_decorators_mixins_and_multiline_imports() {
+        let temp = TestDir::new("django-permission-gaps");
+        write_file(
+            &temp.path().join("settings.py"),
+            "REST_FRAMEWORK = {\n    'DEFAULT_PERMISSION_CLASSES': [IsAuthenticated],\n}\n",
+        );
+        write_file(
+            &temp.path().join("views.py"),
+            "from django.contrib.auth.decorators import login_required\nfrom django.utils.decorators import method_decorator\nfrom django.views import View\nfrom rest_framework.decorators import action\nfrom rest_framework.viewsets import ModelViewSet\n\nclass OverrideViewSet(ModelViewSet):\n    def list(self, request):\n        return []\n\n    @action(detail=False, methods=['post'], permission_classes=[IsAdminUser])\n    def rotate(self, request):\n        return None\n\n@method_decorator(login_required, name='dispatch')\nclass DecoratedView(View):\n    def get(self, request):\n        return None\n\nclass ProjectMixin(LoginRequiredMixin):\n    pass\n\nclass ChainedMixinView(ProjectMixin, View):\n    def get(self, request):\n        return None\n\ndef multiline_view(request):\n    return None\n",
+        );
+        write_file(
+            &temp.path().join("urls.py"),
+            "from django.urls import include, path\nfrom rest_framework.routers import SimpleRouter\nfrom .views import OverrideViewSet\nfrom .views import (\n    DecoratedView,\n    ChainedMixinView,\n    multiline_view,\n)\n\nrouter = SimpleRouter()\nrouter.register('override', OverrideViewSet, basename='override')\nurlpatterns = [\n    path('decorated/', DecoratedView.as_view()),\n    path('chained/', ChainedMixinView.as_view()),\n    path('multiline/', multiline_view),\n    path('api/', include(router.urls)),\n]\n",
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let document = run_scan(&plan).expect("scan should succeed");
+        let default_route = route_by_path(&document, "/api/override");
+        let action_route = route_by_path(&document, "/api/override/rotate");
+        let decorated_route = route_by_path(&document, "/decorated/");
+        let chained_route = route_by_path(&document, "/chained/");
+        let multiline_route = route_by_path(&document, "/multiline/");
+
+        assert_eq!(
+            coverage_for_route(&document, &default_route.id).class,
+            CoverageClass::AuthnOnly
+        );
+        assert_eq!(
+            coverage_for_route(&document, &action_route.id).class,
+            CoverageClass::AdminGuarded
+        );
+        assert_eq!(
+            coverage_for_route(&document, &decorated_route.id).class,
+            CoverageClass::AuthnOnly
+        );
+        assert_eq!(
+            coverage_for_route(&document, &chained_route.id).class,
+            CoverageClass::AuthnOnly
+        );
+        assert_eq!(
+            multiline_route
+                .handler
+                .as_ref()
+                .map(|handler| handler.name.as_str()),
+            Some("multiline_view")
+        );
+        assert!(
+            !document
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "django_unresolved_handler")
+        );
     }
 
     #[test]

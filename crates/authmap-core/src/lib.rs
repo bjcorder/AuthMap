@@ -198,6 +198,7 @@ pub mod diagnostic_codes {
     pub const DJANGO_DYNAMIC_INCLUDE_HELPER: &str = "django_dynamic_include_helper";
     pub const DJANGO_INCLUDE_DEPTH_EXCEEDED: &str = "django_include_depth_exceeded";
     pub const DJANGO_DYNAMIC_URL_PATH: &str = "django_dynamic_url_path";
+    pub const DJANGO_DYNAMIC_SETTINGS_DEFAULT: &str = "django_dynamic_settings_default";
     pub const DJANGO_UNRESOLVED_HANDLER: &str = "django_unresolved_handler";
     pub const DJANGO_UNRESOLVED_INCLUDE: &str = "django_unresolved_include";
     pub const DJANGO_URLPATTERN_CONTEXT_UNCERTAIN: &str = "django_urlpattern_context_uncertain";
@@ -310,6 +311,10 @@ pub const FIRST_PARTY_DIAGNOSTIC_CODES: &[(&str, DiagnosticCategory)] = &[
     ),
     (
         diagnostic_codes::DJANGO_DYNAMIC_URL_PATH,
+        DiagnosticCategory::Adapter,
+    ),
+    (
+        diagnostic_codes::DJANGO_DYNAMIC_SETTINGS_DEFAULT,
         DiagnosticCategory::Adapter,
     ),
     (

@@ -51,6 +51,7 @@ emitting them.
 | `django_dynamic_include_helper` | Django include target is a helper call that could not be expanded statically |
 | `django_include_depth_exceeded` | Django include chain exceeded the maximum static include depth |
 | `django_dynamic_url_path` | Django URL path is dynamic and could not be resolved |
+| `django_dynamic_settings_default` | DRF settings default is dynamic and emitted as review-only context |
 | `django_unresolved_handler` | Django URL handler could not be resolved statically |
 | `django_unresolved_include` | Django include module could not be resolved statically |
 | `django_urlpattern_context_uncertain` | Django URL helper call was outside a recognized `urlpatterns` context |
