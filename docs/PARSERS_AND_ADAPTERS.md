@@ -104,9 +104,9 @@ per-`@action` `permission_classes` overrides.
 
 **Express** — `app`/`router` method calls, mounted routers with prefix
 composition, route-level and array middleware, route chaining, and
-`options`/`head`. *Not yet:* `app.all` catch-all routes with a terminal handler,
-prefix-less `router.use`/`app.use` propagation, `app.param`, and dynamic
-`app[method]` dispatch.
+`options`/`head`/`all` terminal handlers. Prefix-less `router.use`/`app.use`
+middleware applies to later registrations on the same receiver and propagates
+through later mounts. *Not yet:* `app.param` and dynamic `app[method]` dispatch.
 
 **Next.js** — App Router `route.ts` handlers (all export forms), Pages Router
 `pages/api/**` default-export handlers, and `middleware.ts` whose `config.matcher`

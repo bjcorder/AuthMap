@@ -8569,7 +8569,24 @@ sensitivity:
         let plan = ScanPlan::new(vec![target], None, ScanConfig::default());
         let document = run_scan(&plan).expect("scan should succeed");
 
-        assert_eq!(document.routes.len(), 29);
+        assert_eq!(document.routes.len(), 32);
+        assert!(document.routes.iter().any(|route| {
+            route.method == "GET" && route.path == "/global/before" && route.middleware.is_empty()
+        }));
+        assert!(document.routes.iter().any(|route| {
+            route.method == "GET"
+                && route.path == "/global/after"
+                && route
+                    .middleware
+                    .iter()
+                    .any(|middleware| middleware.name == "requireAuth")
+        }));
+        assert!(
+            document
+                .routes
+                .iter()
+                .any(|route| route.method == "ANY" && route.path == "/admin/*")
+        );
         assert!(document.routes.iter().any(|route| {
             route.framework == authmap_core::Framework::Express
                 && route.method == "POST"
@@ -9813,6 +9830,46 @@ def update_account(account_id: str):
                     .notes
                     .iter()
                     .any(|note| note.contains("configured guard synonym"))
+        }));
+    }
+
+    #[test]
+    fn express_global_middleware_respects_order_without_fabricating_guard_evidence() {
+        let temp = TestDir::new("express-global-middleware");
+        write_file(
+            &temp.path().join("app.js"),
+            "const express = require('express');\nconst app = express();\n\nfunction requireAuth(req, res, next) { next(); }\nfunction observeRequests(req, res, next) { next(); }\nfunction handler(req, res) { res.json({}); }\n\napp.get('/before', handler);\napp.use(requireAuth);\napp.get('/after', handler);\napp.use(observeRequests);\napp.get('/unknown', handler);\napp.all('/admin/*', requireAuth, handler);\n",
+        );
+        let plan = ScanPlan::new(vec![temp.path().to_path_buf()], None, ScanConfig::default());
+
+        let document = run_scan(&plan).expect("scan should succeed");
+        let before = route_by_path(&document, "/before");
+        let after = route_by_path(&document, "/after");
+        let unknown = route_by_path(&document, "/unknown");
+        let catch_all = route_by_path(&document, "/admin/*");
+
+        assert_eq!(
+            coverage_for_route(&document, &before.id).class,
+            CoverageClass::Unauthenticated
+        );
+        assert_eq!(
+            coverage_for_route(&document, &after.id).class,
+            CoverageClass::AuthnOnly
+        );
+        assert_eq!(
+            coverage_for_route(&document, &unknown.id).class,
+            CoverageClass::AuthnOnly
+        );
+        assert_eq!(catch_all.method, "ANY");
+        assert_eq!(
+            coverage_for_route(&document, &catch_all.id).class,
+            CoverageClass::AuthnOnly
+        );
+        assert!(!document.evidence.iter().any(|evidence| {
+            evidence
+                .symbol
+                .as_ref()
+                .is_some_and(|symbol| symbol.name == "observeRequests")
         }));
     }
 

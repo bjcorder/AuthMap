@@ -98,4 +98,9 @@ app.use("/exported", exportedRouter);
 app.use(dynamicPrefix, childRouter);
 app.use("/missing", missingRouter);
 
+app.get("/global/before", listAccounts);
+app.use(requireAuth);
+app.get("/global/after", listAccounts);
+app.all("/admin/*", requireAuth, listAccounts);
+
 module.exports = app;

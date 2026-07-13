@@ -2622,6 +2622,14 @@ struct ExpressPrefixMiddleware {
 }
 
 #[derive(Clone, Debug)]
+struct ExpressGlobalMiddleware {
+    file: String,
+    owner_name: String,
+    middleware: Vec<SymbolRef>,
+    offset: usize,
+}
+
+#[derive(Clone, Debug)]
 struct MountedRouter {
     binding: ExpressBinding,
     prefixes: Vec<String>,
@@ -2670,6 +2678,7 @@ struct ExpressIndex {
     definitions_by_file: HashMap<String, HashMap<String, Span>>,
     mounts: Vec<ExpressMount>,
     prefix_middleware: Vec<ExpressPrefixMiddleware>,
+    global_middleware: Vec<ExpressGlobalMiddleware>,
     routes: Vec<ExpressRouteFact>,
     factories: Vec<ExpressFactory>,
     factory_calls: Vec<ExpressFactoryCall>,
@@ -2678,7 +2687,8 @@ struct ExpressIndex {
 
 impl ExpressIndex {
     fn into_output(self) -> AdapterOutput {
-        let route_facts = self.expanded_route_facts();
+        let mut route_facts = self.expanded_route_facts();
+        apply_express_global_middleware_to_facts(&mut route_facts, &self.global_middleware);
         let mut diagnostics = self.diagnostics;
         let mut bindings = HashMap::<(String, String), ExpressBinding>::new();
         for binding in &self.bindings {
@@ -2755,7 +2765,19 @@ impl ExpressIndex {
             mounted.push(MountedRouter {
                 binding: child,
                 prefixes,
-                middleware: mount.middleware.clone(),
+                middleware: merged_middleware(
+                    &global_middleware_before(
+                        &self.global_middleware,
+                        &mount.file,
+                        &mount.parent_name,
+                        mount
+                            .span
+                            .byte_range
+                            .as_ref()
+                            .map_or(0, |range| range.start as usize),
+                    ),
+                    &mount.middleware,
+                ),
                 dynamic_prefix: mount.dynamic_prefix,
                 dynamic_prefix_spans: mount.dynamic_prefix_span.iter().cloned().collect(),
                 lineage,
@@ -2803,6 +2825,16 @@ impl ExpressIndex {
                     prefixes.push(prefix.clone());
                 }
                 let mut middleware = parent_mount.middleware;
+                middleware.extend(global_middleware_before(
+                    &self.global_middleware,
+                    &mount.file,
+                    &mount.parent_name,
+                    mount
+                        .span
+                        .byte_range
+                        .as_ref()
+                        .map_or(0, |range| range.start as usize),
+                ));
                 middleware.extend(mount.middleware.clone());
                 let dynamic = parent_mount.dynamic_prefix || mount.dynamic_prefix;
                 let mut dynamic_prefix_spans = parent_mount.dynamic_prefix_spans;
@@ -2996,6 +3028,75 @@ fn apply_express_prefix_middleware(
         added.extend(route.middleware.clone());
         route.middleware = dedup_symbol_refs(added);
     }
+}
+
+fn apply_express_global_middleware_to_facts(
+    facts: &mut [ExpressRouteFact],
+    global_middleware: &[ExpressGlobalMiddleware],
+) {
+    for fact in facts {
+        let offset = fact
+            .span
+            .byte_range
+            .as_ref()
+            .map_or(0, |range| range.start as usize);
+        let added = global_middleware_before(
+            global_middleware,
+            &fact.owner_file,
+            &fact.owner_name,
+            offset,
+        );
+        if added.is_empty() {
+            continue;
+        }
+        let has_unknown_global = added
+            .iter()
+            .any(|middleware| !looks_like_express_authorization_middleware(&middleware.name));
+        let mut middleware = added;
+        middleware.extend(fact.middleware.clone());
+        fact.middleware = dedup_symbol_refs(middleware);
+        if has_unknown_global {
+            fact.notes.push(
+                "Express prefix-less middleware applies by registration order but its authorization semantics were not recognized"
+                    .to_string(),
+            );
+        }
+    }
+}
+
+fn looks_like_express_authorization_middleware(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    [
+        "auth",
+        "permission",
+        "role",
+        "tenant",
+        "owner",
+        "admin",
+        "login",
+        "session",
+    ]
+    .iter()
+    .any(|token| lower.contains(token))
+}
+
+fn global_middleware_before(
+    global_middleware: &[ExpressGlobalMiddleware],
+    file: &str,
+    owner_name: &str,
+    offset: usize,
+) -> Vec<SymbolRef> {
+    let mut applicable = global_middleware
+        .iter()
+        .filter(|global| {
+            global.file == file && global.owner_name == owner_name && global.offset < offset
+        })
+        .collect::<Vec<_>>();
+    applicable.sort_by_key(|global| global.offset);
+    applicable
+        .into_iter()
+        .flat_map(|global| global.middleware.iter().cloned())
+        .collect()
 }
 
 fn express_path_matches_prefix(path: &str, prefix: &str) -> bool {
@@ -3261,6 +3362,13 @@ impl<'a> ExpressCollector<'a> {
             return;
         }
         if member == "all" {
+            let definitions = self.index.definitions_by_file.get(&self.parsed.source.path);
+            let scope = self.current_factory_scope(call);
+            if let Some(mut route) = express_all_route(self.parsed, call, &owner, definitions) {
+                route.scope = scope;
+                self.push_route(route);
+                return;
+            }
             self.collect_prefix_middleware(call);
             return;
         }
@@ -3439,6 +3547,9 @@ impl<'a> ExpressCollector<'a> {
             if let Some(prefix) = prefix.clone() {
                 let middleware = symbols_from_route_args(self.parsed, child_candidates, None);
                 self.push_prefix_middleware(vec![prefix], middleware);
+            } else {
+                let middleware = symbols_from_route_args(self.parsed, child_candidates, None);
+                self.push_global_middleware(parent_name, call, middleware);
             }
             return;
         }
@@ -3516,6 +3627,23 @@ impl<'a> ExpressCollector<'a> {
         }
     }
 
+    fn push_global_middleware(
+        &mut self,
+        owner_name: &str,
+        call: Node<'_>,
+        middleware: Vec<SymbolRef>,
+    ) {
+        if middleware.is_empty() {
+            return;
+        }
+        self.index.global_middleware.push(ExpressGlobalMiddleware {
+            file: self.parsed.source.path.clone(),
+            owner_name: owner_name.to_string(),
+            middleware,
+            offset: call.start_byte(),
+        });
+    }
+
     fn push_route(&mut self, candidate: ExpressRouteCandidate) {
         let mut route = ExpressRouteFact {
             owner_file: self.parsed.source.path.clone(),
@@ -3576,6 +3704,39 @@ fn express_direct_route(
         scope: None,
         span: parsed.span_for(call),
     })
+}
+
+fn express_all_route(
+    parsed: &ParsedFile,
+    call: Node<'_>,
+    owner: &str,
+    definitions: Option<&HashMap<String, Span>>,
+) -> Option<ExpressRouteCandidate> {
+    let args = call_arguments(call);
+    if args.len() < 2 || !is_terminal_express_handler(*args.last()?) {
+        return None;
+    }
+    let (path, dynamic_path) = express_path(parsed, args[0]);
+    let symbols = symbols_from_route_args(parsed, &args[1..], definitions);
+    let (handler, middleware) = split_handler_middleware(symbols)?;
+    Some(ExpressRouteCandidate {
+        owner: owner.to_string(),
+        method: "ANY".to_string(),
+        path,
+        dynamic_path,
+        allow_unbound_owner: false,
+        handler,
+        middleware,
+        scope: None,
+        span: parsed.span_for(call),
+    })
+}
+
+fn is_terminal_express_handler(node: Node<'_>) -> bool {
+    matches!(
+        node.kind(),
+        "identifier" | "member_expression" | "arrow_function" | "function" | "function_expression"
+    )
 }
 
 fn express_route_chain(
@@ -4635,6 +4796,96 @@ app.head("/widgets", (req, res) => res.sendStatus(200));
     }
 
     #[test]
+    fn propagates_express_prefixless_middleware_by_registration_order() {
+        let parsed = parse_sources(&[(
+            "app.js".to_string(),
+            Language::JavaScript,
+            r#"
+const express = require("express");
+const app = express();
+
+app.get("/before", beforeHandler);
+app.use(requireAuth);
+app.get("/after", afterHandler);
+app.use(observeRequests);
+app.get("/unknown", unknownHandler);
+"#
+            .to_string(),
+        )]);
+        let output = ExpressAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert!(middleware_names(route(&output, "GET", "/before")).is_empty());
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/after")),
+            vec!["requireAuth"]
+        );
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/unknown")),
+            vec!["requireAuth", "observeRequests"]
+        );
+        assert!(
+            route(&output, "GET", "/unknown")
+                .notes
+                .iter()
+                .any(|note| note.contains("registration order"))
+        );
+    }
+
+    #[test]
+    fn mounted_express_router_inherits_preceding_global_middleware() {
+        let parsed = parse_sources(&[(
+            "app.js".to_string(),
+            Language::JavaScript,
+            r#"
+const express = require("express");
+const app = express();
+const router = express.Router();
+
+app.use(requireAuth);
+router.get("/reports", reportsHandler);
+app.use("/internal", router);
+"#
+            .to_string(),
+        )]);
+        let output = ExpressAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/internal/reports")),
+            vec!["requireAuth"]
+        );
+    }
+
+    #[test]
+    fn discovers_express_all_with_terminal_handler_as_any_route() {
+        let parsed = parse_sources(&[(
+            "app.js".to_string(),
+            Language::JavaScript,
+            r#"
+const express = require("express");
+const app = express();
+
+app.all("/admin/*", requireAuth, adminHandler);
+app.all("/middleware-only", requireAuth, requirePermission("admin"));
+"#
+            .to_string(),
+        )]);
+        let output = ExpressAdapter.discover_routes(&parsed, &AdapterContext::default());
+
+        let route = route(&output, "ANY", "/admin/*");
+        assert_eq!(
+            route.handler.as_ref().map(|handler| handler.name.as_str()),
+            Some("adminHandler")
+        );
+        assert_eq!(middleware_names(route), vec!["requireAuth"]);
+        assert!(
+            !output
+                .routes
+                .iter()
+                .any(|route| route.path == "/middleware-only" && route.method == "ANY")
+        );
+    }
+
+    #[test]
     fn discovers_fastapi_options_and_head_routes() {
         let parsed = parse_sources(&[(
             "app.py".to_string(),
@@ -4908,7 +5159,7 @@ async def ws_endpoint(websocket: WebSocket):
         ]);
         let output = ExpressAdapter.discover_routes(&parsed, &AdapterContext::default());
 
-        assert_eq!(output.routes.len(), 29);
+        assert_eq!(output.routes.len(), 32);
         assert!(
             output
                 .routes
@@ -4931,6 +5182,18 @@ async def ws_endpoint(websocket: WebSocket):
         );
         assert_eq!(middleware_names(health), vec!["requireAuth"]);
         assert_eq!(health.confidence, Confidence::High);
+
+        assert!(middleware_names(route(&output, "GET", "/global/before")).is_empty());
+        assert_eq!(
+            middleware_names(route(&output, "GET", "/global/after")),
+            vec!["requireAuth"]
+        );
+        assert!(
+            output
+                .routes
+                .iter()
+                .any(|route| route.method == "ANY" && route.path == "/admin/*")
+        );
 
         assert_eq!(
             middleware_names(route(&output, "GET", "/profile")),
