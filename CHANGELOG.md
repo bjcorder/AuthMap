@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+- Added Django/DRF settings-default, action-override, method-decorator,
+  multiline-import, and local mixin-chain permission evidence.
 - Added Express prefix-less middleware propagation with registration-order
   semantics and `app.all` catch-all route inventory.
 - Added Knex query-builder, Prisma transaction-group, and repository-pattern

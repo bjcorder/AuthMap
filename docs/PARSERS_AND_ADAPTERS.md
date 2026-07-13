@@ -98,9 +98,10 @@ and `urlpatterns += [...]`, DRF routers and `@action`, CBV mixins and
 (`@login_required`, `@permission_required`, `@user_passes_test`,
 `@staff_member_required`, `@api_view` + `@permission_classes`). Django ORM
 mutations include `create/get_or_create/update_or_create/bulk_create/update/
-bulk_update/delete/save`. *Not yet:* multi-line parenthesized imports,
-settings-level `DEFAULT_PERMISSION_CLASSES`, `@method_decorator` on CBVs, and
-per-`@action` `permission_classes` overrides.
+bulk_update/delete/save`. DRF settings defaults, per-`@action` permission
+overrides, `@method_decorator` CBV guards, multi-line parenthesized imports, and
+local mixin chains are resolved conservatively. *Not yet:* dynamic settings
+defaults beyond review-only context.
 
 **Express** — `app`/`router` method calls, mounted routers with prefix
 composition, route-level and array middleware, route chaining, and
