@@ -11,6 +11,10 @@ updates:
     labels:
       - dependencies
       - rust
+    groups:
+      compatible-rust:
+        update-types: [minor, patch]
+        exclude-patterns: ["tree-sitter*", jsonschema, criterion]
 
   - package-ecosystem: github-actions
     directory: /
@@ -23,3 +27,9 @@ updates:
     labels:
       - dependencies
       - github-actions
+    groups:
+      codeql:
+        patterns: ["github/codeql-action*"]
+      compatible-actions:
+        update-types: [minor, patch]
+        exclude-patterns: ["github/codeql-action*"]

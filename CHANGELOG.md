@@ -29,6 +29,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   checks during parsing to reduce scan overhead and runtime-budget overshoot.
 - Ported the release process to cargo-release-managed versioning, per-artifact
   checksums, source archives, SLSA provenance, and release verification docs.
+- Consolidated CI around staged `development-gate` and `release-gate` checks,
+  with `develop` as the integration branch and protected `main` as the release
+  branch.
 
 ## 0.1.0 - 2026-05-24
 

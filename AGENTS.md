@@ -31,6 +31,21 @@ The repository is a Rust Cargo workspace using Rust 2024. The canonical AuthMap 
 - `action.yml`: composite GitHub Action for CI reports, artifacts, optional SARIF upload, and baseline drift review.
 - `docs`: schema, diagnostics, configuration, and contributor-facing design docs.
 
+## Branch and release workflow
+
+- `develop` is the default integration branch; feature and ordinary maintenance
+  pull requests target it and are squash-merged after `development-gate`.
+- Promote `develop` to `main` with a merge commit after `release-gate`, then
+  merge `main` back into `develop`.
+- Hotfixes branch from `main`, pass `release-gate`, merge into `main`, and sync
+  back into `develop`.
+- Create a version tag only after promotion on the actual validated `main`
+  commit. Published tags are immutable; repair a bad release with the next
+  version and keep branch history recoverable.
+- `cargo-release` preparation branches are `release/*` rooted at `develop`.
+  Its `tag = false`, `push = false`, and `publish = false` settings prepare the
+  version commit without external publication.
+
 ## Common Commands
 
 Run these from the repository root:
