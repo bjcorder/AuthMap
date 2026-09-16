@@ -620,43 +620,35 @@ fn rules_suggest_help_shows_limit_overrides() {
 }
 
 #[test]
-fn ci_workflow_defines_cross_platform_rust_matrix_and_install_smoke() {
-    let root = repo_root();
-    let workflow = fs::read_to_string(root.join(".github/workflows/rust.yml"))
-        .expect("rust workflow should exist");
+fn ci_workflow_runs_staged_policy_and_binary_smoke() {
+    let workflow = fs::read_to_string(repo_root().join(".github/workflows/ci.yml"))
+        .expect("staged CI workflow should exist");
 
-    for runner in ["ubuntu-24.04", "macos-latest", "windows-2025"] {
-        assert!(workflow.contains(runner), "missing runner {runner}");
+    for required in [
+        "python3 scripts/ci_policy.py plan",
+        "python3 scripts/ci_policy.py check-gate",
+        "python3 -m unittest discover",
+        "fromJSON(needs.plan.outputs.matrix)",
+        "development-gate:",
+        "release-gate:",
+        "cargo fmt --all -- --check",
+        "cargo test --workspace --all-targets --locked",
+        "cargo package --list --manifest-path crates/authmap-cli/Cargo.toml --locked",
+        "cargo install --path crates/authmap-cli --locked",
+        "--format json --output",
+        "--format markdown --output",
+        "--format sarif --output",
+        "baseline create tests/fixtures/negative/frontend_only",
+        "diff --base",
+        "~/.cargo/registry",
+        "~/.cargo/git",
+    ] {
+        assert!(
+            workflow.contains(required),
+            "missing CI contract: {required}"
+        );
     }
-    for rust in ["\"1.95\"", "stable"] {
-        assert!(workflow.contains(rust), "missing Rust toolchain {rust}");
-    }
-    assert!(workflow.contains("permissions:"));
-    assert!(workflow.contains("contents: read"));
-    assert!(workflow.contains("toolchain: ${{ matrix.rust }}"));
-    assert!(workflow.contains("components: rustfmt"));
-    assert!(workflow.contains("actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"));
-    assert!(workflow.contains("~/.cargo/registry"));
-    assert!(workflow.contains("~/.cargo/git"));
-    assert!(!workflow.contains("target/"));
-    assert!(workflow.contains("cargo fmt --all -- --check"));
-    assert!(workflow.contains("cargo check --workspace --locked"));
-    assert!(workflow.contains("cargo test --workspace --all-targets --locked"));
-    assert!(
-        workflow.contains(
-            "cargo package --list --manifest-path crates/authmap-cli/Cargo.toml --locked"
-        )
-    );
-    assert!(workflow.contains("cargo metadata --no-deps --format-version 1"));
-    assert!(workflow.contains("cargo install --path crates/authmap-cli --locked"));
-    assert!(workflow.contains("& $authmap --help"));
-    assert!(workflow.contains("& $authmap --version"));
-    assert!(workflow.contains("--format json --output $json"));
-    assert!(workflow.contains("--format markdown --output $markdown"));
-    assert!(workflow.contains("baseline create tests/fixtures/negative/frontend_only"));
-    assert!(workflow.contains("diff --base $baseline --head $json"));
-    assert!(workflow.contains("RUST_BACKTRACE: \"1\""));
-    assert!(workflow.contains("CARGO_TERM_COLOR: always"));
+    assert!(!workflow.contains("cargo check --workspace"));
 }
 
 #[test]
@@ -727,12 +719,16 @@ fn release_docs_cover_runbook_and_slsa_verification() {
 
     for expected in [
         "cargo release",
-        "release/v${VERSION}",
-        "NEVER squash",
-        "git merge-base --is-ancestor",
+        "release/next",
+        "squash-merge it into",
+        "promotion PR from `develop` to `main`",
+        "merge commit after `release-gate` passes",
+        "gh pr create --base develop --head main",
+        r#"test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)""#,
+        r#"git tag -a "v${VERSION}" "$MAIN_SHA""#,
         "git push origin \"v${VERSION}\"",
         "slsa-verifier verify-artifact",
-        "Ozark-Security-Labs/AuthMap",
+        "gh repo view --json nameWithOwner --jq .nameWithOwner",
     ] {
         assert!(
             releasing.contains(expected),

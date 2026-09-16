@@ -39,9 +39,9 @@ merge `main` back into `develop` to keep the branches aligned. The merge need
 not change the version for documentation or other maintenance work.
 
 The consolidated `ci.yml` workflow stages checks by change type. Ordinary code
-changes run on Linux stable with formatting, locked checks, full workspace
-tests, and the CLI installation smoke test. The full release gate and weekly
-integration matrix add four cells (Linux stable, Linux 1.95, macOS 1.95, and
+changes run on Linux stable with formatting, full locked workspace tests
+(including all targets), and smoke tests of the existing CLI binary. The full
+release gate and weekly integration matrix use four cells total (Linux stable, Linux 1.95, macOS 1.95, and
 Windows 1.95), along with CodeQL, audit, dependency validation, performance,
 action smoke, and clean package checks. Dependency, action, and performance
 changes run targeted checks early. Docs-only changes

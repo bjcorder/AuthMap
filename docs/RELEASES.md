@@ -73,7 +73,7 @@ Before creating a release tag, maintainers should verify:
 1. `CHANGELOG.md` has a dated section for the release and an empty `Unreleased` section.
 2. The Cargo workspace version matches the intended tag.
 3. Schema compatibility notes are present when schema-facing behavior changed.
-4. The release commit has passed the normal Rust, docs, action smoke, security, and dependency determinism workflows.
+4. The promotion has passed `release-gate`, and the resulting `main` commit has passed its lightweight push smoke check.
 5. `cargo test --workspace --all-targets --locked` passes locally or in CI.
 6. `cargo package --list --manifest-path crates/authmap-cli/Cargo.toml --locked` shows only intended package contents.
 7. A clean `cargo install --path crates/authmap-cli --locked` can run `authmap --help` and `authmap --version`.
