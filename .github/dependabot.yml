@@ -11,6 +11,12 @@ updates:
     labels:
       - dependencies
       - rust
+    groups:
+      compatible-rust:
+        update-types: [minor, patch]
+      compatibility-sensitive:
+        patterns: [tree-sitter, tree-sitter-*, jsonschema, criterion]
+        update-types: [version-update:semver-major, version-update:semver-minor, version-update:semver-patch]
 
   - package-ecosystem: github-actions
     directory: /
@@ -23,3 +29,8 @@ updates:
     labels:
       - dependencies
       - github-actions
+    groups:
+      compatible-actions:
+        update-types: [minor, patch]
+      codeql:
+        patterns: [github/codeql-action]

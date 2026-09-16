@@ -1,0 +1,215 @@
+name: CI
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 11 * * 1"
+  workflow_dispatch:
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: read
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  plan:
+    name: CI plan
+    runs-on: ubuntu-24.04
+    outputs:
+      rust: ${{ steps.plan.outputs.rust }}
+      full: ${{ steps.plan.outputs.full }}
+      dependencies: ${{ steps.plan.outputs.dependencies }}
+    steps:
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+        with: { fetch-depth: 0, persist-credentials: false }
+      - id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = pull_request ]; then files="$(git diff --name-only "$BASE" "$SHA")"; else files="all"; fi
+          python3 - "$EVENT" "${{ github.base_ref }}" "$files" <<'PY'
+          import os, sys
+          event, base, files = sys.argv[1:]
+          names = files.splitlines()
+          docs_only = bool(names) and all(n.endswith(('.md', '.txt')) or n.startswith('docs/') for n in names)
+          dependencies = any(n in ('Cargo.toml','Cargo.lock') or n.startswith('.github/') for n in names)
+          full = event in ('schedule','workflow_dispatch') or (event == 'pull_request' and base == 'main')
+          print(f"rust={'false' if docs_only else 'true'}")
+          print(f"full={'true' if full else 'false'}")
+          print(f"dependencies={'true' if dependencies else 'false'}")
+          PY
+          python3 - "$EVENT" "${{ github.base_ref }}" "$files" >> "$GITHUB_OUTPUT" <<'PY'
+          import sys
+          event, base, files = sys.argv[1:]
+          names = files.splitlines()
+          docs_only = bool(names) and all(n.endswith(('.md', '.txt')) or n.startswith('docs/') for n in names)
+          print(f"rust={'false' if docs_only else 'true'}")
+          print(f"full={'true' if event in ('schedule','workflow_dispatch') or (event == 'pull_request' and base == 'main') else 'false'}")
+          print(f"dependencies={'true' if any(n in ('Cargo.toml','Cargo.lock') or n.startswith('.github/') for n in names) else 'false'}")
+          PY
+  integration:
+    name: integration (Ubuntu stable)
+    needs: plan
+    if: always() && needs.plan.result == 'success' && needs.plan.outputs.rust == 'true' && (github.event_name == 'pull_request' && github.base_ref == 'develop' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+        with:
+          ref: "${{ github.event_name == 'schedule' && 'develop' || github.sha }}"
+      - uses: "dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8"
+        with: { toolchain: stable, components: rustfmt }
+      - uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+        with:
+          path: ~/.cargo/registry
+          key: cargo-${{ runner.os }}-stable-${{ hashFiles('Cargo.lock') }}
+      - run: cargo fmt --all -- --check
+      - run: cargo test --workspace --all-targets --locked
+      - name: Existing binary smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build -p authmap-cli --bin authmap --locked
+          bin=target/debug/authmap
+          "$bin" --help; "$bin" --version
+          out="$RUNNER_TEMP/authmap-smoke"; mkdir -p "$out"
+          "$bin" scan tests/fixtures/negative/frontend_only --format json --output "$out/authmap.json"
+          "$bin" scan tests/fixtures/negative/frontend_only --format markdown --output "$out/authmap.md"
+  release-rust:
+    name: release Rust ${{ matrix.os }} / ${{ matrix.rust }}
+    needs: plan
+    if: always() && needs.plan.outputs.full == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, rust: stable }
+          - { os: ubuntu-24.04, rust: "1.95" }
+          - { os: macos-latest, rust: "1.95" }
+          - { os: windows-2025, rust: "1.95" }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+      - uses: "dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8"
+        with:
+          toolchain: "${{ matrix.rust }}"
+          components: rustfmt
+      - name: Format and test
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.os }}" = ubuntu-24.04 ] && [ "${{ matrix.rust }}" = stable ]; then cargo fmt --all -- --check; fi
+          cargo test --workspace --all-targets --locked
+      - name: Package and clean install checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo package --list --manifest-path crates/authmap-cli/Cargo.toml --locked
+          root="$RUNNER_TEMP/authmap-install"; cargo install --path crates/authmap-cli --locked --root "$root" --debug --force
+          bin="$root/bin/authmap"; [ "$RUNNER_OS" = Windows ] && bin="$bin.exe"; "$bin" --help; "$bin" --version
+  audit:
+    needs: plan
+    if: always() && needs.plan.outputs.dependencies == 'true' || always() && needs.plan.outputs.full == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+        with:
+          ref: "${{ github.event_name == 'schedule' && 'develop' || github.sha }}"
+      - uses: "dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8"
+      - run: cargo install cargo-audit --version 0.22.1 --locked
+      - run: cargo audit
+  dependency-review:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+      - uses: "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294"
+  determinism:
+    needs: plan
+    if: always() && needs.plan.outputs.full == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+      - uses: "Ozark-Security-Labs/deterministic-deps@838ba7893ec59d17e7883fbc1629a222dacb431b"
+        with: { mode: enforce, remote-validation: true }
+  codeql:
+    needs: plan
+    if: always() && needs.plan.outputs.full == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+      - uses: "github/codeql-action/init@99df26d4f13ea111d4ec1a7dddef6063f76b97e9"
+        with:
+          languages: rust
+          config-file: ./.github/codeql/codeql-config.yml
+      - uses: "github/codeql-action/analyze@99df26d4f13ea111d4ec1a7dddef6063f76b97e9"
+  action-smoke:
+    needs: plan
+    if: always() && needs.plan.outputs.full == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+      - uses: "dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8"
+      - uses: "./"
+        with:
+          mode: advisory
+          output: "markdown,json"
+          target: tests/fixtures/negative/frontend_only
+          upload-artifact: "false"
+  performance:
+    needs: plan
+    if: always() && needs.plan.outputs.full == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+      - uses: "dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8"
+        with: { toolchain: stable }
+      - run: bash scripts/perf_guard.sh ci/perf-baseline.env
+  main-smoke:
+    needs: plan
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+      - uses: "dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8"
+      - run: cargo test -p authmap-cli --locked
+  development-gate:
+    name: development-gate
+    if: always() && (github.event_name == 'pull_request' && github.base_ref == 'develop' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    needs: [plan, integration]
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          RESULT: "${{ needs.integration.result }}"
+        run: test "$RESULT" = success
+  release-gate:
+    name: release-gate
+    if: always() && (github.event_name == 'pull_request' && github.base_ref == 'main' || github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    needs: [plan, release-rust, audit, dependency-review, determinism, codeql, action-smoke, performance, main-smoke]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every applicable job to pass
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+          RUST: ${{ needs.release-rust.result }}
+          AUDIT: ${{ needs.audit.result }}
+          REVIEW: ${{ needs.dependency-review.result }}
+          DET: ${{ needs.determinism.result }}
+          CODEQL: ${{ needs.codeql.result }}
+          ACTION: ${{ needs.action-smoke.result }}
+          PERF: ${{ needs.performance.result }}
+          MAIN: ${{ needs.main-smoke.result }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = push ]; then test "$MAIN" = success; else
+            test "$RUST" = success; test "$AUDIT" = success; test "$REVIEW" = success; test "$DET" = success
+            test "$CODEQL" = success; test "$ACTION" = success; test "$PERF" = success
+          fi
