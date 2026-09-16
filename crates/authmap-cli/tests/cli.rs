@@ -335,9 +335,11 @@ fn cargo_release_config_matches_pr_mediated_release_policy() {
         .expect("CLI manifest should exist");
 
     for expected in [
-        "allow-branch = [\"main\"]",
+        "allow-branch = [\"release/*\"]",
         "publish = false",
         "push = false",
+        "tag = false",
+        "consolidate-commits = true",
         "sign-tag = false",
         "sign-commit = false",
         "tag-name = \"v{{version}}\"",

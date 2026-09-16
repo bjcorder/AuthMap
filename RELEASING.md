@@ -3,13 +3,11 @@
 This runbook cuts a new AuthMap GitHub Release. End-user artifact verification
 instructions live in [docs/VERIFYING_RELEASES.md](docs/VERIFYING_RELEASES.md).
 
-AuthMap uses a semi-manual release flow:
-
-1. `cargo release` creates a local version-bump commit and local `vX.Y.Z` tag.
-2. The release commit moves through a protected-branch PR.
-3. After merge, the maintainer pushes the tag.
-4. `.github/workflows/release.yml` builds artifacts, checksums, provenance, and
-   the GitHub Release.
+AuthMap integrates on `develop` and releases from protected `main`. A release
+preparation branch is rooted at `develop`; its version commit is squash-merged
+into `develop`, then `develop` is promoted to `main` with a merge commit. The
+release tag is created only after that promotion and points at the actual
+validated `main` commit. Merging `main` does not publish by itself.
 
 ## One-time setup
 
@@ -27,9 +25,9 @@ go install github.com/slsa-framework/slsa-verifier/v2/cli/slsa-verifier@latest
 
 ## Pre-flight
 
-- `main` is green on the Rust, security, docs, dependency determinism, and
-  AuthMap action smoke workflows.
-- You are on an up-to-date `main`: `git switch main && git pull --ff-only`.
+- `develop` is green and ready for promotion; the `release-gate` requirements
+  are understood and available.
+- You are on an up-to-date `develop`: `git switch develop && git pull --ff-only`.
 - The working tree is clean.
 - `CHANGELOG.md` has accurate user-facing notes under `## Unreleased`.
 - No PR is mid-merge.
@@ -44,35 +42,39 @@ Use `minor` or `major` instead of `patch` when the release scope requires it.
 Read the version bump, changelog rewrite, commit message, and tag name before
 continuing.
 
-## Cut the local release commit and tag
+## Prepare the release commit
 
 ```sh
+git switch -c "release/next"
 cargo release patch --execute
+VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
 ```
 
-The release config runs `cargo test --workspace --locked`, bumps the shared
-workspace version, rewrites `CHANGELOG.md`, commits `chore: release X.Y.Z`, and
-creates local tag `vX.Y.Z`. It does not push.
+`release.toml` allows only `release/*` branches and sets cargo-release's
+`tag = false`, `push = false`, and `publish = false`. The official
+cargo-release reference documents `tag = false` as the configuration form of
+`--no-tag`: [configuration reference](https://raw.githubusercontent.com/crate-ci/cargo-release/master/docs/reference.md).
 
-## Move the release commit through a PR
+Create the `release/*` preparation branch from `develop` before running the
+command. The release config runs `cargo test --workspace --locked`, bumps the shared
+workspace version, rewrites `CHANGELOG.md`, and creates the version commit. It
+does not tag, push, or publish.
+
+## Merge through develop and promote main
 
 ```sh
-VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+git push -u origin "release/next"
 
-git branch "release/v${VERSION}"
-git reset --hard origin/main
-git switch "release/v${VERSION}"
-git push -u origin "release/v${VERSION}"
-
-gh pr create --base main --head "release/v${VERSION}" \
+gh pr create --base develop --head "release/next" \
   --title "chore: release ${VERSION}" \
-  --body "Release commit + local v${VERSION} tag. Merge with rebase or a merge commit. NEVER squash."
+  --body "Release version commit. Squash into develop, then promote develop to main with a merge commit."
 ```
 
-Merge the PR with rebase or a merge commit. NEVER squash. The local tag points
-at the release commit SHA, and that SHA must remain reachable from `main`.
+After the preparation PR passes `development-gate`, squash-merge it into
+`develop`. Open the promotion PR from `develop` to `main` and merge it with a
+merge commit after `release-gate` passes. Record the resulting `main` SHA.
 
-## Push the tag
+## Create the immutable tag on main
 
 After the PR merges:
 
@@ -80,10 +82,11 @@ After the PR merges:
 git switch main
 git pull --ff-only
 
-git merge-base --is-ancestor "v${VERSION}" main \
-  && echo "tag commit reachable from main" \
-  || { echo "tag commit is not reachable from main"; exit 1; }
+MAIN_SHA=$(git rev-parse HEAD)
+git show-ref --verify --quiet "refs/tags/v${VERSION}" \
+  && { echo "tag already exists; published tags are immutable"; exit 1; } || true
 
+git tag -a "v${VERSION}" "$MAIN_SHA" -m "Release v${VERSION}"
 git push origin "v${VERSION}"
 ```
 
@@ -122,13 +125,7 @@ authmap --version
 
 ## Rollback
 
-If the tag points at the wrong commit or the release artifacts are bad:
-
-```sh
-git tag -d vX.Y.Z
-git push --delete origin vX.Y.Z
-gh release delete vX.Y.Z -R Ozark-Security-Labs/AuthMap --cleanup-tag --yes
-```
-
-Do not reuse a version number once users may have downloaded it. Cut the next
-patch version after fixing the issue.
+Published release tags are immutable: repository rules block tag deletion and
+force-push. If a release is wrong, fix the source on `main`, sync it back to
+`develop`, and cut the next patch version. Do not reset a branch destructively
+or reuse a published version number.
