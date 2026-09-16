@@ -3,13 +3,11 @@
 This runbook cuts a new AuthMap GitHub Release. End-user artifact verification
 instructions live in [docs/VERIFYING_RELEASES.md](docs/VERIFYING_RELEASES.md).
 
-AuthMap uses a semi-manual release flow:
-
-1. `cargo release` creates a local version-bump commit and local `vX.Y.Z` tag.
-2. The release commit moves through a protected-branch PR.
-3. After merge, the maintainer pushes the tag.
-4. `.github/workflows/release.yml` builds artifacts, checksums, provenance, and
-   the GitHub Release.
+AuthMap integrates on `develop` and releases from protected `main`. A release
+preparation branch is rooted at `develop`; its version commit is squash-merged
+into `develop`, then `develop` is promoted to `main` with a merge commit. The
+release tag is created only after that promotion and points at the actual
+validated `main` commit. Merging `main` does not publish by itself.
 
 ## One-time setup
 
@@ -27,75 +25,93 @@ go install github.com/slsa-framework/slsa-verifier/v2/cli/slsa-verifier@latest
 
 ## Pre-flight
 
-- `main` is green on the Rust, security, docs, dependency determinism, and
-  AuthMap action smoke workflows.
-- You are on an up-to-date `main`: `git switch main && git pull --ff-only`.
+- `develop` is green and ready for promotion; the `release-gate` requirements
+  are understood and available.
+- You are on an up-to-date `develop`: `git switch develop && git pull --ff-only`.
 - The working tree is clean.
 - `CHANGELOG.md` has accurate user-facing notes under `## Unreleased`.
 - No PR is mid-merge.
 
-## Dry-run
+## Prepare the release branch and review the dry-run
 
 ```sh
-cargo release patch --dry-run
+git switch -c "release/next"
+cargo release patch
 ```
 
 Use `minor` or `major` instead of `patch` when the release scope requires it.
 Read the version bump, changelog rewrite, commit message, and tag name before
 continuing.
 
-## Cut the local release commit and tag
+## Create the release commit
 
 ```sh
 cargo release patch --execute
+VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
 ```
+
+`release.toml` allows only `release/*` branches and sets cargo-release's
+`tag = false`, `push = false`, and `publish = false`. The official
+cargo-release reference documents `tag = false` as the configuration form of
+`--no-tag`: [configuration reference](https://raw.githubusercontent.com/crate-ci/cargo-release/master/docs/reference.md).
 
 The release config runs `cargo test --workspace --locked`, bumps the shared
-workspace version, rewrites `CHANGELOG.md`, commits `chore: release X.Y.Z`, and
-creates local tag `vX.Y.Z`. It does not push.
+workspace version, rewrites `CHANGELOG.md`, and creates the version commit. It
+does not tag, push, or publish.
 
-## Move the release commit through a PR
+## Merge through develop and promote main
 
 ```sh
-VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+git push -u origin "release/next"
 
-git branch "release/v${VERSION}"
-git reset --hard origin/main
-git switch "release/v${VERSION}"
-git push -u origin "release/v${VERSION}"
-
-gh pr create --base main --head "release/v${VERSION}" \
+gh pr create --base develop --head "release/next" \
   --title "chore: release ${VERSION}" \
-  --body "Release commit + local v${VERSION} tag. Merge with rebase or a merge commit. NEVER squash."
+  --body "Release version commit. Squash into develop, then promote develop to main with a merge commit."
 ```
 
-Merge the PR with rebase or a merge commit. NEVER squash. The local tag points
-at the release commit SHA, and that SHA must remain reachable from `main`.
+After the preparation PR passes `development-gate`, squash-merge it into
+`develop`. Open the promotion PR from `develop` to `main` and merge it with a
+merge commit after `release-gate` passes. Wait for the lightweight `main` push
+smoke check, then record the resulting `main` SHA. Open a follow-up PR from
+`main` to `develop` and merge it with a merge commit to synchronize the
+permanent branches:
 
-## Push the tag
+```sh
+gh pr create --base develop --head main \
+  --title "chore: sync main into develop" \
+  --body "Synchronize the promoted main merge back into develop."
+```
+
+## Create the immutable tag on main
 
 After the PR merges:
 
 ```sh
+git fetch origin main --tags
 git switch main
 git pull --ff-only
 
-git merge-base --is-ancestor "v${VERSION}" main \
-  && echo "tag commit reachable from main" \
-  || { echo "tag commit is not reachable from main"; exit 1; }
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+MAIN_SHA=$(git rev-parse HEAD)
+git show-ref --verify --quiet "refs/tags/v${VERSION}" \
+  && { echo "tag already exists; published tags are immutable"; exit 1; } || true
+git ls-remote --exit-code --refs origin "refs/tags/v${VERSION}" >/dev/null \
+  && { echo "remote tag already exists; published tags are immutable"; exit 1; } || true
 
+git tag -a "v${VERSION}" "$MAIN_SHA" -m "Release v${VERSION}"
 git push origin "v${VERSION}"
 ```
 
-The tag push triggers the release workflow for
-`Ozark-Security-Labs/AuthMap`.
+The tag push triggers the release workflow for this repository.
 
 ## Watch and verify
 
 Watch the release workflow:
 
 ```sh
-gh run watch -R Ozark-Security-Labs/AuthMap
+REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+gh run watch
 ```
 
 After the release publishes, verify at least one binary archive and the source
@@ -103,12 +119,13 @@ archive:
 
 ```sh
 TAG=v1.0.1
-gh release download "$TAG" -R Ozark-Security-Labs/AuthMap \
+REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+gh release download "$TAG" \
   -p '*.tar.gz' -p '*.zip' -p '*.sha256' -p '*.intoto.jsonl'
 
 slsa-verifier verify-artifact \
   --provenance-path "authmap-${TAG#v}.intoto.jsonl" \
-  --source-uri github.com/Ozark-Security-Labs/AuthMap \
+  --source-uri "github.com/${REPO}" \
   --source-tag "$TAG" \
   "authmap-${TAG#v}-source.tar.gz"
 ```
@@ -122,13 +139,7 @@ authmap --version
 
 ## Rollback
 
-If the tag points at the wrong commit or the release artifacts are bad:
-
-```sh
-git tag -d vX.Y.Z
-git push --delete origin vX.Y.Z
-gh release delete vX.Y.Z -R Ozark-Security-Labs/AuthMap --cleanup-tag --yes
-```
-
-Do not reuse a version number once users may have downloaded it. Cut the next
-patch version after fixing the issue.
+Published release tags are immutable: repository rules block tag deletion and
+force-push. If a release is wrong, fix the source on `main`, sync it back to
+`develop`, and cut the next patch version. Do not reset a branch destructively
+or reuse a published version number.

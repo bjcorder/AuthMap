@@ -1,0 +1,316 @@
+name: CI
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches: [develop, main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 11 * * 1"
+  workflow_dispatch:
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+permissions:
+  contents: read
+  pull-requests: read
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+jobs:
+  plan:
+    name: CI plan
+    runs-on: ubuntu-24.04
+    outputs:
+      policy: ${{ steps.plan.outputs.policy }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      ref: ${{ steps.plan.outputs.ref }}
+      rust: ${{ steps.plan.outputs.rust }}
+      audit: ${{ steps.plan.outputs.audit }}
+      audit_main: ${{ steps.plan.outputs.audit_main }}
+      dependency_review: ${{ steps.plan.outputs.dependency_review }}
+      determinism: ${{ steps.plan.outputs.determinism }}
+      codeql: ${{ steps.plan.outputs.codeql }}
+      action_smoke: ${{ steps.plan.outputs.action_smoke }}
+      performance: ${{ steps.plan.outputs.performance }}
+      package: ${{ steps.plan.outputs.package }}
+      main_smoke: ${{ steps.plan.outputs.main_smoke }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          # Weekly and manual validation exercise develop; audit_main checks main separately.
+          ref: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'develop' || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test CI policy on every event, including documentation-only PRs
+        run: python3 -m unittest discover -s scripts -p 'test_ci_policy.py' -v
+      - id: plan
+        run: python3 scripts/ci_policy.py plan
+  rust:
+    needs: plan
+    if: needs.plan.outputs.rust == 'true'
+    name: Rust ${{ matrix.os }} / ${{ matrix.rust }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ runner.os }}-rust-${{ hashFiles('Cargo.lock') }}
+      - name: Format
+        if: matrix.os == 'ubuntu-24.04' && matrix.rust == 'stable'
+        run: cargo fmt --all -- --check
+      - name: Full locked workspace tests
+        run: cargo test --workspace --all-targets --locked
+      - name: Existing binary smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build -p authmap-cli --bin authmap --locked
+          bin=target/debug/authmap
+          if [ "$RUNNER_OS" = Windows ]; then bin="$bin.exe"; fi
+          "$bin" --help
+          "$bin" --version
+          out="$RUNNER_TEMP/authmap-smoke"
+          mkdir -p "$out"
+          "$bin" scan tests/fixtures/negative/frontend_only --format json --output "$out/authmap.json"
+          "$bin" scan tests/fixtures/negative/frontend_only --format markdown --output "$out/authmap.md"
+          "$bin" scan tests/fixtures/negative/frontend_only --format sarif --output "$out/authmap.sarif"
+          "$bin" baseline create tests/fixtures/negative/frontend_only --output "$out/baseline.json"
+          "$bin" diff --base "$out/baseline.json" --head "$out/authmap.json" --format markdown
+  audit:
+    needs: plan
+    if: needs.plan.outputs.audit == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+        with:
+          toolchain: stable
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ runner.os }}-audit-${{ hashFiles('Cargo.lock') }}
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --version 0.22.1 --locked
+      - run: cargo audit
+  audit_main:
+    needs: plan
+    if: needs.plan.outputs.audit_main == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+        with:
+          toolchain: stable
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ runner.os }}-audit_main-${{ hashFiles('Cargo.lock') }}
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --version 0.22.1 --locked
+      - run: cargo audit
+  dependency_review:
+    needs: plan
+    if: needs.plan.outputs.dependency_review == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294
+  determinism:
+    needs: plan
+    if: needs.plan.outputs.determinism == 'true'
+    env:
+      # Preserve the code-scanning baseline identity across workflow consolidation.
+      CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/dependency-determinism.yml:deterministic-deps
+    permissions:
+      contents: read
+      security-events: write
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - id: deterministic-deps
+        uses: Ozark-Security-Labs/deterministic-deps@838ba7893ec59d17e7883fbc1629a222dacb431b
+        with:
+          mode: advisory
+          sarif: true
+          remote-validation: true
+      - uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9
+        if: always() && steps.deterministic-deps.outputs.sarif-path != ''
+        with:
+          sarif_file: ${{ steps.deterministic-deps.outputs.sarif-path }}
+          category: deterministic-deps
+  codeql:
+    needs: plan
+    if: needs.plan.outputs.codeql == 'true'
+    env:
+      # Preserve the code-scanning baseline identity across workflow consolidation.
+      CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/codeql.yml:analyze
+    permissions:
+      contents: read
+      security-events: write
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: github/codeql-action/init@99df26d4f13ea111d4ec1a7dddef6063f76b97e9
+        with:
+          languages: rust
+          config-file: ./.github/codeql/codeql-config.yml
+      - uses: github/codeql-action/analyze@99df26d4f13ea111d4ec1a7dddef6063f76b97e9
+  action_smoke:
+    needs: plan
+    if: needs.plan.outputs.action_smoke == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+        with:
+          toolchain: stable
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ runner.os }}-action_smoke-${{ hashFiles('Cargo.lock') }}
+      - uses: ./
+        with:
+          mode: advisory
+          output: markdown,json
+          target: tests/fixtures/negative/frontend_only
+          upload-artifact: "false"
+  performance:
+    needs: plan
+    if: needs.plan.outputs.performance == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+        with:
+          toolchain: stable
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ runner.os }}-performance-${{ hashFiles('Cargo.lock') }}
+      - run: bash scripts/perf_guard.sh ci/perf-baseline.env
+  package:
+    needs: plan
+    if: needs.plan.outputs.package == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+        with:
+          toolchain: stable
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ runner.os }}-package-${{ hashFiles('Cargo.lock') }}
+      - name: Package and clean installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo package --list --manifest-path crates/authmap-cli/Cargo.toml --locked
+          root="$RUNNER_TEMP/authmap-install"
+          cargo install --path crates/authmap-cli --locked --root "$root" --debug --force
+          "$root/bin/authmap" --help
+          expected="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')"
+          schema="$(python3 -c 'import json; print(json.load(open("schemas/authmap.schema.json"))["properties"]["schema_version"]["const"])')"
+          test "$("$root/bin/authmap" --version)" = "authmap $expected (schema $schema)"
+  main_smoke:
+    needs: plan
+    if: needs.plan.outputs.main_smoke == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+        with:
+          toolchain: stable
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ runner.os }}-main_smoke-${{ hashFiles('Cargo.lock') }}
+      - run: cargo build -p authmap-cli --bin authmap --locked
+      - run: target/debug/authmap --help
+      - name: Verify binary version
+        shell: bash
+        run: |
+          expected="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')"
+          schema="$(python3 -c 'import json; print(json.load(open("schemas/authmap.schema.json"))["properties"]["schema_version"]["const"])')"
+          test "$(target/debug/authmap --version)" = "authmap $expected (schema $schema)"
+  development-gate:
+    name: development-gate
+    if: always() && (github.event_name == 'pull_request' && github.base_ref == 'develop')
+    needs: [plan, rust, audit, audit_main, dependency_review, determinism, codeql, action_smoke, performance, package, main_smoke]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.plan.outputs.ref || github.sha }}
+          persist-credentials: false
+      - name: Require every applicable job and reject unexpected skips
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/ci_policy.py check-gate
+  release-gate:
+    name: release-gate
+    if: always() && ((github.event_name == 'pull_request' && github.base_ref == 'main') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push')
+    needs: [plan, rust, audit, audit_main, dependency_review, determinism, codeql, action_smoke, performance, package, main_smoke]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.plan.outputs.ref || github.sha }}
+          persist-credentials: false
+      - name: Require every applicable job and reject unexpected skips
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/ci_policy.py check-gate

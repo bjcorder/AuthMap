@@ -53,6 +53,19 @@ Use these categories when they fit:
 
 Keep changelog entries evidence-bound. Do not describe AuthMap findings as confirmed vulnerabilities unless the project can mechanically prove that claim.
 
+## Branch and promotion policy
+
+`develop` is the default integration branch. Feature, dependency, and ordinary
+maintenance pull requests target `develop` and are squash-merged after the
+`development-gate`. A promotion pull request merges `develop` into protected
+`main` with a merge commit after the full `release-gate`. Then merge `main` back
+into `develop` so both permanent branches contain the same release history.
+
+An urgent fix branches from `main`, passes `release-gate`, merges into `main`,
+and is then merged back into `develop`. A main merge does not imply a version
+bump or publication; documentation-only and maintenance promotions can use
+the existing version.
+
 ## Release checklist
 
 Before creating a release tag, maintainers should verify:
@@ -60,7 +73,7 @@ Before creating a release tag, maintainers should verify:
 1. `CHANGELOG.md` has a dated section for the release and an empty `Unreleased` section.
 2. The Cargo workspace version matches the intended tag.
 3. Schema compatibility notes are present when schema-facing behavior changed.
-4. The release commit has passed the normal Rust, docs, action smoke, security, and dependency determinism workflows.
+4. The promotion has passed `release-gate`, and the resulting `main` commit has passed its lightweight push smoke check.
 5. `cargo test --workspace --all-targets --locked` passes locally or in CI.
 6. `cargo package --list --manifest-path crates/authmap-cli/Cargo.toml --locked` shows only intended package contents.
 7. A clean `cargo install --path crates/authmap-cli --locked` can run `authmap --help` and `authmap --version`.
@@ -68,10 +81,13 @@ Before creating a release tag, maintainers should verify:
 
 ## Automated release workflow
 
-The release workflow runs on pushed `v*` tags. Maintainers use
-`cargo-release` locally to create the version-bump commit and tag, move the
-release commit through a protected-branch PR, then push the tag after verifying
-the tag commit is reachable from `main`. The step-by-step runbook is in
+The release workflow runs on pushed `v*` tags. Maintainers create a
+`release/*` preparation branch from `develop` and use `cargo-release` with
+`tag = false`, `push = false`, and `publish = false`; it creates the version
+commit without tagging, pushing, or publishing. The version commit may be
+squash-merged into `develop`. After a
+merge-commit promotion to `main` passes `release-gate`, create the immutable
+tag on that actual `main` commit and push it. The step-by-step runbook is in
 [../RELEASING.md](../RELEASING.md).
 
 The workflow checks that the tag matches the workspace version, runs locked
