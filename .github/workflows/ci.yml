@@ -145,6 +145,9 @@ jobs:
   determinism:
     needs: plan
     if: needs.plan.outputs.determinism == 'true'
+    env:
+      # Preserve the code-scanning baseline identity across workflow consolidation.
+      CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/dependency-determinism.yml:deterministic-deps
     permissions:
       contents: read
       security-events: write
@@ -168,6 +171,9 @@ jobs:
   codeql:
     needs: plan
     if: needs.plan.outputs.codeql == 'true'
+    env:
+      # Preserve the code-scanning baseline identity across workflow consolidation.
+      CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/codeql.yml:analyze
     permissions:
       contents: read
       security-events: write

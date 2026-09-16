@@ -205,6 +205,8 @@ class PolicyTests(unittest.TestCase):
         self.assertIn("python3 -m unittest discover", blocks['plan'])
         self.assertIn("fromJSON(needs.plan.outputs.matrix)", blocks['rust'])
         self.assertIn("security-events: write", blocks['codeql'])
+        self.assertIn("CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/codeql.yml:analyze", blocks['codeql'])
+        self.assertIn("CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/dependency-determinism.yml:deterministic-deps", blocks['determinism'])
         self.assertIn("ref: main", blocks['audit_main'])
         self.assertIn("&& 'develop' || github.sha", blocks['plan'])
         for job in JOBS:
