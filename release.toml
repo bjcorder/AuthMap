@@ -1,10 +1,10 @@
 # cargo-release workspace config.
 #
-# Dry-run first from a release preparation branch rooted at develop:
+# Dry-run is the default from a release preparation branch rooted at develop:
 #
-#   cargo release patch --dry-run
+#   cargo release patch
 #
-# Execute only after the release checklist is complete:
+# Execute only after reviewing the dry-run and completing the release checklist:
 #
 #   cargo release patch --execute
 #
@@ -16,8 +16,8 @@ allow-branch = ["release/*"]
 # separate reviewed policy because the workspace contains internal crates.
 publish = false
 
-# cargo-release prepares the version commit only. The release tag is created by
-# the release gate on the validated merge commit on main.
+# cargo-release prepares the version commit only. The maintainer creates the
+# release tag after the release gate validates the promotion merge on main.
 push = false
 tag = false
 consolidate-commits = true

@@ -32,20 +32,20 @@ go install github.com/slsa-framework/slsa-verifier/v2/cli/slsa-verifier@latest
 - `CHANGELOG.md` has accurate user-facing notes under `## Unreleased`.
 - No PR is mid-merge.
 
-## Dry-run
+## Prepare the release branch and review the dry-run
 
 ```sh
-cargo release patch --dry-run
+git switch -c "release/next"
+cargo release patch
 ```
 
 Use `minor` or `major` instead of `patch` when the release scope requires it.
 Read the version bump, changelog rewrite, commit message, and tag name before
 continuing.
 
-## Prepare the release commit
+## Create the release commit
 
 ```sh
-git switch -c "release/next"
 cargo release patch --execute
 VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
 ```
@@ -55,8 +55,7 @@ VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
 cargo-release reference documents `tag = false` as the configuration form of
 `--no-tag`: [configuration reference](https://raw.githubusercontent.com/crate-ci/cargo-release/master/docs/reference.md).
 
-Create the `release/*` preparation branch from `develop` before running the
-command. The release config runs `cargo test --workspace --locked`, bumps the shared
+The release config runs `cargo test --workspace --locked`, bumps the shared
 workspace version, rewrites `CHANGELOG.md`, and creates the version commit. It
 does not tag, push, or publish.
 
@@ -72,33 +71,47 @@ gh pr create --base develop --head "release/next" \
 
 After the preparation PR passes `development-gate`, squash-merge it into
 `develop`. Open the promotion PR from `develop` to `main` and merge it with a
-merge commit after `release-gate` passes. Record the resulting `main` SHA.
+merge commit after `release-gate` passes. Wait for the lightweight `main` push
+smoke check, then record the resulting `main` SHA. Open a follow-up PR from
+`main` to `develop` and merge it with a merge commit to synchronize the
+permanent branches:
+
+```sh
+gh pr create --base develop --head main \
+  --title "chore: sync main into develop" \
+  --body "Synchronize the promoted main merge back into develop."
+```
 
 ## Create the immutable tag on main
 
 After the PR merges:
 
 ```sh
+git fetch origin main --tags
 git switch main
 git pull --ff-only
 
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
 MAIN_SHA=$(git rev-parse HEAD)
 git show-ref --verify --quiet "refs/tags/v${VERSION}" \
   && { echo "tag already exists; published tags are immutable"; exit 1; } || true
+git ls-remote --exit-code --refs origin "refs/tags/v${VERSION}" >/dev/null \
+  && { echo "remote tag already exists; published tags are immutable"; exit 1; } || true
 
 git tag -a "v${VERSION}" "$MAIN_SHA" -m "Release v${VERSION}"
 git push origin "v${VERSION}"
 ```
 
-The tag push triggers the release workflow for
-`Ozark-Security-Labs/AuthMap`.
+The tag push triggers the release workflow for this repository.
 
 ## Watch and verify
 
 Watch the release workflow:
 
 ```sh
-gh run watch -R Ozark-Security-Labs/AuthMap
+REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+gh run watch
 ```
 
 After the release publishes, verify at least one binary archive and the source
@@ -106,12 +119,13 @@ archive:
 
 ```sh
 TAG=v1.0.1
-gh release download "$TAG" -R Ozark-Security-Labs/AuthMap \
+REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+gh release download "$TAG" \
   -p '*.tar.gz' -p '*.zip' -p '*.sha256' -p '*.intoto.jsonl'
 
 slsa-verifier verify-artifact \
   --provenance-path "authmap-${TAG#v}.intoto.jsonl" \
-  --source-uri github.com/Ozark-Security-Labs/AuthMap \
+  --source-uri "github.com/${REPO}" \
   --source-tag "$TAG" \
   "authmap-${TAG#v}-source.tar.gz"
 ```
