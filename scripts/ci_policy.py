@@ -85,11 +85,10 @@ def validate_repository(root: Path, release: bool) -> None:
         raise ValueError("Invalid workspace version")
     # Existing released versions are valid for promotions; a bump is not mandatory.
     changelog = (root / "CHANGELOG.md").read_text()
-    section = re.search(
-        rf"^##[ \t]+\[?{re.escape(version)}\]?(?:[ \t]+-[^\n]*)?[ \t]*\n(.*?)(?=^##[ \t]|\Z)",
-        changelog, re.MULTILINE | re.DOTALL,
-    )
-    if not section or not any(line.strip() and not line.lstrip().startswith("#") for line in section[1].splitlines()):
+    # Match the release publisher's heading and section boundaries exactly.
+    heading = re.search(rf"^## {re.escape(version)}(?:\s+-.*)?$", changelog, re.MULTILINE)
+    section = re.split(r"^## ", changelog[heading.end():], maxsplit=1, flags=re.MULTILINE)[0] if heading else ""
+    if not any(line.strip() and not line.lstrip().startswith("#") for line in section.splitlines()):
         raise ValueError(f"CHANGELOG.md needs a nonempty section for {version}")
     lock = tomllib.loads((root / "Cargo.lock").read_text())
     locked = {p["name"]: p["version"] for p in lock["package"] if "source" not in p}

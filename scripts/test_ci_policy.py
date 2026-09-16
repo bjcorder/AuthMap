@@ -138,14 +138,22 @@ class PolicyTests(unittest.TestCase):
             crate.parent.mkdir(parents=True)
             crate.write_text('[package]\nname = "authmap-cli"\nversion.workspace = true\n')
             changelog = root / "CHANGELOG.md"
-            for content in ["## 0.1.0 - 2026-05-24\n\n- Released\n", "## [0.1.0]\n\n- Released\n"]:
+            for content in ["## 0.1.0 - 2026-05-24\n\n- Released\n", "## 0.1.0\n\nReleased\n"]:
                 changelog.write_text(content)
                 validate_repository(root, True)
-            for content in ["## Unreleased\n- Entry\n", "## 0.1.0\n### Added\n\n## 0.0.9\n- Old entry\n"]:
+            for content in [
+                "## Unreleased\n- Entry\n",
+                "## 0.1.0\n### Added\n\n## 0.0.9\n- Old entry\n",
+                "## [0.1.0]\n\n- Released\n",
+                "## [0.1.0] - 2026-05-24\n\n- Released\n",
+                "##  0.1.0\n\n- Released\n",
+                "## 0.1.0 \n\n- Released\n",
+                "## 0.1.0\n\n- Released\n",
+            ]:
                 changelog.write_text(content)
                 with self.assertRaises(ValueError):
                     validate_repository(root, True)
-            changelog.write_text("## 0.1.0\n- Existing release\n")
+            changelog.write_text("## 0.1.0 - 2026-05-24\n- Existing release\n")
             (root / "Cargo.lock").write_text('[[package]]\nname = "authmap-cli"\nversion = "0.2.0"\n')
             with self.assertRaises(ValueError):
                 validate_repository(root, True)
