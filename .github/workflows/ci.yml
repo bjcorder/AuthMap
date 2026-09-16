@@ -209,7 +209,10 @@ jobs:
           MAIN: ${{ needs.main-smoke.result }}
         run: |
           set -euo pipefail
-          if [ "$EVENT" = push ]; then test "$MAIN" = success; else
+          if [ "$EVENT" = push ]; then test "$MAIN" = success; elif [ "$EVENT" = pull_request ]; then
             test "$RUST" = success; test "$AUDIT" = success; test "$REVIEW" = success; test "$DET" = success
+            test "$CODEQL" = success; test "$ACTION" = success; test "$PERF" = success
+          else
+            test "$RUST" = success; test "$AUDIT" = success; test "$DET" = success
             test "$CODEQL" = success; test "$ACTION" = success; test "$PERF" = success
           fi
