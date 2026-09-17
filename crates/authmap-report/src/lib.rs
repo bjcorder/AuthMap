@@ -2603,7 +2603,7 @@ impl Reporter for SarifReporter {
                         "driver": {
                             "name": "AuthMap",
                             "semanticVersion": document.metadata.tool_version,
-                            "informationUri": "https://github.com/Ozark-Security-Labs/AuthMap",
+                            "informationUri": "https://github.com/bjcorder/AuthMap",
                             "rules": rules
                         }
                     },

@@ -289,11 +289,11 @@ fn cli_package_metadata_is_publish_ready() {
 
     for expected in [
         "license = \"MIT\"",
-        "repository = \"https://github.com/Ozark-Security-Labs/AuthMap\"",
+        "repository = \"https://github.com/bjcorder/AuthMap\"",
         "rust-version = \"1.95\"",
         "readme = \"README.md\"",
-        "homepage = \"https://github.com/Ozark-Security-Labs/AuthMap\"",
-        "documentation = \"https://github.com/Ozark-Security-Labs/AuthMap/tree/main/docs\"",
+        "homepage = \"https://github.com/bjcorder/AuthMap\"",
+        "documentation = \"https://github.com/bjcorder/AuthMap/tree/main/docs\"",
         "keywords = [\"authorization\", \"cli\", \"security\", \"static-analysis\"]",
         "categories = [\"command-line-utilities\", \"development-tools\"]",
     ] {
@@ -739,7 +739,7 @@ fn release_docs_cover_runbook_and_slsa_verification() {
     for expected in [
         "SLSA",
         "slsa-verifier verify-artifact",
-        "github.com/Ozark-Security-Labs/AuthMap",
+        "github.com/bjcorder/AuthMap",
         "authmap-${TAG#v}.intoto.jsonl",
         ".sha256",
         "authmap-${TAG#v}-",
