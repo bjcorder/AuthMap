@@ -5,12 +5,12 @@
 <p align="center"><strong>Authorization coverage mapping for application code.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/Ozark-Security-Labs/AuthMap/actions/workflows/rust.yml"><img alt="CI" src="https://github.com/Ozark-Security-Labs/AuthMap/actions/workflows/rust.yml/badge.svg?branch=main"></a>
-  <a href="https://github.com/Ozark-Security-Labs/AuthMap/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Ozark-Security-Labs/AuthMap/actions/workflows/security.yml/badge.svg?branch=main"></a>
-  <a href="https://github.com/Ozark-Security-Labs/AuthMap/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/Ozark-Security-Labs/AuthMap/actions/workflows/codeql.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/bjcorder/AuthMap/actions/workflows/rust.yml"><img alt="CI" src="https://github.com/bjcorder/AuthMap/actions/workflows/rust.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/bjcorder/AuthMap/actions/workflows/security.yml"><img alt="Security" src="https://github.com/bjcorder/AuthMap/actions/workflows/security.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/bjcorder/AuthMap/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/bjcorder/AuthMap/actions/workflows/codeql.yml/badge.svg?branch=main"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="Rust 1.95+" src="https://img.shields.io/badge/rust-1.95%2B-orange.svg">
-  <a href="https://github.com/Ozark-Security-Labs/AuthMap/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Ozark-Security-Labs/AuthMap?sort=semver&display_name=tag"></a>
+  <a href="https://github.com/bjcorder/AuthMap/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/bjcorder/AuthMap?sort=semver&display_name=tag"></a>
 </p>
 
 ---
@@ -31,10 +31,10 @@ limitations.
 Install from source:
 
 ```bash
-cargo install --git https://github.com/Ozark-Security-Labs/AuthMap authmap-cli
+cargo install --git https://github.com/bjcorder/AuthMap authmap-cli
 ```
 
-Prebuilt binaries for Linux, macOS, and Windows are attached to each [GitHub Release](https://github.com/Ozark-Security-Labs/AuthMap/releases).
+Prebuilt binaries for Linux, macOS, and Windows are attached to each [GitHub Release](https://github.com/bjcorder/AuthMap/releases).
 
 Then bootstrap a config and scan:
 
@@ -48,7 +48,7 @@ Use it in CI with the GitHub Action:
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: Ozark-Security-Labs/AuthMap@v0.1.0
+- uses: bjcorder/AuthMap@v0.1.0
   with:
     mode: advisory
     output: markdown,json
@@ -175,7 +175,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Ozark-Security-Labs/AuthMap@v0.1.0
+      - uses: bjcorder/AuthMap@v0.1.0
         with:
           mode: enforce
           output: markdown,json

@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Ozark-Security-Labs/AuthMap@v1
+      - uses: bjcorder/AuthMap@v1
         with:
           mode: advisory
           output: markdown,json
@@ -66,7 +66,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Ozark-Security-Labs/AuthMap@v1
+      - uses: bjcorder/AuthMap@v1
         with:
           mode: enforce
           output: markdown,json
@@ -96,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Ozark-Security-Labs/AuthMap@v1
+      - uses: bjcorder/AuthMap@v1
         with:
           mode: advisory
           output: markdown,json,sarif

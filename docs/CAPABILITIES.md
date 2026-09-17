@@ -20,11 +20,11 @@ generic SAST sprawl, and no unsupported vulnerability claims.
 | CI and downstream integrations | GitHub Action, SARIF, canonical JSON | Publish review summaries, optional SARIF, baseline drift gates, and schema-backed JSON for consumers. | Implemented; see [GITHUB_ACTION.md](GITHUB_ACTION.md) and [JSON_CONSUMERS.md](JSON_CONSUMERS.md). |
 
 Roadmap and fixture follow-up are tracked in the v1.5 milestone issues:
-[#53](https://github.com/Ozark-Security-Labs/AuthMap/issues/53) documents the
+[#53](https://github.com/bjcorder/AuthMap/issues/53) documents the
 JSON consumer contract,
-[#54](https://github.com/Ozark-Security-Labs/AuthMap/issues/54) expands
+[#54](https://github.com/bjcorder/AuthMap/issues/54) expands
 post-v1 workflow fixtures, and
-[#55](https://github.com/Ozark-Security-Labs/AuthMap/issues/55) documents this
+[#55](https://github.com/bjcorder/AuthMap/issues/55) documents this
 folded model.
 
 ## Command Surface
@@ -89,7 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Ozark-Security-Labs/AuthMap@v1
+      - uses: bjcorder/AuthMap@v1
         with:
           mode: advisory
           output: markdown,json,sarif

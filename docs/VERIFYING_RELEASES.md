@@ -8,7 +8,7 @@ both before trusting a downloaded binary in a sensitive environment.
 SLSA verification confirms that an artifact digest appears in a Sigstore-signed
 attestation for:
 
-- source repo `github.com/Ozark-Security-Labs/AuthMap`;
+- source repo `github.com/bjcorder/AuthMap`;
 - source tag `vX.Y.Z`;
 - the release workflow at that tag; and
 - GitHub Actions workflow identity recorded in the attestation.
@@ -29,7 +29,7 @@ go install github.com/slsa-framework/slsa-verifier/v2/cli/slsa-verifier@latest
 ```sh
 TAG=v1.0.1
 
-gh release download "$TAG" -R Ozark-Security-Labs/AuthMap \
+gh release download "$TAG" -R bjcorder/AuthMap \
   -p '*.tar.gz' -p '*.zip' -p '*.sha256' -p '*.intoto.jsonl'
 
 sha256sum --check "authmap-${TAG#v}-source.tar.gz.sha256"
@@ -43,7 +43,7 @@ For macOS or Windows archives, check the matching `authmap-${TAG#v}-...`
 ```sh
 slsa-verifier verify-artifact \
   --provenance-path "authmap-${TAG#v}.intoto.jsonl" \
-  --source-uri github.com/Ozark-Security-Labs/AuthMap \
+  --source-uri github.com/bjcorder/AuthMap \
   --source-tag "$TAG" \
   "authmap-${TAG#v}-source.tar.gz"
 ```
@@ -53,7 +53,7 @@ Repeat the command for the platform archive you plan to run, for example:
 ```sh
 slsa-verifier verify-artifact \
   --provenance-path "authmap-${TAG#v}.intoto.jsonl" \
-  --source-uri github.com/Ozark-Security-Labs/AuthMap \
+  --source-uri github.com/bjcorder/AuthMap \
   --source-tag "$TAG" \
   "authmap-${TAG#v}-x86_64-unknown-linux-gnu.tar.gz"
 ```

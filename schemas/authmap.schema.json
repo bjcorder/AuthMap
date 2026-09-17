@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Ozark-Security-Labs/AuthMap/schemas/authmap.schema.json",
+  "$id": "https://github.com/bjcorder/AuthMap/schemas/authmap.schema.json",
   "title": "AuthMap Document",
   "type": "object",
   "required": [
