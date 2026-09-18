@@ -1112,6 +1112,10 @@
       "notes": [],
       "extensions": {
         "authmap.django": {
+          "action_authentication_dynamic": false,
+          "action_authentication_empty": false,
+          "action_permission_dynamic": false,
+          "action_permission_empty": false,
           "basename": "user",
           "class_name": "UserViewSet",
           "handler_kind": "viewset_action",
@@ -1667,6 +1671,10 @@
       ],
       "extensions": {
         "authmap.django": {
+          "action_authentication_dynamic": false,
+          "action_authentication_empty": false,
+          "action_permission_dynamic": false,
+          "action_permission_empty": false,
           "basename": "custom-model",
           "class_name": "CustomModelBackedViewSet",
           "handler_kind": "viewset_action",
@@ -3843,6 +3851,10 @@
       "notes": [],
       "extensions": {
         "authmap.django": {
+          "action_authentication_dynamic": false,
+          "action_authentication_empty": false,
+          "action_permission_dynamic": false,
+          "action_permission_empty": false,
           "basename": "audit",
           "class_name": "ReadOnlyAuditViewSet",
           "handler_kind": "viewset_action",
@@ -3930,6 +3942,7 @@
       "extensions": {
         "authmap.django": {
           "class_name": null,
+          "drf_handler": false,
           "handler_kind": "function",
           "method_name": null,
           "route_pattern_kind": "path"
@@ -4057,6 +4070,7 @@
       "extensions": {
         "authmap.django": {
           "class_name": "AccountDetailView",
+          "drf_handler": false,
           "handler_kind": "class_based_view",
           "method_name": null,
           "route_pattern_kind": "path"
@@ -4144,6 +4158,7 @@
       "extensions": {
         "authmap.django": {
           "class_name": null,
+          "drf_handler": false,
           "handler_kind": "function",
           "method_name": null,
           "route_pattern_kind": "path"
@@ -4650,6 +4665,7 @@
       "extensions": {
         "authmap.django": {
           "class_name": null,
+          "drf_handler": false,
           "handler_kind": "function",
           "method_name": null,
           "route_pattern_kind": "path"
@@ -4751,6 +4767,7 @@
       "extensions": {
         "authmap.django": {
           "class_name": null,
+          "drf_handler": false,
           "handler_kind": "function",
           "method_name": null,
           "route_pattern_kind": "path"
@@ -4856,6 +4873,7 @@
       "extensions": {
         "authmap.django": {
           "class_name": null,
+          "drf_handler": true,
           "handler_kind": "function",
           "method_name": null,
           "route_pattern_kind": "re_path"
@@ -4924,6 +4942,7 @@
       "extensions": {
         "authmap.django": {
           "class_name": null,
+          "drf_handler": false,
           "handler_kind": "function",
           "method_name": null,
           "route_pattern_kind": "path"
@@ -4992,6 +5011,7 @@
       "extensions": {
         "authmap.django": {
           "class_name": null,
+          "drf_handler": false,
           "handler_kind": "function",
           "method_name": null,
           "route_pattern_kind": "path"
@@ -5073,6 +5093,7 @@
       "extensions": {
         "authmap.django": {
           "class_name": null,
+          "drf_handler": false,
           "handler_kind": "function",
           "method_name": null,
           "route_pattern_kind": "re_path"
