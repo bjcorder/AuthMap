@@ -3894,10 +3894,7 @@ fn collect_python_imports(
         let module_file = resolve_python_module(parsed, module_index, module.trim())
             .unwrap_or_else(|| parsed.source.path.clone());
         let mut cursor = node.walk();
-        for child in node
-            .named_children(&mut cursor)
-            .filter(|child| child.kind() != "module_name")
-        {
+        for child in node.children_by_field_name("name", &mut cursor) {
             let (export_name, local_name) = if child.kind() == "aliased_import" {
                 (
                     child
@@ -6113,26 +6110,21 @@ fn extract_django_method_decorator_evidence(
                         .named_child(0)
                         .filter(|node| node.kind() == "call")?;
                     let function = call.child_by_field_name("function")?;
-                    if python_import_alias(class.parsed, &terminal_symbol_name(class.parsed.text_for(function)?)) != "method_decorator"
+                    if python_import_alias(
+                        class.parsed,
+                        &terminal_symbol_name(class.parsed.text_for(function)?),
+                        Some(decorator.start_byte()),
+                    ) != "method_decorator"
                     {
                         return None;
                     }
                     let arguments = call.child_by_field_name("arguments")?;
                     let mut argument_cursor = arguments.walk();
-                    let mut children = arguments.named_children(&mut argument_cursor);
-                    let guard_node = children.find(|node| node.kind() != "keyword_argument")?;
-                    let guard_args = guard_node
-                        .child_by_field_name("arguments")
-                        .and_then(|node| class.parsed.text_for(node))
-                        .unwrap_or_default();
-                    let guard_node = if guard_node.kind() == "call" {
-                        guard_node
-                            .child_by_field_name("function")
-                            .unwrap_or(guard_node)
-                    } else {
-                        guard_node
-                    };
-                    let guard = python_import_alias(class.parsed, &terminal_symbol_name(class.parsed.text_for(guard_node)?));
+                    let positional = arguments
+                        .named_children(&mut argument_cursor)
+                        .filter(|node| !matches!(node.kind(), "keyword_argument" | "comment"))
+                        .collect::<Vec<_>>();
+                    let guard_node = positional.first().copied()?;
                     let mut target_cursor = arguments.walk();
                     let named_target = arguments.named_children(&mut target_cursor).find(|node| {
                         node.kind() == "keyword_argument"
@@ -6141,42 +6133,77 @@ fn extract_django_method_decorator_evidence(
                                 .and_then(|name| class.parsed.text_for(name))
                                 == Some("name")
                     });
+                    let target_node = positional.get(1).copied().or_else(|| {
+                        named_target.and_then(|node| node.child_by_field_name("value"))
+                    });
                     let class_wrapper = class
                         .node
                         .parent()
                         .is_some_and(|parent| parent.id() == decorated.id());
                     let decorated_method_name = find_direct_child_kind(decorated, "function_definition")
                         .and_then(|node| function_name(class.parsed, node));
-                    let concrete_target = if let Some(target) = named_target
-                        .and_then(|node| node.child_by_field_name("value"))
+                    let static_dispatch_target = target_node
+                        .filter(|node| node.kind() == "string")
                         .and_then(|node| class.parsed.text_for(node))
-                    {
-                        let target = target.trim_matches(['\'', '"']);
-                        target != "dispatch"
+                        .is_some_and(|target| target.trim_matches(['\'', '"']) == "dispatch");
+                    let concrete_target = if class_wrapper {
+                        !static_dispatch_target
                     } else {
-                        !class_wrapper && decorated_method_name.as_deref() != Some("dispatch")
+                        decorated_method_name.as_deref() != Some("dispatch")
                     };
-                    let mut evidence = django_decorator_evidence(
-                        route,
-                        &guard,
-                        &guard_args,
-                        class.parsed.span_for(decorator),
-                        rules,
-                    )?;
-                    if inherited && evidence.confidence == Confidence::High {
-                        evidence.confidence = Confidence::Medium;
-                    }
-                    if concrete_target {
-                        evidence.confidence = Confidence::Low;
-                        evidence.notes.push("method_decorator targets one concrete method; aggregate route coverage is uncertain".to_string());
-                    }
-                    evidence.notes.push(if concrete_target {
-                        format!("Django method_decorator targets {guard} on a concrete method")
+                    let mut evidence = Vec::new();
+                    let guard_nodes = if matches!(guard_node.kind(), "list" | "tuple") {
+                        let mut guard_cursor = guard_node.walk();
+                        guard_node
+                            .named_children(&mut guard_cursor)
+                            .filter(|node| node.kind() != "comment")
+                            .collect::<Vec<_>>()
                     } else {
-                        "Django method_decorator applies to class dispatch".to_string()
-                    });
-                    Some(evidence)
+                        vec![guard_node]
+                    };
+                    for guard_node in guard_nodes {
+                        let guard_args = guard_node
+                            .child_by_field_name("arguments")
+                            .and_then(|node| class.parsed.text_for(node))
+                            .unwrap_or_default();
+                        let guard_function = if guard_node.kind() == "call" {
+                            guard_node
+                                .child_by_field_name("function")
+                                .unwrap_or(guard_node)
+                        } else {
+                            guard_node
+                        };
+                        let guard = python_import_alias(
+                            class.parsed,
+                            &terminal_symbol_name(class.parsed.text_for(guard_function)?),
+                            Some(decorator.start_byte()),
+                        );
+                        let Some(mut item) = django_decorator_evidence(
+                            route,
+                            &guard,
+                            &guard_args,
+                            class.parsed.span_for(decorator),
+                            rules,
+                        ) else {
+                            continue;
+                        };
+                        if inherited && item.confidence == Confidence::High {
+                            item.confidence = Confidence::Medium;
+                        }
+                        if concrete_target {
+                            item.confidence = Confidence::Low;
+                            item.notes.push("method_decorator targets one concrete method; aggregate route coverage is uncertain".to_string());
+                        }
+                        item.notes.push(if concrete_target {
+                            format!("Django method_decorator targets {guard} on a concrete method")
+                        } else {
+                            "Django method_decorator applies to class dispatch".to_string()
+                        });
+                        evidence.push(item);
+                    }
+                    (!evidence.is_empty()).then_some(evidence)
                 })
+                .flatten()
                 .collect::<Vec<_>>()
         })
         .collect()
@@ -6431,7 +6458,7 @@ fn extract_django_fbv_decorator_evidence(
         else {
             continue;
         };
-        let name = python_import_alias(parsed, &name);
+        let name = python_import_alias(parsed, &name, Some(decorator.start_byte()));
         if let Some(item) =
             django_decorator_evidence(route, &name, &args_text, parsed.span_for(decorator), rules)
         {
@@ -6462,7 +6489,7 @@ fn django_fbv_declaration_presence(parsed: &ParsedFile, function_node: Node<'_>)
         let name = parsed
             .text_for(function)
             .map(terminal_symbol_name)
-            .map(|name| python_import_alias(parsed, &name))
+            .map(|name| python_import_alias(parsed, &name, Some(decorator.start_byte())))
             .unwrap_or_default();
         permission |= name == "permission_classes";
         authentication |= name == "authentication_classes";
@@ -6470,25 +6497,41 @@ fn django_fbv_declaration_presence(parsed: &ParsedFile, function_node: Node<'_>)
     (permission, authentication)
 }
 
-fn python_import_alias(parsed: &ParsedFile, name: &str) -> String {
-    for line in parsed.text.lines() {
-        let trimmed = line.trim();
-        if let Some((left, right)) = trimmed
-            .strip_prefix("from ")
-            .and_then(|rest| rest.split_once(" import "))
-        {
-            for part in right.split(',') {
-                let mut bits = part.trim().split(" as ");
-                let original = bits.next().unwrap_or_default().trim();
-                let local = bits.next().unwrap_or(original).trim();
-                if local == name {
-                    return original.rsplit('.').next().unwrap_or(original).to_string();
-                }
+fn python_import_alias(parsed: &ParsedFile, name: &str, use_byte: Option<usize>) -> String {
+    let Some(root) = parsed.root_node() else {
+        return name.to_string();
+    };
+    let mut latest = None;
+    let mut root_cursor = root.walk();
+    for node in root.named_children(&mut root_cursor) {
+        if use_byte.is_some_and(|offset| node.start_byte() >= offset) {
+            break;
+        }
+        if node.kind() != "import_from_statement" {
+            continue;
+        }
+        let mut cursor = node.walk();
+        for child in node.children_by_field_name("name", &mut cursor) {
+            let (original, local) = if child.kind() == "aliased_import" {
+                let original = child
+                    .child_by_field_name("name")
+                    .and_then(|node| parsed.text_for(node))
+                    .unwrap_or_default();
+                let local = child
+                    .child_by_field_name("alias")
+                    .and_then(|node| parsed.text_for(node))
+                    .unwrap_or(original);
+                (original, local)
+            } else {
+                let original = parsed.text_for(child).unwrap_or_default();
+                (original, original)
+            };
+            if local == name {
+                latest = Some(original.rsplit('.').next().unwrap_or(original).to_string());
             }
-            let _ = left;
         }
     }
-    name.to_string()
+    latest.unwrap_or_else(|| name.to_string())
 }
 
 fn django_decorator_evidence(
@@ -7213,17 +7256,10 @@ fn python_class_bases(parsed: &ParsedFile, node: Node<'_>) -> Vec<String> {
             bases
                 .children(&mut cursor)
                 .filter(|base| base.is_named())
-                .filter_map(|base| parsed.text_for(base).map(clean_python_base))
+                .filter_map(|base| parsed.text_for(base).map(|text| text.trim().to_string()))
                 .collect()
         })
         .unwrap_or_default()
-}
-
-fn clean_python_base(value: &str) -> String {
-    value
-        .trim()
-        .trim_matches(|ch: char| matches!(ch, '"' | '\'' | '`' | ' ' | '\n' | '\r' | '\t'))
-        .to_string()
 }
 
 fn direct_class_assignments(class_node: Node<'_>) -> Vec<Node<'_>> {
@@ -10830,6 +10866,111 @@ def update_account(account_id: str):
         assert_eq!(
             coverage_for_route(&document, &dispatch.id).class,
             CoverageClass::AuthnOnly
+        );
+    }
+
+    #[test]
+    fn django_startproject_settings_propagate_through_included_router_and_qualified_bases() {
+        let temp = TestDir::new("django-startproject-settings");
+        write_file(
+            &temp.path().join("mysite/settings.py"),
+            "REST_FRAMEWORK = {'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated']}\n",
+        );
+        write_file(
+            &temp.path().join("mysite/urls.py"),
+            "from django.urls import include, path\nfrom polls.views import GenericView\nurlpatterns = [path('generic/', GenericView.as_view()), path('api/', include('polls.urls'))]\n",
+        );
+        write_file(
+            &temp.path().join("polls/views.py"),
+            "from rest_framework import generics, viewsets\nclass GenericView(generics.ListCreateAPIView):\n    pass\nclass ItemViewSet(viewsets.ModelViewSet):\n    pass\n",
+        );
+        write_file(
+            &temp.path().join("polls/urls.py"),
+            "from rest_framework.routers import SimpleRouter\nfrom .views import ItemViewSet\nrouter = SimpleRouter()\nrouter.register('items', ItemViewSet, basename='item')\nurlpatterns = router.urls\n",
+        );
+        let document = run_scan(&ScanPlan::new(
+            vec![temp.path().to_path_buf()],
+            None,
+            ScanConfig::default(),
+        ))
+        .expect("scan should succeed");
+        for path in ["/generic/", "/api/items"] {
+            let route = route_by_path(&document, path);
+            assert_eq!(
+                coverage_for_route(&document, &route.id).class,
+                CoverageClass::AuthnOnly,
+                "route {path} should inherit project settings"
+            );
+        }
+        assert!(document.routes.iter().any(|route| {
+            route.path == "/generic/"
+                && route
+                    .extensions
+                    .get("authmap.django")
+                    .and_then(|value| value.get("drf_handler"))
+                    .and_then(serde_json::Value::as_bool)
+                    == Some(true)
+        }));
+    }
+
+    #[test]
+    fn django_method_decorator_supports_positional_target_lists_and_multiline_aliases() {
+        let temp = TestDir::new("django-method-decorator-forms");
+        write_file(
+            &temp.path().join("views.py"),
+            "from django.contrib.auth.decorators import login_required\nfrom django.utils.decorators import (\n    method_decorator as md,\n)\nfrom django.views import View\n\n@md([login_required], 'dispatch')\nclass Dispatch(View):\n    def get(self, request):\n        return []\n\n@md([login_required], 'get')\nclass Concrete(View):\n    def get(self, request):\n        return []\n\n@md(login_required, target_name)\nclass Dynamic(View):\n    def get(self, request):\n        return []\n\n@md(login_required, name='get')\nclass MethodNameIgnored(View):\n    @md(login_required, name='get')\n    def dispatch(self, request):\n        return []\n    def get(self, request):\n        return []\n\n@md(login_required)\nclass Missing(View):\n    def get(self, request):\n        return []\n",
+        );
+        write_file(
+            &temp.path().join("urls.py"),
+            "from django.urls import path\nfrom .views import Dispatch, Concrete, Dynamic, MethodNameIgnored, Missing\nurlpatterns = [path('dispatch/', Dispatch.as_view()), path('concrete/', Concrete.as_view()), path('dynamic/', Dynamic.as_view()), path('method-name/', MethodNameIgnored.as_view()), path('missing/', Missing.as_view())]\n",
+        );
+        let document = run_scan(&ScanPlan::new(
+            vec![temp.path().to_path_buf()],
+            None,
+            ScanConfig::default(),
+        ))
+        .expect("scan should succeed");
+        assert_eq!(
+            coverage_for_route(&document, &route_by_path(&document, "/dispatch/").id).class,
+            CoverageClass::AuthnOnly
+        );
+        assert_eq!(
+            coverage_for_route(&document, &route_by_path(&document, "/method-name/").id).class,
+            CoverageClass::AuthnOnly
+        );
+        for path in ["/concrete/", "/dynamic/", "/missing/"] {
+            assert_eq!(
+                coverage_for_route(&document, &route_by_path(&document, path).id).class,
+                CoverageClass::UnknownOrDynamic,
+                "route {path} should remain weak"
+            );
+        }
+    }
+
+    #[test]
+    fn django_method_decorator_aliases_are_module_scoped_and_comments_are_not_arguments() {
+        let temp = TestDir::new("django-method-decorator-alias-scope");
+        write_file(
+            &temp.path().join("views.py"),
+            "from django.contrib.auth.decorators import login_required as auth_guard\nfrom custom.decorators import passthrough as no_op\nfrom django.utils.decorators import method_decorator as md\nfrom django.views import View\n\n@md(auth_guard,  # the keyword target follows this comment\n    name='dispatch')\nclass Guarded(View):\n    def get(self, request):\n        return []\n\n@md(no_op, name='dispatch')\nclass Public(View):\n    def get(self, request):\n        return []\n\ndef later_rebinds_auth_guard():\n    from custom.decorators import passthrough as auth_guard\n    return auth_guard\n\ndef later_rebinds_no_op():\n    from django.contrib.auth.decorators import login_required as no_op\n    return no_op\n",
+        );
+        write_file(
+            &temp.path().join("urls.py"),
+            "from django.urls import path\nfrom .views import Guarded, Public\nurlpatterns = [path('guarded/', Guarded.as_view()), path('public/', Public.as_view())]\n",
+        );
+        let document = run_scan(&ScanPlan::new(
+            vec![temp.path().to_path_buf()],
+            None,
+            ScanConfig::default(),
+        ))
+        .expect("scan should succeed");
+        assert_eq!(
+            coverage_for_route(&document, &route_by_path(&document, "/guarded/").id).class,
+            CoverageClass::AuthnOnly
+        );
+        assert_eq!(
+            coverage_for_route(&document, &route_by_path(&document, "/public/").id).class,
+            CoverageClass::Unauthenticated
         );
     }
 

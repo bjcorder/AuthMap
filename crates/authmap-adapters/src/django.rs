@@ -1301,6 +1301,14 @@ fn emit_router_routes(
         let Some(viewset) = &registration.viewset else {
             continue;
         };
+        let defaults = index.settings_for_file(&viewset.file).or_else(|| {
+            inherited_evidence.iter().find_map(|evidence| {
+                evidence
+                    .span
+                    .as_ref()
+                    .and_then(|span| index.settings_for_file(&span.file))
+            })
+        });
         let route_prefix = registration
             .prefix
             .clone()
@@ -1335,7 +1343,7 @@ fn emit_router_routes(
                 inherited_evidence.clone(),
                 base_confidence,
                 base_notes.clone(),
-                index.settings_for_file(&viewset.file).as_ref(),
+                defaults.as_ref(),
             );
         }
         for action in &viewset.actions {
@@ -1375,7 +1383,7 @@ fn emit_router_routes(
                     inherited_evidence.clone(),
                     confidence,
                     notes.clone(),
-                    index.settings_for_file(&viewset.file).as_ref(),
+                    defaults.as_ref(),
                 );
             }
         }
@@ -1840,7 +1848,7 @@ fn class_bases(parsed: &ParsedFile, node: Node<'_>) -> Vec<String> {
             bases
                 .children(&mut cursor)
                 .filter(|base| base.is_named())
-                .filter_map(|base| parsed.text_for(base).map(clean_symbol))
+                .filter_map(|base| parsed.text_for(base).map(|text| text.trim().to_string()))
                 .collect()
         })
         .unwrap_or_default()
@@ -2173,6 +2181,22 @@ fn class_resolves_drf(
         return false;
     }
     let resolved = class.bases.iter().any(|base| {
+        if let Some((object, member)) = base.rsplit_once('.') {
+            if let Some(key) = index.resolve_class_key(&class.file, base)
+                && let Some(parent) = index.classes.get(&key)
+            {
+                return class_resolves_drf(index, parent, active, depth + 1);
+            }
+            let Some(import) = index
+                .imports_by_file
+                .get(&class.file)
+                .and_then(|imports| imports.get(object))
+            else {
+                return false;
+            };
+            return import.module.as_deref().is_some_and(is_drf_module)
+                && is_known_drf_base(member);
+        }
         let clean = clean_symbol(base);
         // Resolve local definitions before accepting a framework-shaped name;
         // a project class named APIView may inherit an ordinary Django View.
@@ -2312,10 +2336,7 @@ fn parse_imports(
             let module = module.trim();
             let base_file = resolve_python_import_module(parsed, module, module_index);
             let mut cursor = node.walk();
-            for child in node
-                .named_children(&mut cursor)
-                .filter(|child| child.kind() != "module_name")
-            {
+            for child in node.children_by_field_name("name", &mut cursor) {
                 let (original, local) = if child.kind() == "aliased_import" {
                     let original = child
                         .child_by_field_name("name")
@@ -2827,10 +2848,14 @@ mod tests {
     fn imports_use_tree_sitter_nodes_and_ignore_string_decoys() {
         let file = parsed(
             "project/urls.py",
-            "text = \"from .views import( Fake )\"\nfrom .views import(\n View as Alias,\n)\n",
+            "text = \"from .views import( Fake )\"\nfrom .views import(\n View as Alias,\n)\nfrom .views import Foo\nfrom rest_framework.viewsets import ModelViewSet\n",
         );
         let imports = parse_imports(&file, &BTreeMap::new());
         assert!(imports.contains_key("Alias"));
+        assert!(imports.contains_key("Foo"));
+        assert!(imports.contains_key("ModelViewSet"));
+        assert!(!imports.contains_key(".views"));
+        assert!(!imports.contains_key("rest_framework.viewsets"));
         assert!(!imports.contains_key("Fake"));
     }
 
@@ -2838,7 +2863,7 @@ mod tests {
     fn local_view_base_is_not_drf_but_known_alias_and_ancestry_are() {
         let file = parsed(
             "project/views.py",
-            "from rest_framework.views import APIView as DRFAPIView\nfrom rest_framework.generics import ListCreateAPIView as Items\nclass View: pass\nclass APIView(View): pass\nclass Things(APIView): pass\nclass PublicAPIView(View): pass\nclass Base(DRFAPIView): pass\nclass Leaf(Base): pass\nclass ItemsView(Items): pass\n",
+            "from rest_framework import generics, viewsets\nfrom rest_framework.views import APIView as DRFAPIView\nfrom rest_framework.generics import ListCreateAPIView as Items\nfrom django.views import View as DjangoView\nclass View: pass\nclass APIView(View): pass\nclass Things(APIView): pass\nclass PublicAPIView(View): pass\nclass Base(DRFAPIView): pass\nclass Leaf(Base): pass\nclass ItemsView(Items): pass\nclass GenericView(generics.ListCreateAPIView): pass\nclass ViewsetView(viewsets.ModelViewSet): pass\nclass FakeQualified(DjangoView.ListCreateAPIView): pass\n",
         );
         let mut index = DjangoIndex::default();
         index.module_index = build_module_index(std::slice::from_ref(&file));
@@ -2855,6 +2880,9 @@ mod tests {
             "Base",
             "Leaf",
             "ItemsView",
+            "GenericView",
+            "ViewsetView",
+            "FakeQualified",
         ] {
             assert!(
                 index
@@ -2875,6 +2903,9 @@ mod tests {
         assert!(!is_drf_handler(&index, &target("Things")));
         assert!(is_drf_handler(&index, &target("Leaf")));
         assert!(is_drf_handler(&index, &target("ItemsView")));
+        assert!(is_drf_handler(&index, &target("GenericView")));
+        assert!(is_drf_handler(&index, &target("ViewsetView")));
+        assert!(!is_drf_handler(&index, &target("FakeQualified")));
     }
 
     #[test]
