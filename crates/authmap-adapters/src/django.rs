@@ -41,6 +41,7 @@ impl FrameworkAdapter for DjangoAdapter {
             let Some(root) = parsed.root_node() else {
                 continue;
             };
+            index.collect_drf_settings_defaults(parsed);
             collect_symbols(parsed, root, &mut index);
         }
 
@@ -160,6 +161,29 @@ struct ViewSetAction {
     url_path: Option<String>,
     dynamic_url_path: bool,
     dynamic_methods: bool,
+    permission_classes: Option<String>,
+    authentication_classes: Option<String>,
+    permission_dynamic: bool,
+    authentication_dynamic: bool,
+    permission_empty: bool,
+    authentication_empty: bool,
+    permission_span: Option<Span>,
+    authentication_span: Option<Span>,
+}
+
+#[derive(Clone, Debug)]
+struct DrfSettingsDefaults {
+    scope_root: String,
+    permission_classes: Option<String>,
+    authentication_classes: Option<String>,
+    dynamic: bool,
+    permission_dynamic: bool,
+    authentication_dynamic: bool,
+    permission_empty: bool,
+    authentication_empty: bool,
+    permission_span: Option<Span>,
+    authentication_span: Option<Span>,
+    span: Span,
 }
 
 #[derive(Clone, Debug)]
@@ -264,10 +288,54 @@ struct DjangoIndex {
     routers: BTreeMap<(String, String), RouterBinding>,
     registrations: Vec<RouterRegistration>,
     model_views: Vec<ModelViewRegistration>,
+    drf_settings_defaults: Vec<DrfSettingsDefaults>,
     diagnostics: Vec<Diagnostic>,
+    drf_functions: BTreeSet<(String, String)>,
 }
 
 impl DjangoIndex {
+    fn collect_drf_settings_defaults(&mut self, parsed: &ParsedFile) {
+        let path = parsed.source.path.replace('\\', "/");
+        let components = path.split('/').collect::<Vec<_>>();
+        let in_settings_package = components.iter().enumerate().any(|(i, part)| {
+            *part == "settings"
+                && components
+                    .get(i + 1)
+                    .is_some_and(|next| next.ends_with(".py"))
+        });
+        if !path.ends_with("settings.py") && !in_settings_package {
+            return;
+        }
+        let Some(defaults) = django_settings_defaults(parsed) else {
+            return;
+        };
+        self.drf_settings_defaults.push(defaults);
+    }
+
+    fn settings_for_file(&self, file: &str) -> Option<DrfSettingsDefaults> {
+        let mut matches = self
+            .drf_settings_defaults
+            .iter()
+            .filter(|candidate| file.replace('\\', "/").starts_with(&candidate.scope_root));
+        let first = matches.next()?.clone();
+        if matches.next().is_some() {
+            return Some(DrfSettingsDefaults {
+                scope_root: first.scope_root,
+                permission_classes: None,
+                authentication_classes: None,
+                dynamic: true,
+                permission_dynamic: true,
+                authentication_dynamic: true,
+                permission_empty: false,
+                authentication_empty: false,
+                permission_span: None,
+                authentication_span: None,
+                span: first.span,
+            });
+        }
+        Some(first)
+    }
+
     fn resolve_viewset_classes(&mut self) {
         let keys = self.classes.keys().cloned().collect::<Vec<_>>();
         let mut resolved = BTreeMap::new();
@@ -426,6 +494,28 @@ impl DjangoIndex {
         }
 
         let mut diagnostics = self.diagnostics;
+        if self
+            .drf_settings_defaults
+            .iter()
+            .any(|defaults| defaults.dynamic)
+            || self
+                .drf_settings_defaults
+                .iter()
+                .map(|candidate| candidate.scope_root.as_str())
+                .any(|root| {
+                    self.drf_settings_defaults
+                        .iter()
+                        .filter(|candidate| candidate.scope_root == root)
+                        .count()
+                        > 1
+                })
+        {
+            diagnostics.push(diagnostic(
+                diagnostic_codes::DJANGO_DYNAMIC_SETTINGS_DEFAULT,
+                self.drf_settings_defaults.first().map_or_else(|| Span { file: "settings.py".to_string(), line: 1, column: 1, byte_range: None }, |defaults| defaults.span.clone()),
+                "DRF settings defaults are dynamic or ambiguous; authorization coverage is review-only",
+            ));
+        }
         diagnostics.extend(include_diagnostics);
         diagnostics.sort_by_key(diagnostic_sort_key);
         AdapterOutput {
@@ -956,15 +1046,69 @@ fn emit_pattern_routes(
                 notes.clone(),
             ));
             let mut extensions = authmap_core::ExtensionMap::new();
-            extensions.insert(
-                "authmap.django".to_string(),
-                serde_json::json!({
-                    "route_pattern_kind": pattern_kind_name(pattern.kind),
-                    "handler_kind": handler_kind_name(handler.kind),
-                    "class_name": handler.class_name,
-                    "method_name": handler.method_name,
-                }),
-            );
+            let mut django_metadata = serde_json::json!({
+                "route_pattern_kind": pattern_kind_name(pattern.kind),
+                "handler_kind": handler_kind_name(handler.kind),
+                "class_name": handler.class_name,
+                "method_name": handler.method_name,
+                "drf_handler": is_drf_handler(index, handler),
+            });
+            let defaults_for_route = index.settings_for_file(&handler.span.file).or_else(|| {
+                source_evidence.iter().find_map(|item| {
+                    item.span
+                        .as_ref()
+                        .and_then(|span| index.settings_for_file(&span.file))
+                })
+            });
+            if let Some(defaults) = defaults_for_route
+                && let Some(metadata) = django_metadata.as_object_mut()
+            {
+                if let Some(value) = &defaults.permission_classes {
+                    metadata.insert(
+                        "default_permission_classes".to_string(),
+                        serde_json::json!(value),
+                    );
+                }
+                metadata.insert(
+                    "default_permission_dynamic".to_string(),
+                    serde_json::json!(defaults.permission_dynamic),
+                );
+                metadata.insert(
+                    "default_permission_empty".to_string(),
+                    serde_json::json!(defaults.permission_empty),
+                );
+                if let Some(span) = &defaults.permission_span {
+                    metadata.insert(
+                        "default_permission_span".to_string(),
+                        serde_json::json!(span),
+                    );
+                }
+                if let Some(value) = &defaults.authentication_classes {
+                    metadata.insert(
+                        "default_authentication_classes".to_string(),
+                        serde_json::json!(value),
+                    );
+                }
+                metadata.insert(
+                    "default_authentication_dynamic".to_string(),
+                    serde_json::json!(defaults.authentication_dynamic),
+                );
+                metadata.insert(
+                    "default_authentication_empty".to_string(),
+                    serde_json::json!(defaults.authentication_empty),
+                );
+                if let Some(span) = &defaults.authentication_span {
+                    metadata.insert(
+                        "default_authentication_span".to_string(),
+                        serde_json::json!(span),
+                    );
+                }
+                metadata.insert(
+                    "default_permissions_dynamic".to_string(),
+                    serde_json::json!(defaults.dynamic),
+                );
+            }
+            extensions.insert("authmap.django".to_string(), django_metadata);
             push_route_unique(
                 routes,
                 seen,
@@ -1191,6 +1335,7 @@ fn emit_router_routes(
                 inherited_evidence.clone(),
                 base_confidence,
                 base_notes.clone(),
+                index.settings_for_file(&viewset.file).as_ref(),
             );
         }
         for action in &viewset.actions {
@@ -1230,6 +1375,7 @@ fn emit_router_routes(
                     inherited_evidence.clone(),
                     confidence,
                     notes.clone(),
+                    index.settings_for_file(&viewset.file).as_ref(),
                 );
             }
         }
@@ -1288,6 +1434,7 @@ fn emit_drf_route(
     mut source_evidence: Vec<SourceEvidence>,
     confidence: Confidence,
     notes: Vec<String>,
+    defaults: Option<&DrfSettingsDefaults>,
 ) {
     source_evidence.push(source_evidence_item(
         "drf_router_register",
@@ -1312,18 +1459,118 @@ fn emit_drf_route(
         ));
     }
     let mut extensions = authmap_core::ExtensionMap::new();
-    extensions.insert(
-        "authmap.django".to_string(),
-        serde_json::json!({
-            "route_pattern_kind": "drf_router",
-            "handler_kind": handler_kind,
-            "class_name": viewset.name,
-            "method_name": action_name,
-            "router_name": registration.router_name,
-            "basename": registration.basename,
-            "lookup_field": lookup_field(viewset),
-        }),
-    );
+    let mut django_metadata = serde_json::json!({
+        "route_pattern_kind": "drf_router",
+        "handler_kind": handler_kind,
+        "class_name": viewset.name,
+        "method_name": action_name,
+        "router_name": registration.router_name,
+        "basename": registration.basename,
+        "lookup_field": lookup_field(viewset),
+    });
+    if let Some(metadata) = django_metadata.as_object_mut() {
+        if let Some(value) = action_permission_classes(viewset, action_name) {
+            metadata.insert(
+                "action_permission_classes".to_string(),
+                serde_json::json!(value),
+            );
+        }
+        if let Some(action) = viewset
+            .actions
+            .iter()
+            .find(|action| action.name == action_name)
+        {
+            metadata.insert(
+                "action_permission_dynamic".to_string(),
+                serde_json::json!(action.permission_dynamic),
+            );
+            metadata.insert(
+                "action_permission_empty".to_string(),
+                serde_json::json!(action.permission_empty),
+            );
+            if let Some(span) = &action.permission_span {
+                metadata.insert(
+                    "action_permission_span".to_string(),
+                    serde_json::json!(span),
+                );
+            }
+        }
+        if let Some(value) = action_authentication_classes(viewset, action_name) {
+            metadata.insert(
+                "action_authentication_classes".to_string(),
+                serde_json::json!(value),
+            );
+        }
+        if let Some(action) = viewset
+            .actions
+            .iter()
+            .find(|action| action.name == action_name)
+        {
+            metadata.insert(
+                "action_authentication_dynamic".to_string(),
+                serde_json::json!(action.authentication_dynamic),
+            );
+            metadata.insert(
+                "action_authentication_empty".to_string(),
+                serde_json::json!(action.authentication_empty),
+            );
+            if let Some(span) = &action.authentication_span {
+                metadata.insert(
+                    "action_authentication_span".to_string(),
+                    serde_json::json!(span),
+                );
+            }
+        }
+        if let Some(defaults) = defaults {
+            if let Some(value) = &defaults.permission_classes {
+                metadata.insert(
+                    "default_permission_classes".to_string(),
+                    serde_json::json!(value),
+                );
+            }
+            if let Some(value) = &defaults.authentication_classes {
+                metadata.insert(
+                    "default_authentication_classes".to_string(),
+                    serde_json::json!(value),
+                );
+            }
+            if defaults.dynamic {
+                metadata.insert(
+                    "default_permissions_dynamic".to_string(),
+                    serde_json::json!(true),
+                );
+            }
+            metadata.insert(
+                "default_permission_dynamic".to_string(),
+                serde_json::json!(defaults.permission_dynamic),
+            );
+            metadata.insert(
+                "default_permission_empty".to_string(),
+                serde_json::json!(defaults.permission_empty),
+            );
+            metadata.insert(
+                "default_authentication_dynamic".to_string(),
+                serde_json::json!(defaults.authentication_dynamic),
+            );
+            metadata.insert(
+                "default_authentication_empty".to_string(),
+                serde_json::json!(defaults.authentication_empty),
+            );
+            if let Some(span) = &defaults.permission_span {
+                metadata.insert(
+                    "default_permission_span".to_string(),
+                    serde_json::json!(span),
+                );
+            }
+            if let Some(span) = &defaults.authentication_span {
+                metadata.insert(
+                    "default_authentication_span".to_string(),
+                    serde_json::json!(span),
+                );
+            }
+        }
+    }
+    extensions.insert("authmap.django".to_string(), django_metadata);
     push_route_unique(
         routes,
         seen,
@@ -1363,6 +1610,16 @@ fn collect_symbols(parsed: &ParsedFile, root: Node<'_>, index: &mut DjangoIndex)
         match node.kind() {
             "decorated_definition" => {
                 collect_model_view_registration(parsed, node, index);
+                if let Some(function) = find_direct_child_kind(node, "function_definition")
+                    && decorated_has_api_view(parsed, node)
+                    && let Some(name) = function
+                        .child_by_field_name("name")
+                        .and_then(|name| parsed.text_for(name))
+                {
+                    index
+                        .drf_functions
+                        .insert((parsed.source.path.clone(), name.to_string()));
+                }
             }
             "function_definition" => {
                 if let Some(name_node) = node.child_by_field_name("name")
@@ -1455,6 +1712,25 @@ fn collect_model_view_registration(
             span: parsed.span_for(call),
         });
     }
+}
+
+fn decorated_has_api_view(parsed: &ParsedFile, node: Node<'_>) -> bool {
+    let mut cursor = node.walk();
+    node.children(&mut cursor)
+        .filter(|child| child.kind() == "decorator")
+        .any(|decorator| {
+            let Some(expr) = decorator.named_child(0) else {
+                return false;
+            };
+            let target = if expr.kind() == "call" {
+                expr.child_by_field_name("function").unwrap_or(expr)
+            } else {
+                expr
+            };
+            parsed
+                .text_for(target)
+                .is_some_and(|text| terminal_symbol_name(text) == "api_view")
+        })
 }
 
 fn class_info(parsed: &ParsedFile, node: Node<'_>) -> Option<ClassInfo> {
@@ -1605,9 +1881,395 @@ fn viewset_action(
             url_path,
             dynamic_url_path,
             dynamic_methods,
+            permission_classes: keyword_value_text(parsed, call, "permission_classes"),
+            authentication_classes: keyword_value_text(parsed, call, "authentication_classes"),
+            permission_dynamic: keyword_value_node(parsed, call, "permission_classes")
+                .is_some_and(|node| !static_permission_value(node)),
+            authentication_dynamic: keyword_value_node(parsed, call, "authentication_classes")
+                .is_some_and(|node| !static_permission_value(node)),
+            permission_empty: keyword_value_node(parsed, call, "permission_classes")
+                .is_some_and(is_empty_static_value),
+            authentication_empty: keyword_value_node(parsed, call, "authentication_classes")
+                .is_some_and(is_empty_static_value),
+            permission_span: keyword_value_node(parsed, call, "permission_classes")
+                .map(|node| parsed.span_for(node)),
+            authentication_span: keyword_value_node(parsed, call, "authentication_classes")
+                .map(|node| parsed.span_for(node)),
         });
     }
     None
+}
+
+fn action_permission_classes(viewset: &ClassInfo, action_name: &str) -> Option<String> {
+    viewset
+        .actions
+        .iter()
+        .find(|action| action.name == action_name)
+        .and_then(|action| action.permission_classes.clone())
+}
+
+fn action_authentication_classes(viewset: &ClassInfo, action_name: &str) -> Option<String> {
+    viewset
+        .actions
+        .iter()
+        .find(|action| action.name == action_name)
+        .and_then(|action| action.authentication_classes.clone())
+}
+
+fn keyword_value_text(parsed: &ParsedFile, call: Node<'_>, name: &str) -> Option<String> {
+    keyword_value_node(parsed, call, name)
+        .and_then(|value| parsed.text_for(value).map(str::to_string))
+}
+
+fn keyword_value_node<'a>(parsed: &ParsedFile, call: Node<'a>, name: &str) -> Option<Node<'a>> {
+    let arguments = call.child_by_field_name("arguments")?;
+    let mut cursor = arguments.walk();
+    arguments
+        .children(&mut cursor)
+        .filter(|child| child.kind() == "keyword_argument")
+        .find_map(|keyword| {
+            let keyword_name = keyword.child_by_field_name("name")?;
+            (parsed.text_for(keyword_name)? == name)
+                .then(|| keyword.child_by_field_name("value"))
+                .flatten()
+        })
+}
+
+fn django_settings_defaults(parsed: &ParsedFile) -> Option<DrfSettingsDefaults> {
+    let root = parsed.root_node()?;
+    let mut stack = vec![root];
+    let mut writes = Vec::new();
+    let mut mutations = Vec::new();
+    while let Some(node) = stack.pop() {
+        if is_module_python_scope(node) {
+            if matches!(node.kind(), "assignment" | "augmented_assignment")
+                && node
+                    .child_by_field_name("left")
+                    .or_else(|| node.child_by_field_name("target"))
+                    .is_some_and(|left| {
+                        let text = parsed.text_for(left).unwrap_or_default().trim();
+                        text == "REST_FRAMEWORK"
+                            || (left.kind() == "subscript"
+                                && text
+                                    .chars()
+                                    .filter(|ch| !ch.is_whitespace())
+                                    .collect::<String>()
+                                    .starts_with("REST_FRAMEWORK["))
+                    })
+            {
+                writes.push(node);
+            }
+            if node.kind() == "expression_statement" {
+                let mut cursor = node.walk();
+                if node.children(&mut cursor).any(|child| {
+                    child.kind() == "call"
+                        && child
+                            .child_by_field_name("function")
+                            .and_then(|function| function.child_by_field_name("object"))
+                            .and_then(|object| parsed.text_for(object))
+                            .is_some_and(|object| object.trim() == "REST_FRAMEWORK")
+                }) {
+                    mutations.push(node);
+                }
+            }
+        }
+        let mut cursor = node.walk();
+        stack.extend(node.children(&mut cursor));
+    }
+    writes.sort_by_key(|node| node.start_byte());
+    mutations.sort_by_key(|node| node.start_byte());
+    let mut found = None;
+    for node in writes {
+        if node.kind() == "augmented_assignment" {
+            found = Some(dynamic_settings_candidate(parsed, node));
+            continue;
+        }
+        // A subscript assignment mutates one setting entry; it does not
+        // replace the REST_FRAMEWORK mapping. Keep the whole settings
+        // candidate dynamic even when its RHS happens to be a dictionary.
+        if node
+            .child_by_field_name("left")
+            .or_else(|| node.child_by_field_name("target"))
+            .is_some_and(|left| left.kind() == "subscript")
+        {
+            found = Some(dynamic_settings_candidate(parsed, node));
+            continue;
+        }
+        let Some(right) = node.child_by_field_name("right") else {
+            found = Some(dynamic_settings_candidate(parsed, node));
+            continue;
+        };
+        if right.kind() != "dictionary" || has_uncertain_settings_context(node) {
+            found = Some(dynamic_settings_candidate(parsed, node));
+            continue;
+        }
+        let mut candidate = settings_candidate_from_dict(parsed, right);
+        if candidate.permission_classes.is_some() || candidate.authentication_classes.is_some() {
+            found = Some(candidate);
+        } else {
+            candidate.dynamic = false;
+            found = Some(candidate);
+        }
+    }
+    if !mutations.is_empty() {
+        let mut candidate =
+            found.unwrap_or_else(|| dynamic_settings_candidate(parsed, mutations[0]));
+        candidate.dynamic = true;
+        candidate.permission_dynamic = true;
+        candidate.authentication_dynamic = true;
+        found = Some(candidate);
+    }
+    found
+}
+
+fn dynamic_settings_candidate(parsed: &ParsedFile, node: Node<'_>) -> DrfSettingsDefaults {
+    DrfSettingsDefaults {
+        scope_root: settings_scope_root(&parsed.source.path.replace('\\', "/")),
+        permission_classes: None,
+        authentication_classes: None,
+        dynamic: true,
+        permission_dynamic: true,
+        authentication_dynamic: true,
+        permission_empty: false,
+        authentication_empty: false,
+        permission_span: None,
+        authentication_span: None,
+        span: parsed.span_for(node),
+    }
+}
+
+fn settings_candidate_from_dict(parsed: &ParsedFile, dict: Node<'_>) -> DrfSettingsDefaults {
+    let mut candidate = DrfSettingsDefaults {
+        scope_root: settings_scope_root(&parsed.source.path.replace('\\', "/")),
+        permission_classes: None,
+        authentication_classes: None,
+        dynamic: false,
+        permission_dynamic: false,
+        authentication_dynamic: false,
+        permission_empty: false,
+        authentication_empty: false,
+        permission_span: None,
+        authentication_span: None,
+        span: parsed.span_for(dict),
+    };
+    let mut cursor = dict.walk();
+    for pair in dict.children(&mut cursor) {
+        if pair.kind() == "dictionary_splat" {
+            candidate.dynamic = true;
+            candidate.permission_dynamic = true;
+            candidate.authentication_dynamic = true;
+            continue;
+        }
+        if pair.kind() != "pair" {
+            continue;
+        }
+        let Some(key_node) = pair.child_by_field_name("key") else {
+            continue;
+        };
+        let Some(key_text) = parsed.text_for(key_node) else {
+            continue;
+        };
+        let key_text = key_text.trim();
+        if !matches!(key_node.kind(), "string" | "string_content")
+            // Keep key handling conservative: without a Python string
+            // decoder, prefixes, escapes, and interpolation are unresolved
+            // and may evaluate to a recognized settings key at runtime.
+            || !key_text.starts_with(['\'', '"'])
+            || key_text.contains('\\')
+            || node_contains_interpolation(key_node)
+        {
+            candidate.dynamic = true;
+            candidate.permission_dynamic = true;
+            candidate.authentication_dynamic = true;
+            continue;
+        }
+        let key = key_text.trim_matches(['\'', '"']);
+        let Some(value_node) = pair.child_by_field_name("value") else {
+            continue;
+        };
+        let value = parsed.text_for(value_node).unwrap_or_default().to_string();
+        let is_permission = key == "DEFAULT_PERMISSION_CLASSES";
+        let is_authentication = key == "DEFAULT_AUTHENTICATION_CLASSES";
+        if !is_permission && !is_authentication {
+            continue;
+        }
+        let dynamic = !static_permission_value(value_node);
+        if is_permission {
+            candidate.permission_classes = Some(value);
+            candidate.permission_dynamic |= dynamic;
+            candidate.permission_empty = is_empty_static_value(value_node);
+            candidate.permission_span = Some(parsed.span_for(value_node));
+        } else {
+            candidate.authentication_classes = Some(value);
+            candidate.authentication_dynamic |= dynamic;
+            candidate.authentication_empty = is_empty_static_value(value_node);
+            candidate.authentication_span = Some(parsed.span_for(value_node));
+        }
+        candidate.dynamic |= dynamic;
+    }
+    candidate
+}
+
+fn is_module_python_scope(node: Node<'_>) -> bool {
+    let mut current = node.parent();
+    while let Some(parent) = current {
+        if matches!(
+            parent.kind(),
+            "function_definition" | "class_definition" | "lambda"
+        ) {
+            return false;
+        }
+        current = parent.parent();
+    }
+    true
+}
+
+fn has_uncertain_settings_context(node: Node<'_>) -> bool {
+    let mut current = node.parent();
+    while let Some(parent) = current {
+        if matches!(
+            parent.kind(),
+            "if_statement"
+                | "try_statement"
+                | "for_statement"
+                | "while_statement"
+                | "with_statement"
+        ) {
+            return true;
+        }
+        current = parent.parent();
+    }
+    false
+}
+
+fn settings_scope_root(path: &str) -> String {
+    let normalized = path.replace('\\', "/");
+    let parent = normalized.rsplit_once('/').map_or("", |(parent, _)| parent);
+    format!("{parent}/")
+}
+
+fn is_drf_handler(index: &DjangoIndex, handler: &HandlerTarget) -> bool {
+    if let Some(class_name) = &handler.class_name
+        && let Some(class) = index
+            .classes
+            .get(&(handler.span.file.clone(), class_name.clone()))
+    {
+        return class_resolves_drf(index, class, &mut BTreeSet::new(), 0);
+    }
+    index
+        .drf_functions
+        .contains(&(handler.span.file.clone(), handler.name.clone()))
+}
+
+fn class_resolves_drf(
+    index: &DjangoIndex,
+    class: &ClassInfo,
+    active: &mut BTreeSet<(String, String)>,
+    depth: usize,
+) -> bool {
+    if depth >= DJANGO_CLASS_RESOLUTION_DEPTH_LIMIT
+        || !active.insert((class.file.clone(), class.name.clone()))
+    {
+        return false;
+    }
+    let resolved = class.bases.iter().any(|base| {
+        let clean = clean_symbol(base);
+        // Resolve local definitions before accepting a framework-shaped name;
+        // a project class named APIView may inherit an ordinary Django View.
+        if let Some(key) = index.resolve_class_key(&class.file, base)
+            && let Some(parent) = index.classes.get(&key)
+        {
+            return class_resolves_drf(index, parent, active, depth + 1);
+        }
+        if let Some(import) = index
+            .imports_by_file
+            .get(&class.file)
+            .and_then(|imports| imports.get(&clean))
+        {
+            return import.module.as_deref().is_some_and(is_drf_module)
+                && import.name.as_deref().is_some_and(is_known_drf_base);
+        }
+        // A bare framework-shaped name has no provenance. Only imports,
+        // local class inheritance, and their recursively resolved ancestors
+        // can establish that this is a DRF handler.
+        false
+    });
+    active.remove(&(class.file.clone(), class.name.clone()));
+    resolved
+}
+
+fn is_known_drf_base(base: &str) -> bool {
+    matches!(
+        base,
+        "APIView"
+            | "ViewSet"
+            | "GenericViewSet"
+            | "ModelViewSet"
+            | "ReadOnlyModelViewSet"
+            | "ListCreateAPIView"
+            | "RetrieveAPIView"
+            | "RetrieveUpdateAPIView"
+            | "RetrieveDestroyAPIView"
+            | "RetrieveUpdateDestroyAPIView"
+            | "CreateAPIView"
+            | "ListAPIView"
+            | "UpdateAPIView"
+            | "DestroyAPIView"
+            | "GenericAPIView"
+            | "ListModelMixin"
+            | "CreateModelMixin"
+            | "RetrieveModelMixin"
+            | "UpdateModelMixin"
+            | "DestroyModelMixin"
+    )
+}
+
+fn is_drf_module(module: &str) -> bool {
+    module == "rest_framework" || module.starts_with("rest_framework.")
+}
+
+fn static_permission_value(node: Node<'_>) -> bool {
+    if !matches!(node.kind(), "list" | "tuple" | "set") {
+        return false;
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .filter(|child| child.kind() != "comment")
+        .all(static_permission_item)
+}
+
+fn static_permission_item(node: Node<'_>) -> bool {
+    match node.kind() {
+        "identifier" => true,
+        "string" => !node_contains_interpolation(node),
+        "attribute" => {
+            let mut cursor = node.walk();
+            node.named_children(&mut cursor).all(|child| {
+                matches!(child.kind(), "identifier" | "attribute") && static_permission_item(child)
+            })
+        }
+        _ => false,
+    }
+}
+
+fn node_contains_interpolation(node: Node<'_>) -> bool {
+    let mut stack = vec![node];
+    while let Some(current) = stack.pop() {
+        if current.kind() == "interpolation" {
+            return true;
+        }
+        let mut cursor = current.walk();
+        stack.extend(current.named_children(&mut cursor));
+    }
+    false
+}
+
+fn is_empty_static_value(node: Node<'_>) -> bool {
+    let mut cursor = node.walk();
+    static_permission_value(node)
+        && node
+            .named_children(&mut cursor)
+            .all(|child| child.kind() == "comment")
 }
 
 fn build_module_index(parsed_files: &[ParsedFile]) -> BTreeMap<String, String> {
@@ -1637,24 +2299,40 @@ fn parse_imports(
     module_index: &BTreeMap<String, String>,
 ) -> BTreeMap<String, ImportTarget> {
     let mut imports = BTreeMap::new();
-    for line in parsed.text.lines() {
-        let trimmed = line.trim();
-        if let Some(rest) = trimmed.strip_prefix("from ") {
-            let Some((module, imported_names)) = rest.split_once(" import ") else {
-                continue;
-            };
+    let Some(root) = parsed.root_node() else {
+        return imports;
+    };
+    let mut nodes = vec![root];
+    while let Some(node) = nodes.pop() {
+        if node.kind() == "import_from_statement" {
+            let module = node
+                .child_by_field_name("module_name")
+                .and_then(|n| parsed.text_for(n))
+                .unwrap_or_default();
             let module = module.trim();
             let base_file = resolve_python_import_module(parsed, module, module_index);
-            for imported in imported_names.split(',') {
-                let imported = imported.trim();
-                if imported.is_empty() || imported == "*" {
+            let mut cursor = node.walk();
+            for child in node
+                .named_children(&mut cursor)
+                .filter(|child| child.kind() != "module_name")
+            {
+                let (original, local) = if child.kind() == "aliased_import" {
+                    let original = child
+                        .child_by_field_name("name")
+                        .and_then(|n| parsed.text_for(n))
+                        .unwrap_or_default();
+                    let local = child
+                        .child_by_field_name("alias")
+                        .and_then(|n| parsed.text_for(n))
+                        .unwrap_or(original);
+                    (original, local)
+                } else {
+                    let original = parsed.text_for(child).unwrap_or_default();
+                    (original, original)
+                };
+                if original.is_empty() || original == "*" {
                     continue;
                 }
-                let (original, local) = imported
-                    .split_once(" as ")
-                    .map_or((imported, imported), |(original, local)| {
-                        (original.trim(), local.trim())
-                    });
                 let submodule = if module.starts_with('.') {
                     resolve_relative_submodule(parsed, module, original, module_index)
                 } else {
@@ -1675,13 +2353,27 @@ fn parse_imports(
                     },
                 );
             }
-        } else if let Some(rest) = trimmed.strip_prefix("import ") {
-            for imported in rest.split(',') {
-                let imported = imported.trim();
-                let (module, local) = imported.split_once(" as ").map_or(
-                    (imported, imported.rsplit('.').next().unwrap_or(imported)),
-                    |(module, local)| (module.trim(), local.trim()),
-                );
+        } else if node.kind() == "import_statement" {
+            let mut cursor = node.walk();
+            for child in node
+                .named_children(&mut cursor)
+                .filter(|child| child.kind() == "dotted_name" || child.kind() == "aliased_import")
+            {
+                let (module, local) = if child.kind() == "aliased_import" {
+                    (
+                        child
+                            .child_by_field_name("name")
+                            .and_then(|n| parsed.text_for(n))
+                            .unwrap_or_default(),
+                        child
+                            .child_by_field_name("alias")
+                            .and_then(|n| parsed.text_for(n))
+                            .unwrap_or_default(),
+                    )
+                } else {
+                    let module = parsed.text_for(child).unwrap_or_default();
+                    (module, module.rsplit('.').next().unwrap_or(module))
+                };
                 imports.insert(
                     local.to_string(),
                     ImportTarget {
@@ -1692,6 +2384,8 @@ fn parse_imports(
                 );
             }
         }
+        let mut cursor = node.walk();
+        nodes.extend(node.children(&mut cursor).filter(|child| child.is_named()));
     }
     imports
 }
@@ -2038,6 +2732,218 @@ fn normalize_django_regex_path(pattern: &str) -> String {
         value.replace_range(start..=group_end, &format!("{{{name}}}"));
     }
     value
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use authmap_core::{Language, SourceFile};
+    use authmap_parsers::{ParserBackend, TreeSitterBackend};
+
+    fn parsed(path: &str, text: &str) -> ParsedFile {
+        TreeSitterBackend
+            .parse(
+                &SourceFile {
+                    path: path.to_string(),
+                    language: Language::Python,
+                    size_bytes: text.len() as u64,
+                    sha256: None,
+                    project_hints: Vec::new(),
+                    skipped: None,
+                },
+                text,
+            )
+            .expect("python parses")
+    }
+
+    #[test]
+    fn settings_dynamic_reassignment_and_mutation_are_uncertain() {
+        for source in [
+            "REST_FRAMEWORK = {'DEFAULT_PERMISSION_CLASSES': [IsAdminUser]}\nREST_FRAMEWORK = load()",
+            "REST_FRAMEWORK = {'DEFAULT_PERMISSION_CLASSES': [IsAdminUser]}\nREST_FRAMEWORK = {}",
+            "REST_FRAMEWORK = {'DEFAULT_PERMISSION_CLASSES': [IsAdminUser]}\nREST_FRAMEWORK.update({})",
+            "if FLAG:\n    REST_FRAMEWORK = {'DEFAULT_PERMISSION_CLASSES': [IsAdminUser]}\n",
+            "REST_FRAMEWORK = {**base, 'DEFAULT_PERMISSION_CLASSES': [IsAdminUser]}\n",
+            "REST_FRAMEWORK = load()\n",
+            "REST_FRAMEWORK = {'DEFAULT_PERMISSION_CLASSES': [IsAdminUser]}\nREST_FRAMEWORK |= {'DEFAULT_PERMISSION_CLASSES': []}\n",
+            "KEY = 'DEFAULT_PERMISSION_CLASSES'\nREST_FRAMEWORK = {'DEFAULT_PERMISSION_CLASSES': [IsAdminUser], KEY: []}\n",
+        ] {
+            let file = parsed("project/settings.py", source);
+            let defaults = django_settings_defaults(&file).expect("candidate retained");
+            assert!(defaults.dynamic || defaults.permission_classes.is_none());
+            if source.contains("update") || source.contains("if FLAG") || source.contains("**") {
+                assert!(defaults.permission_dynamic);
+                assert!(defaults.authentication_dynamic);
+            }
+        }
+        let fstring = parsed(
+            "project/settings.py",
+            "REST_FRAMEWORK = {'DEFAULT_PERMISSION_CLASSES': [f'rest_framework.permissions.{\"IsAdminUser\" if FLAG else \"AllowAny\"}']}\n",
+        );
+        let defaults = django_settings_defaults(&fstring).expect("f-string candidate retained");
+        assert!(defaults.dynamic);
+        assert!(defaults.permission_dynamic);
+
+        let file = parsed(
+            "project/settings.py",
+            "REST_FRAMEWORK = {'DEFAULT_PERMISSION_CLASSES': [IsAdminUser]}\nREST_FRAMEWORK [\"DEFAULT_PERMISSION_CLASSES\"] = []\n",
+        );
+        let defaults = django_settings_defaults(&file).expect("subscript write retained");
+        assert!(defaults.dynamic);
+        assert!(defaults.permission_dynamic && defaults.authentication_dynamic);
+
+        let file = parsed(
+            "project/settings.py",
+            "REST_FRAMEWORK = {'DEFAULT_PERMISSION_CLASSES': [IsAdminUser]}\nREST_FRAMEWORK['EXTRA'] = {'DEFAULT_PERMISSION_CLASSES': [IsAdminUser]}\n",
+        );
+        let defaults = django_settings_defaults(&file).expect("nested dictionary write retained");
+        assert!(defaults.dynamic);
+        assert!(defaults.permission_classes.is_none());
+        assert!(defaults.permission_dynamic && defaults.authentication_dynamic);
+
+        for key in [
+            "f'{KEY}'",
+            "'\\x44EFAULT_PERMISSION_CLASSES'",
+            "u'DEFAULT_PERMISSION_CLASSES'",
+            "r'DEFAULT_PERMISSION_CLASSES'",
+            "f'DEFAULT_PERMISSION_CLASSES'",
+        ] {
+            let file = parsed(
+                "project/settings.py",
+                &format!(
+                    "REST_FRAMEWORK = {{'DEFAULT_PERMISSION_CLASSES': [IsAdminUser], {key}: []}}\n"
+                ),
+            );
+            let defaults = django_settings_defaults(&file).expect("dynamic key retained");
+            assert!(defaults.dynamic, "key {key} should be dynamic");
+            assert!(
+                defaults.permission_dynamic && defaults.authentication_dynamic,
+                "key {key} should invalidate both setting fields"
+            );
+        }
+    }
+
+    #[test]
+    fn imports_use_tree_sitter_nodes_and_ignore_string_decoys() {
+        let file = parsed(
+            "project/urls.py",
+            "text = \"from .views import( Fake )\"\nfrom .views import(\n View as Alias,\n)\n",
+        );
+        let imports = parse_imports(&file, &BTreeMap::new());
+        assert!(imports.contains_key("Alias"));
+        assert!(!imports.contains_key("Fake"));
+    }
+
+    #[test]
+    fn local_view_base_is_not_drf_but_known_alias_and_ancestry_are() {
+        let file = parsed(
+            "project/views.py",
+            "from rest_framework.views import APIView as DRFAPIView\nfrom rest_framework.generics import ListCreateAPIView as Items\nclass View: pass\nclass APIView(View): pass\nclass Things(APIView): pass\nclass PublicAPIView(View): pass\nclass Base(DRFAPIView): pass\nclass Leaf(Base): pass\nclass ItemsView(Items): pass\n",
+        );
+        let mut index = DjangoIndex::default();
+        index.module_index = build_module_index(std::slice::from_ref(&file));
+        index.imports_by_file.insert(
+            file.source.path.clone(),
+            parse_imports(&file, &index.module_index),
+        );
+        let root = file.root_node().unwrap();
+        collect_symbols(&file, root, &mut index);
+        for name in [
+            "APIView",
+            "Things",
+            "PublicAPIView",
+            "Base",
+            "Leaf",
+            "ItemsView",
+        ] {
+            assert!(
+                index
+                    .classes
+                    .contains_key(&(file.source.path.clone(), name.to_string()))
+            );
+        }
+        let target = |name: &str| HandlerTarget {
+            name: name.to_string(),
+            span: index.classes[&(file.source.path.clone(), name.to_string())]
+                .span
+                .clone(),
+            kind: HandlerKind::ClassBasedView,
+            class_name: Some(name.to_string()),
+            method_name: None,
+        };
+        assert!(!is_drf_handler(&index, &target("PublicAPIView")));
+        assert!(!is_drf_handler(&index, &target("Things")));
+        assert!(is_drf_handler(&index, &target("Leaf")));
+        assert!(is_drf_handler(&index, &target("ItemsView")));
+    }
+
+    #[test]
+    fn imported_non_drf_aliases_and_similar_modules_are_not_drf() {
+        let file = parsed(
+            "project/views.py",
+            "from django.views import View as APIView\nfrom rest_framework_fake.views import APIView as FakeAPIView\nclass Ordinary(APIView): pass\nclass Fake(FakeAPIView): pass\n",
+        );
+        let mut index = DjangoIndex::default();
+        index.module_index = build_module_index(std::slice::from_ref(&file));
+        index.imports_by_file.insert(
+            file.source.path.clone(),
+            parse_imports(&file, &index.module_index),
+        );
+        let root = file.root_node().unwrap();
+        collect_symbols(&file, root, &mut index);
+        let target = |name: &str| HandlerTarget {
+            name: name.to_string(),
+            span: index.classes[&(file.source.path.clone(), name.to_string())]
+                .span
+                .clone(),
+            kind: HandlerKind::ClassBasedView,
+            class_name: Some(name.to_string()),
+            method_name: None,
+        };
+        assert!(!is_drf_handler(&index, &target("Ordinary")));
+        assert!(!is_drf_handler(&index, &target("Fake")));
+    }
+
+    #[test]
+    fn settings_scope_associates_sibling_apps_and_isolates_projects() {
+        assert_eq!(
+            settings_scope_root("project/config/settings.py"),
+            "project/config/"
+        );
+        assert_eq!(
+            settings_scope_root("other/config/settings.py"),
+            "other/config/"
+        );
+        let candidate = |root: &str| DrfSettingsDefaults {
+            scope_root: root.to_string(),
+            permission_classes: Some("[IsAdminUser]".to_string()),
+            authentication_classes: None,
+            dynamic: false,
+            permission_dynamic: false,
+            authentication_dynamic: false,
+            permission_empty: false,
+            authentication_empty: false,
+            permission_span: None,
+            authentication_span: None,
+            span: Span {
+                file: format!("{root}config/settings.py"),
+                line: 1,
+                column: 1,
+                byte_range: None,
+            },
+        };
+        let mut index = DjangoIndex::default();
+        index.drf_settings_defaults = vec![candidate("project/"), candidate("other/")];
+        assert!(index.settings_for_file("project/app/views.py").is_some());
+        assert!(index.settings_for_file("other/app/views.py").is_some());
+        assert!(index.settings_for_file("third/app/views.py").is_none());
+        index.drf_settings_defaults.push(candidate("project/"));
+        let ambiguous = index.settings_for_file("project/app/views.py").unwrap();
+        assert!(
+            ambiguous.dynamic && ambiguous.permission_dynamic && ambiguous.authentication_dynamic
+        );
+        assert!(ambiguous.permission_classes.is_none());
+    }
 }
 
 fn find_first_kind<'tree>(node: Node<'tree>, kind: &str) -> Option<Node<'tree>> {
