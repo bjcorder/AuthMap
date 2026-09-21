@@ -163,7 +163,7 @@ jobs:
           mode: advisory
           sarif: true
           remote-validation: true
-      - uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63
+      - uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd
         if: always() && steps.deterministic-deps.outputs.sarif-path != ''
         with:
           sarif_file: ${{ steps.deterministic-deps.outputs.sarif-path }}
@@ -183,11 +183,11 @@ jobs:
         with:
           ref: ${{ needs.plan.outputs.ref }}
           persist-credentials: false
-      - uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63
+      - uses: github/codeql-action/init@1c5b675653bb5c22dbe9b12b556ec555138e09fd
         with:
           languages: rust
           config-file: ./.github/codeql/codeql-config.yml
-      - uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63
+      - uses: github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd
   action_smoke:
     needs: plan
     if: needs.plan.outputs.action_smoke == 'true'
