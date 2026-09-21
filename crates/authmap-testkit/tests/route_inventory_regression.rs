@@ -1,6 +1,6 @@
 use authmap_analysis::run_scan;
 use authmap_config::{ScanConfig, ScanPlan};
-use authmap_core::{AuthMapDocument, ScanMetadata};
+use authmap_core::{AuthMapDocument, CoverageClass, ScanMetadata};
 use authmap_testkit::{
     assert_snapshot_eq, fixture_path, golden_path, render_json, render_markdown,
 };
@@ -26,6 +26,69 @@ fn express_json_matches_golden() {
 #[test]
 fn django_json_matches_golden() {
     assert_golden_eq(render_json(&scan_fixture("django")), "json/django.json");
+}
+
+#[test]
+fn django_permissions_json_matches_golden_and_covers_edge_cases() {
+    let document = scan_fixture("django_permissions");
+    let expected = [
+        ("/api/items", CoverageClass::AdminGuarded),
+        ("/api/items/public", CoverageClass::Unauthenticated),
+        ("/api/items/auth_only", CoverageClass::AdminGuarded),
+        ("/api/items/dynamic", CoverageClass::UnknownOrDynamic),
+        ("/settings/", CoverageClass::AuthnOnly),
+        ("/public-api/", CoverageClass::Unauthenticated),
+        ("/concrete/", CoverageClass::UnknownOrDynamic),
+        ("/dispatch/", CoverageClass::PermissionGuarded),
+        ("/aliased/", CoverageClass::AuthnOnly),
+        ("/ordinary/", CoverageClass::Unauthenticated),
+    ];
+    for (path, class) in expected {
+        let route = document
+            .routes
+            .iter()
+            .find(|route| route.path == path)
+            .unwrap_or_else(|| panic!("missing route {path}"));
+        let coverage = document
+            .coverage
+            .iter()
+            .find(|coverage| coverage.route_id == route.id)
+            .unwrap_or_else(|| panic!("missing coverage for {path}"));
+        assert_eq!(coverage.class, class, "unexpected coverage for {path}");
+    }
+    assert!(
+        document
+            .routes
+            .iter()
+            .any(|route| route.path == "/ordinary/")
+    );
+    let dynamic_route = document
+        .routes
+        .iter()
+        .find(|route| route.path == "/api/items/dynamic")
+        .expect("dynamic action route");
+    assert!(document.evidence.iter().any(|evidence| {
+        evidence.route_id.as_deref() == Some(dynamic_route.id.as_str())
+            && evidence.mechanism == "drf_action_permission_classes"
+            && evidence.confidence == authmap_core::Confidence::Low
+    }));
+    let dispatch_route = document
+        .routes
+        .iter()
+        .find(|route| route.path == "/dispatch/")
+        .expect("dispatch route");
+    assert!(document.evidence.iter().any(|evidence| {
+        evidence.route_id.as_deref() == Some(dispatch_route.id.as_str())
+            && evidence.mechanism == "django_permission_required"
+            && evidence.confidence == authmap_core::Confidence::High
+    }));
+    assert!(
+        !document
+            .diagnostics
+            .iter()
+            .any(|diagnostic| { diagnostic.code == "django_unresolved_handler" })
+    );
+    assert_golden_eq(render_json(&document), "json/django_permissions.json");
 }
 
 #[test]
@@ -58,6 +121,10 @@ fn active_markdown_goldens_match_pipeline_output() {
     assert_golden_eq(
         render_markdown(&scan_fixture("django")),
         "markdown/django.md",
+    );
+    assert_golden_eq(
+        render_markdown(&scan_fixture("django_permissions")),
+        "markdown/django_permissions.md",
     );
     assert_golden_eq(
         render_markdown(&scan_fixture("nextjs")),

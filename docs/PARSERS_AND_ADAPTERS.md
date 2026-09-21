@@ -98,9 +98,24 @@ and `urlpatterns += [...]`, DRF routers and `@action`, CBV mixins and
 (`@login_required`, `@permission_required`, `@user_passes_test`,
 `@staff_member_required`, `@api_view` + `@permission_classes`). Django ORM
 mutations include `create/get_or_create/update_or_create/bulk_create/update/
-bulk_update/delete/save`. *Not yet:* multi-line parenthesized imports,
-settings-level `DEFAULT_PERMISSION_CLASSES`, `@method_decorator` on CBVs, and
-per-`@action` `permission_classes` overrides.
+bulk_update/delete/save`.
+
+DRF defaults are read from a statically recognized `settings.py` (or a
+`settings/` package) in the scanned project. Literal permission and
+authentication declarations are resolved independently using action, nearest
+class, then settings precedence; explicit empty declarations suppress an
+ancestor or default without creating a positive guard. `APIView` and supported
+generic/viewset subclasses, `@api_view` functions, `@method_decorator` guards,
+parenthesized imports, and bounded local mixin chains are covered. A direct
+wrapper on a concrete method is weak evidence for an aggregate `ANY` route,
+while a wrapper targeting `dispatch` covers the aggregate route. Aliased
+external mixins are followed through local intermediate classes when the import
+identity is statically known.
+
+Conditional, reassigned, unpacked, call-built, or otherwise dynamic settings and
+declarations remain low-confidence review context and produce a dynamic
+diagnostic; they do not certify a guard. *Not yet:* runtime settings imports or
+cross-project configuration resolution.
 
 **Express** — `app`/`router` method calls, mounted routers with prefix
 composition, route-level and array middleware, route chaining, and
